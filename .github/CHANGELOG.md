@@ -47,6 +47,7 @@
 1. [TEXTURES] added Registry plaque and improved Textures - @Pleasure0102 (Pleasure)
 1. [GPWS] Add minimums and 100above logic - @linkeleven (linkeleven#2557)
 
+
 ## 0.4.0
 1. [General] Add CHANGELOG.md - @nathaninnes (Nathan Innes)
 1. [ECAM] Improved Upper ECAM Visuals - @wpine215 (Iceman)
