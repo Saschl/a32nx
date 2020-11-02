@@ -44,11 +44,7 @@
 1. [CHECKLISTS] Fix FD check in Taxi checklist - @Acrobot (Andrzej Pomirski)
 1. [ADIRS] Fix ADIRS lights and split into three separate units - @devsnek (devsnek#0001)
 1. [CDU] Fix MCDU not loading when starting midair - @ThatRedMelon (Daniel Brown)
-1. [FCU] Clamp the selected altitude between 100 and 49000 - @lars-reimann (Lars Reimann)
-1. [TEXTURES] added Registry plaque and improved Textures - @Pleasure0102 (Pleasure)
-1. [GPWS] Add minimums and 100above logic - @linkeleven (linkeleven#2557)
-1. [TEXTURES] Changed cockpit font and fixed spelling errors - @FoxinTale (Aubrey)
-1. [FCU] Remember selected pressure mode when returning from Std mode - @lhoenig (Lukas Hoenig)
+1. [FUEL] Ported some fuel system changes for Thrustmaster TCA Quadrant support
 
 ## 0.4.0
 1. [General] Add CHANGELOG.md - @nathaninnes (Nathan Innes)
