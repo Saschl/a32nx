@@ -360,13 +360,28 @@
             <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.ENGINE#ID#_MASTER_TURN_OFF</ANIMTIP_1>
         </DefaultTemplateParameters>
         <Component ID="#NODE_ID#" Node="#NODE_ID#">
-            <Update Frequency="5">
-						(* This Update Ensures that the state of some simvars that are linked to the same button is consistent. *)
-						(A:FUELSYSTEM VALVE SWITCH:#VALVE_ID#, Bool) sp1
-						(A:GENERAL ENG STARTER:#ID#, Bool) l1 != if{
-							(&gt;K:TOGGLE_STARTER#ID#)
-						}
-            </Update>
+         <UseTemplate Name="ASOBO_GT_Update">
+                        <FREQUENCY>5</FREQUENCY>
+        <UPDATE_CODE type="rnp">
+
+						alias fuelSwitch = (A:FUELSYSTEM VALVE SWITCH:#VALVE_ID#, bool);
+                        alias engineRunning = (A:GENERAL ENG COMBUSTION:#ID#, bool);
+                        alias engineStarterEngaged =   (A:GENERAL ENG STARTER:#ID#, bool);
+
+                        if fuelSwitch and !engineRunning and !engineStarterEngaged {
+                            (K:TOGGLE_STARTER#ID#) = 1 ;
+                        }
+
+                        if engineRunning and engineStarterEngaged {
+                            (K:TOGGLE_STARTER#ID#) = 1; 
+                        }
+
+                        if !fuelSwitch and engineStarterEngaged {
+                            (K:TOGGLE_STARTER#ID#) = 1;
+                        } 
+                        
+            </UPDATE_CODE>
+            </UseTemplate>
             <UseTemplate Name="ASOBO_GT_Switch_Code">
                 <ANIM_CODE>
 							(A:FUELSYSTEM VALVE SWITCH:#VALVE_ID#, Bool) 100 *
