@@ -16,11 +16,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import ReactDOM from 'react-dom';
-import { renderTarget } from '../util.mjs';
+import React from "react";
 
-const Efb = () => (
-    <div />
-);
+const soon = require('./Assets/soon.png');
 
-ReactDOM.render(<Efb />, renderTarget);
+
+const EfbSoon:React.FC = () => (
+
+            <div className="wrapper">
+             
+                <img className="airplane" src={soon} />
+            </div>
+        );
+    
+
+export default EfbSoon;
