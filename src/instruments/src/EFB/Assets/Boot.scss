@@ -66,6 +66,27 @@
   }
 }
 
+@keyframes rotater {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(8);
+  }
+}
+
+.soon {
+  /* safari / chrome / mozilla */
+  width: 100px;
+  margin-left: 600px;
+  margin-top: 500px;
+  animation-name: rotater;
+  animation-duration: 10s;
+  animation-iteration-count: 1;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+
 .fbw-logo {
   width: 5rem;
   margin-right: 16px;

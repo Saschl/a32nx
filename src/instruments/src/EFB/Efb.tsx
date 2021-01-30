@@ -255,7 +255,7 @@ class Efb extends React.Component<EfbProps, EfbState> {
                 return <Settings />;
             default:
                 return <Dashboard
-                    fetchSimbrief={this.fetchSimbriefData}
+                     fetchSimbrief={this.fetchSimbriefData}
                     currentFlight={this.props.currentFlight}
                     airline={this.state.airline}
                     flightNum={this.state.flightNum}
