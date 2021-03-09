@@ -45,8 +45,8 @@ bool FlyByWireInterface::connect() {
   loadConfiguration();
 
   // connect to sim connect
-  return simConnectInterface.connect(isThrottleHandlingEnabled, idleThrottleInput, useReverseOnAxis,
-                                     autopilotStateMachineEnabled, autopilotLawsEnabled, flyByWireEnabled);
+  return simConnectInterface.connect(autopilotStateMachineEnabled, autopilotLawsEnabled, flyByWireEnabled,
+                                     throttleAxis);
 }
 
 void FlyByWireInterface::disconnect() {
@@ -60,6 +60,9 @@ void FlyByWireInterface::disconnect() {
 
   // terminate flight data recorder
   flightDataRecorder.terminate();
+
+  // delete throttle axis mapping -> due to usage of shared_ptr no delete call is needed
+  throttleAxis.clear();
 }
 
 bool FlyByWireInterface::update(double sampleTime) {
@@ -78,9 +81,7 @@ bool FlyByWireInterface::update(double sampleTime) {
   result &= updateFlyByWire(sampleTime);
 
   // get throttle data and process it
-  if (isThrottleHandlingEnabled) {
-    result &= processThrottles();
-  }
+  result &= processThrottles();
 
   // update flight data recorder
   flightDataRecorder.update(&autopilotStateMachine, &autopilotLaws, &autoThrust, &flyByWire);
@@ -720,8 +721,6 @@ void FlyByWireInterface::setupLocalVariables() {
 
   idAutothrustThrustLimitType = register_named_variable("A32NX_AUTOTHRUST_THRUST_LIMIT_TYPE");
   idAutothrustThrustLimit = register_named_variable("A32NX_AUTOTHRUST_THRUST_LIMIT");
-  idAutothrust_TLA_1 = register_named_variable("A32NX_AUTOTHRUST_TLA:1");
-  idAutothrust_TLA_2 = register_named_variable("A32NX_AUTOTHRUST_TLA:2");
   idAutothrustN1_TLA_1 = register_named_variable("A32NX_AUTOTHRUST_TLA_N1:1");
   idAutothrustN1_TLA_2 = register_named_variable("A32NX_AUTOTHRUST_TLA_N1:2");
   idAutothrustReverse_1 = register_named_variable("A32NX_AUTOTHRUST_REVERSE:1");
@@ -754,148 +753,40 @@ void FlyByWireInterface::loadConfiguration() {
 }
 
 void FlyByWireInterface::initializeThrottles() {
-  // read configuration
-  INIReader configuration(THROTTLE_CONFIGURATION_FILEPATH);
-  if (configuration.ParseError() < 0) {
-    // file does not exist yet -> store the default configuration in a file
-    ofstream configFile;
-    configFile.open(THROTTLE_CONFIGURATION_FILEPATH);
-    configFile << "[Throttle]" << endl;
-    configFile << "Log = true" << endl;
-    configFile << "Enabled = true" << endl;
-    configFile << "ReverseOnAxis = false" << endl;
-    configFile << "ReverseIdle = true" << endl;
-    configFile << "DetentDeadZone = 2.0" << endl;
-    configFile << "DetentReverseFull = -1.00" << endl;
-    configFile << "DetentReverseIdle = -0.90" << endl;
-    configFile << "DetentIdle = -1.00" << endl;
-    configFile << "DetentClimb = 0.89" << endl;
-    configFile << "DetentFlexMct = 0.95" << endl;
-    configFile << "DetentTakeOffGoAround = 1.00" << endl;
-    configFile.close();
+  // create axis and load configuration
+  for (size_t i = 1; i <= 2; i++) {
+    // create new mapping
+    auto axis = make_shared<ThrottleAxisMapping>(i);
+    // load configuration from file
+    axis->loadFromFile();
+    // store axis
+    throttleAxis.emplace_back(axis);
   }
 
-  // read basic configuration
-  isThrottleLoggingEnabled = configuration.GetBoolean("Throttle", "Log", true);
-  isThrottleHandlingEnabled = configuration.GetBoolean("Throttle", "Enabled", true);
-  useReverseOnAxis = configuration.GetBoolean("Throttle", "ReverseOnAxis", false);
-  useReverseIdle = configuration.GetBoolean("Throttle", "ReverseIdle", false);
-  throttleDetentDeadZone = configuration.GetReal("Throttle", "DetentDeadZone", 0.0);
-  // read mapping configuration
-  vector<pair<double, double>> mappingTable;
-  if (useReverseOnAxis) {
-    mappingTable.emplace_back(configuration.GetReal("Throttle", "DetentReverseFull", -1.00), -20.00);
-    if (useReverseIdle) {
-      mappingTable.emplace_back(configuration.GetReal("Throttle", "DetentReverseIdle", -0.70), -6.00);
-    }
-  }
-  mappingTable.emplace_back(configuration.GetReal("Throttle", "DetentIdle", useReverseOnAxis ? 0.00 : -1.00), 0.00);
-  mappingTable.emplace_back(configuration.GetReal("Throttle", "DetentClimb", 0.89), 25.00);
-  mappingTable.emplace_back(configuration.GetReal("Throttle", "DetentFlexMct", 0.95), 35.00);
-  mappingTable.emplace_back(configuration.GetReal("Throttle", "DetentTakeOffGoAround", 1.00), 45.00);
-
-  // remember idle throttle setting
-  if (useReverseOnAxis) {
-    if (useReverseIdle) {
-      idleThrottleInput = mappingTable[2].first;
-    } else {
-      idleThrottleInput = mappingTable[1].first;
-    }
-  } else {
-    idleThrottleInput = mappingTable[0].first;
-  }
-
-  // print config
-  std::cout << "WASM: Throttle Configuration : Log                   = " << isThrottleLoggingEnabled << endl;
-  std::cout << "WASM: Throttle Configuration : Enabled               = " << isThrottleHandlingEnabled << endl;
-  std::cout << "WASM: Throttle Configuration : ReverseOnAxis         = " << useReverseOnAxis << endl;
-  std::cout << "WASM: Throttle Configuration : ReverseIdle           = " << useReverseIdle << endl;
-  int index = 0;
-  if (useReverseOnAxis) {
-    std::cout << "WASM: Throttle Configuration : DetentReverseFull     = " << mappingTable[index++].first << endl;
-    if (useReverseIdle) {
-      std::cout << "WASM: Throttle Configuration : DetentReverseIdle     = " << mappingTable[index++].first << endl;
-    }
-  }
-  std::cout << "WASM: Throttle Configuration : DetentIdle            = " << mappingTable[index++].first << endl;
-  std::cout << "WASM: Throttle Configuration : DetentClimb           = " << mappingTable[index++].first << endl;
-  std::cout << "WASM: Throttle Configuration : DetentFlexMct         = " << mappingTable[index++].first << endl;
-  std::cout << "WASM: Throttle Configuration : DetentTakeOffGoAround = " << mappingTable[index++].first << endl;
-
-  // initialize lookup table
-  throttleLookupTable.initialize(mappingTable, -20, 100);
-
+  // create mapping for 3D animation position
   vector<pair<double, double>> mappingTable3d;
   mappingTable3d.emplace_back(-20.0, 0.0);
   mappingTable3d.emplace_back(0.0, 25.0);
   mappingTable3d.emplace_back(25.0, 50.0);
   mappingTable3d.emplace_back(35.0, 75.0);
   mappingTable3d.emplace_back(45.0, 100.0);
-  idThrottlePositionLookupTable.initialize(mappingTable3d, 0, 100);
+  idThrottlePositionLookupTable3d.initialize(mappingTable3d, 0, 100);
 }
 
 bool FlyByWireInterface::processThrottles() {
-  // get data from simconnect
-  auto simInputThrottles = simConnectInterface.getSimInputThrottles();
-
-  // process the data (lut)
-  SimOutputThrottles simOutputThrottles = {throttleLookupTable.get(simInputThrottles.throttles[0]),
-                                           throttleLookupTable.get(simInputThrottles.throttles[1])};
-
-  // detect reverse situation
-  if (!useReverseOnAxis && simConnectInterface.getIsReverseToggleActive(0)) {
-    simOutputThrottles.throttleLeverPosition_1 = -10.0 * (simInputThrottles.throttles[0] + 1);
-  }
-  if (!useReverseOnAxis && simConnectInterface.getIsReverseToggleActive(1)) {
-    simOutputThrottles.throttleLeverPosition_2 = -10.0 * (simInputThrottles.throttles[1] + 1);
-  }
-
-  // clip when aircraft is in flight
-  if (!flyByWire.getExternalOutputs().out.sim.data_computed.on_ground) {
-    simOutputThrottles.throttleLeverPosition_1 = max(0, simOutputThrottles.throttleLeverPosition_1);
-    simOutputThrottles.throttleLeverPosition_2 = max(0, simOutputThrottles.throttleLeverPosition_2);
-  }
-
-  // add deadzone around detents
-  simOutputThrottles.throttleLeverPosition_1 =
-      calculateDeadzones(throttleDetentDeadZone, simOutputThrottles.throttleLeverPosition_1);
-  simOutputThrottles.throttleLeverPosition_2 =
-      calculateDeadzones(throttleDetentDeadZone, simOutputThrottles.throttleLeverPosition_2);
-
-  // if enabled, print values
-  if (isThrottleLoggingEnabled) {
-    if (lastThrottleInput_1 != simInputThrottles.throttles[0] ||
-        lastThrottleInput_2 != simInputThrottles.throttles[1]) {
-      // print values
-      std::cout << fixed << setprecision(2) << "WASM";
-      std::cout << " : Throttle 1: " << setw(5) << simInputThrottles.throttles[0];
-      std::cout << " -> " << setw(6) << simOutputThrottles.throttleLeverPosition_1;
-      std::cout << " ; Throttle 2: " << setw(5) << simInputThrottles.throttles[1];
-      std::cout << " -> " << setw(6) << simOutputThrottles.throttleLeverPosition_2;
-      std::cout << endl;
-
-      // store values for next iteration
-      lastThrottleInput_1 = simInputThrottles.throttles[0];
-      lastThrottleInput_2 = simInputThrottles.throttles[1];
-    }
-  }
+  // get sim data
+  SimData simData = simConnectInterface.getSimData();
 
   // set position for 3D animation
-  set_named_variable_value(idAutothrust_TLA_1, simOutputThrottles.throttleLeverPosition_1);
-  set_named_variable_value(idAutothrust_TLA_2, simOutputThrottles.throttleLeverPosition_2);
-  set_named_variable_value(idThrottlePosition3d_1,
-                           idThrottlePositionLookupTable.get(simOutputThrottles.throttleLeverPosition_1));
-  set_named_variable_value(idThrottlePosition3d_2,
-                           idThrottlePositionLookupTable.get(simOutputThrottles.throttleLeverPosition_2));
-
-  SimData simData = simConnectInterface.getSimData();
+  set_named_variable_value(idThrottlePosition3d_1, idThrottlePositionLookupTable3d.get(throttleAxis[0]->getTLA()));
+  set_named_variable_value(idThrottlePosition3d_2, idThrottlePositionLookupTable3d.get(throttleAxis[1]->getTLA()));
 
   // set client data if needed
   if (!autoThrustEnabled || !autopilotStateMachineEnabled || !flyByWireEnabled) {
     ClientDataLocalVariablesAutothrust ClientDataLocalVariablesAutothrust = {
-        simInputThrottles.ATHR_push,
-        simOutputThrottles.throttleLeverPosition_1,
-        simOutputThrottles.throttleLeverPosition_2,
+        simConnectInterface.getSimInputThrottles().ATHR_push,
+        throttleAxis[0]->getTLA(),
+        throttleAxis[1]->getTLA(),
         simData.ap_V_c_kn,
         get_named_variable_value(idFmgcV_LS),
         350,   // V_MAX
@@ -948,9 +839,9 @@ bool FlyByWireInterface::processThrottles() {
     autoThrustInput.in.data.corrected_engine_N1_2_percent = simData.corrected_engine_N1_2_percent;
     autoThrustInput.in.data.SAT_degC = simData.ambient_temperature_celsius;
 
-    autoThrustInput.in.input.ATHR_push = simInputThrottles.ATHR_push;
-    autoThrustInput.in.input.TLA_1_deg = simOutputThrottles.throttleLeverPosition_1;
-    autoThrustInput.in.input.TLA_2_deg = simOutputThrottles.throttleLeverPosition_2;
+    autoThrustInput.in.input.ATHR_push = simConnectInterface.getSimInputThrottles().ATHR_push;
+    autoThrustInput.in.input.TLA_1_deg = throttleAxis[0]->getTLA();
+    autoThrustInput.in.input.TLA_2_deg = throttleAxis[1]->getTLA();
     autoThrustInput.in.input.V_c_kn = simData.ap_V_c_kn;
     autoThrustInput.in.input.V_LS_kn = get_named_variable_value(idFmgcV_LS);
     autoThrustInput.in.input.V_MAX_kn = 350;
@@ -980,10 +871,9 @@ bool FlyByWireInterface::processThrottles() {
     autoThrustOutput = autoThrust.getExternalOutputs().out.output;
 
     // write output to sim --------------------------------------------------------------------------------------------
-    simOutputThrottles.throttleLeverPosition_1 = autoThrustOutput.sim_throttle_lever_1_pos;
-    simOutputThrottles.throttleLeverPosition_2 = autoThrustOutput.sim_throttle_lever_2_pos;
-    simOutputThrottles.throttleManagedMode_1 = autoThrustOutput.sim_thrust_mode_1;
-    simOutputThrottles.throttleManagedMode_2 = autoThrustOutput.sim_thrust_mode_2;
+    SimOutputThrottles simOutputThrottles = {autoThrustOutput.sim_throttle_lever_1_pos,
+                                             autoThrustOutput.sim_throttle_lever_2_pos,
+                                             autoThrustOutput.sim_thrust_mode_1, autoThrustOutput.sim_thrust_mode_2};
     if (!simConnectInterface.sendData(simOutputThrottles)) {
       std::cout << "WASM: Write data failed!" << endl;
       return false;
@@ -1022,27 +912,6 @@ bool FlyByWireInterface::processThrottles() {
 
   // success
   return true;
-}
-
-double FlyByWireInterface::calculateDeadzones(double deadzone, double input) {
-  double result = input;
-  if (useReverseOnAxis) {
-    result = calculateDeadzone(deadzone, -20.0, result);
-    if (useReverseIdle) {
-      result = calculateDeadzone(deadzone, -6.0, result);
-    }
-  }
-  result = calculateDeadzone(deadzone, 0.0, result);
-  result = calculateDeadzone(deadzone, 25.0, result);
-  result = calculateDeadzone(deadzone, 35.0, result);
-  return result;
-}
-
-double FlyByWireInterface::calculateDeadzone(double deadzone, double target, double input) {
-  if (input <= (target + deadzone) && input >= (target - deadzone)) {
-    return target;
-  }
-  return input;
 }
 
 double FlyByWireInterface::smoothFlightDirector(double sampleTime,

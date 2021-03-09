@@ -84,10 +84,9 @@ void FlightDataRecorder::update(AutopilotStateMachineModelClass* autopilotStateM
 }
 
 void FlightDataRecorder::terminate() {
-  if (fileStream != nullptr) {
+  if (fileStream) {
     fileStream->close();
-    fileStream = nullptr;
-    delete fileStream;
+    fileStream.reset();
   }
 }
 
@@ -98,18 +97,17 @@ void FlightDataRecorder::manageFlightDataRecorderFiles() {
   // check if file is considered full
   if (sampleCounter >= maximumSampleCounter) {
     // close file and delete
-    fileStream->close();
-    delete fileStream;
-    fileStream = nullptr;
+    if (fileStream) {
+      fileStream->close();
+      fileStream.reset();
+    }
     // reset counter
     sampleCounter = 0;
   }
 
-  if (fileStream == nullptr) {
-    // get filename
-    string filename = getFlightDataRecorderFilename();
+  if (!fileStream) {
     // create new file
-    fileStream = new gzofstream(filename.c_str());
+    fileStream = make_shared<gzofstream>(getFlightDataRecorderFilename().c_str());
     // clean up directory
     cleanUpFlightDataRecorderFiles();
   }
