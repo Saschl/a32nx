@@ -22,10 +22,10 @@ interface Props {
 const DetentConfig: React.FC<Props> = (props: Props) => {
     const [showWarning, setShowWarning] = useState(false);
 
-    const [deadZone, setDeadZone] = usePersistentPropertyWithDefault(`ASsssdAfsdAsfsSrAsTHROTTLE_${props.throttleNumber}DETENT_${props.index}_RANGE`, '0.05');
+    const [deadZone, setDeadZone] = usePersistentPropertyWithDefault(`THROTTLE_${props.throttleNumber}DETENT_${props.index}_RANGE`, '0.05');
 
     const [previousMode, setPreviousMode] = useState(props.expertMode);
-    const [axisValue, setAxisValue] = usePersistentProperty(`ASAssrddASssfssAsfTHROTTLE_${props.throttleNumber}AXIS_${props.index}_VALUE`);
+    const [axisValue, setAxisValue] = usePersistentProperty(`THROTTLE_${props.throttleNumber}AXIS_${props.index}_VALUE`);
 
     const setFromTo = (throttle1Position, settingLower, settingUpper, deadZone: number, overrideValue?: string) => {
         const newSetting = overrideValue || throttle1Position;
