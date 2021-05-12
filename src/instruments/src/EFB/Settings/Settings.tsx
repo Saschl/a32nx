@@ -144,15 +144,25 @@ const SoundSettings: React.FC = () => {
     );
 };
 
-const ControlSettings = ({ setShowSettings }) => (
-    <div className="bg-gray-800 divide-y divide-gray-700 flex flex-col rounded-xl px-6 py-4 shadow-lg">
-        <div className="flex flex-row justify-between items-center">
-            <span className="text-lg text-gray-300">Detents</span>
-            <Button text="Calibrate" onClick={() => setShowSettings(true)} />
-        </div>
+const ControlSettings = ({ setShowSettings }) => {
+    const [autobrake, setAutobrake] = useSimVarSyncedPersistentProperty('L:A32NX_AUTO_BRAKE_REALISTIC', 'Bool', 'A32NX_AUTO_BRAKE_REALISTIC');
 
-    </div>
-);
+    return (
+        <div className="bg-gray-800 divide-y divide-gray-700 flex flex-col rounded-xl px-6 py-4 shadow-lg">
+            <div className="flex flex-row justify-between items-center">
+                <span>
+                    <span className="text-lg text-gray-300">Realistic Autobrake</span>
+                </span>
+                <Toggle value={!!autobrake} onToggle={(value) => setAutobrake(value ? 1 : 0)} />
+
+                <span className="text-lg text-gray-300">Detents</span>
+                <Button text="Calibrate" onClick={() => setShowSettings(true)} />
+
+            </div>
+
+        </div>
+    );
+};
 
 const FlyPadSettings: React.FC = () => {
     const [brightness, setBrightness] = useSimVarSyncedPersistentProperty('L:A32NX_EFB_BRIGHTNESS', 'number', 'EFB_BRIGHTNESS');

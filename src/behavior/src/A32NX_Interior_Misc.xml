@@ -181,15 +181,19 @@
                             alias onGroundWaitCounter = (L:A32NX_ON_GROUND_WAIT_COUNTER, number);
                             alias disarmAutobrakesOnLgRetract = (L:A32NX_DISARM_AUTOBRAKES_ON_LG_RETRACT, bool);
                             alias autobrakesActivated = (L:A32NX_AUTOBRAKES_ACTIVATED, bool);
+                            alias autobrakesRealistic = (L:A32NX_AUTO_BRAKE_REALISTIC, bool);
                             let autoBrakeSwitch = (A:AUTO BRAKE SWITCH CB, number);
 
-                            if autoBrakeSwitch &gt; 0 {
+                            if autoBrakeSwitch &gt; 0 and autobrakesRealistic {
                                 if onGround or autoBrakeSwitch &lt; 4 {
                                     autobrakesLevel = autoBrakeSwitch - 1;
                                 }
                                 if !onGround and autoBrakeSwitch == 4 {
                                    autobrakeControl = 0;
                                 }
+                            }
+                            if !autobrakesRealistic and autoBrakeSwitch == 1 {
+                                autobrakeControl = autobrakesLevel + 1;
                             }
 
                             if autobrakesLevel != 0 {
