@@ -1,6 +1,6 @@
 import { connect } from 'react-redux';
 import React, { useEffect, useState } from 'react';
-import { IconCornerDownLeft, IconCornerDownRight, IconArrowDown, IconHandStop, IconTruck, IconBriefcase, IconBuildingArch, IconArchive, IconPlug, IconTir } from '@tabler/icons';
+import { IconCornerDownLeft, IconCornerDownRight, IconArrowDown, IconHandStop, IconTruck, IconBriefcase, IconBuildingArch, IconArchive, IconPlug, IconTir, IconArrowUp } from '@tabler/icons';
 import './Ground.scss';
 import fuselage from '../Assets/320neo-outline-upright.svg';
 import { useSimVar, useSplitSimVar } from '../../Common/simVars';
@@ -33,6 +33,7 @@ export const Ground = ({
 
     const [pushBackWait, setPushBackWait] = useSimVar('Pushback Wait', 'bool', 100);
     const [pushBackAttached] = useSimVar('Pushback Attached', 'bool', 1000);
+    const [pushBackSpeed, setPushBackSpeed] = useSimVar('Velocity Body Z', 'feet per second');
 
     const [tugDirection, setTugDirection] = useState(0);
     const [tugActive, setTugActive] = useState(false);
@@ -47,22 +48,27 @@ export const Ground = ({
      * rather than first backwards and after that the direction
      */
     useEffect(() => {
-        if (pushBack === 0 && tugDirection !== 0) {
+        if (pushBack === 0 && tugDirection > 0) {
             computeAndSetTugHeading(tugDirection);
             setTugDirection(0);
         }
+
         /**
          * Timer needed, as we cannot check when the variable "Pushback Wait" is being set to false after calling the tug
          */
         const timer = setInterval(() => {
+            console.log(`Direction ${tugDirection}`);
+            if (tugDirection < 0) {
+                setPushBackSpeed(10);
+            }
             if (tugRequestOnly) {
                 setPushBackWait(1);
             }
-        }, 100);
+        }, 10);
         return () => clearInterval(timer);
-    }, [pushBackWait, tugRequestOnly]);
+    }, [pushBackWait, tugRequestOnly, pushBackSpeed]);
 
-    const getTugHeading = (value: number): number => (tugHeading + value) % 360;
+    const getTugHeading = (value: number): number => (tugHeading < 0 ? 0 : (tugHeading + value) % 360);
 
     const computeAndSetTugHeading = (direction: number) => {
         if (tugRequestOnly) {
@@ -272,6 +278,14 @@ export const Ground = ({
 
                 <div className="stop">
                     <h1 className="text-white font-medium text-xl text-center">Pushback</h1>
+                    <Button
+                        id="up"
+                        type={BUTTON_TYPE.NONE}
+                        onClick={(e) => handlePushBackClick(() => computeAndSetTugHeading(-180), e)}
+                        className={applySelected('w-32 up', 'up')}
+                    >
+                        <IconArrowUp size="2.825rem" stroke="1.5" />
+                    </Button>
                     <Button
                         id="stop"
                         onClick={(e) => handlePushBackClick(() => {

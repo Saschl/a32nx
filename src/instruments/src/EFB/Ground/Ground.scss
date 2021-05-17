@@ -25,6 +25,10 @@
 .stop {
   grid-column: 2 / 3;
 }
+
+.up {
+  grid-column: 1 / 3;
+}
 button:active {
   @apply transform;
   @apply translate-y-1;
