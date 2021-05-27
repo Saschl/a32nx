@@ -450,23 +450,9 @@ class MapInstrument extends ISvgMapRootElement {
         this.checkBushTripCase();
     }
     onBingMapReady() {
-        this.checkBushTripCase();
+
     }
-    checkBushTripCase() {
-        if (this.eBingMode !== EBingMode.HORIZON) {
-            Coherent.call("GET_IS_BUSHTRIP").then(v => {
-                this.isBushTrip = v;
-                if (this.isBushTrip) {
-                    console.log("Bushtrip Detected");
-                }
-                if (this.flightPlanElement) {
-                    this.flightPlanElement.highlightActiveLeg = !this.isBushTrip;
-                    this.flightPlanElement.hideReachedWaypoints = !this.isBushTrip;
-                }
-                this.updateFlightPlanVisibility();
-            });
-        }
-    }
+
     updateFlightPlanVisibility() {
         if (this.showFlightPlan) {
             if (this.bHideFlightPlanIfBushtrip) {

@@ -188,6 +188,7 @@ class FMCMainDisplay extends BaseAirliners {
         this.managedSpeedDescendMach = .78;
         // this.managedSpeedDescendMachIsPilotEntered = false;
         this.cruiseFlightLevelTimeOut = undefined;
+        this._flightGuidance = new Guidance(new FlightPlanManager(this), {});
     }
 
     Init() {
