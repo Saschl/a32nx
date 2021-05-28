@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Toggle } from '../Components/Form/Toggle';
 import { Select, SelectGroup, SelectItem } from '../Components/Form/Select';
 import { Slider } from '../Components/Form/Slider';
-import { useSimVarSyncedPersistentProperty } from '../../Common/persistence';
+import { NXDataStore, useSimVarSyncedPersistentProperty } from '../../Common/persistence';
 import Button from '../Components/Button/Button';
 import ThrottleConfig from './ThrottleConfig/ThrottleConfig';
 
@@ -145,13 +145,27 @@ const SoundSettings: React.FC = () => {
 };
 
 const ControlSettings = ({ setShowSettings }) => (
+
     <div className="bg-gray-800 divide-y divide-gray-700 flex flex-col rounded-xl px-6 py-4 shadow-lg">
         <div className="flex flex-row justify-between items-center">
+
+            <span className="text-lg text-gray-300">Brake On Axis</span>
+            <Button
+                text="Unpause"
+                onClick={() => {
+                    if (NXDataStore.get('A32NX_DID_PAUSE', '0') === '1') {
+                        SimVar.SetSimVarValue('K:PAUSE_SET', 'Boolean', 0);
+                    }
+                }}
+            />
+
             <span className="text-lg text-gray-300">Detents</span>
             <Button text="Calibrate" onClick={() => setShowSettings(true)} />
+
         </div>
 
     </div>
+
 );
 
 const FlyPadSettings: React.FC = () => {

@@ -1,8 +1,9 @@
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
-    typeof define === 'function' && define.amd ? define(['exports'], factory) :
-    (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.window = global.window || {}));
-}(this, (function (exports) { 'use strict';
+        typeof define === 'function' && define.amd ? define(['exports'], factory) :
+            (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.window = global.window || {}));
+}(this, (function (exports) {
+    'use strict';
 
     /*! *****************************************************************************
     Copyright (c) Microsoft Corporation.
@@ -20,11 +21,29 @@
     ***************************************************************************** */
 
     function __awaiter(thisArg, _arguments, P, generator) {
-        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        function adopt(value) {
+            return value instanceof P ? value : new P(function (resolve) {
+                resolve(value);
+            });
+        }
         return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            function fulfilled(value) {
+                try {
+                    step(generator.next(value));
+                } catch (e) {
+                    reject(e);
+                }
+            }
+            function rejected(value) {
+                try {
+                    step(generator["throw"](value));
+                } catch (e) {
+                    reject(e);
+                }
+            }
+            function step(result) {
+                result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
             step((generator = generator.apply(thisArg, _arguments || [])).next());
         });
     }
@@ -198,7 +217,7 @@
             this.fm[n] = n;
         }
         this.k[1][1] = 0.0;
-        this.fm[0] = 0.0; // !!!!!! WMM C and Fortran both have a bug in that fm[0] is not initialised 
+        this.fm[0] = 0.0; // !!!!!! WMM C and Fortran both have a bug in that fm[0] is not initialised
     }
     WorldMagneticModel.prototype.declination = function (altitudeKm, latitudeDegrees, longitudeDegrees, yearFloat) {
         /* locals */
@@ -222,8 +241,9 @@
         /*************************************************************************/
         dt = yearFloat - 2020.0;
         //if more then 5 years has passed since last epoch update then return invalid
-        if ((dt < 0.0) || (dt > 5.0))
+        if ((dt < 0.0) || (dt > 5.0)) {
             return -999;
+        }
         pi = 3.14159265359;
         dtr = pi / 180.0;
         rlon = glon * dtr;
@@ -264,16 +284,16 @@
                 if (n == m) {
                     this.snorm[n + m * 13] = st * this.snorm[n - 1 + (m - 1) * 13];
                     this.dp[m][n] = st * this.dp[m - 1][n - 1] + ct * this.snorm[n - 1 + (m - 1) * 13];
-                }
-                else if (n == 1 && m == 0) {
+                } else if (n == 1 && m == 0) {
                     this.snorm[n + m * 13] = ct * this.snorm[n - 1 + m * 13];
                     this.dp[m][n] = ct * this.dp[m][n - 1] - st * this.snorm[n - 1 + m * 13];
-                }
-                else if (n > 1 && n != m) {
-                    if (m > n - 2)
+                } else if (n > 1 && n != m) {
+                    if (m > n - 2) {
                         this.snorm[n - 2 + m * 13] = 0.0;
-                    if (m > n - 2)
+                    }
+                    if (m > n - 2) {
                         this.dp[m][n - 2] = 0.0;
+                    }
                     this.snorm[n + m * 13] = ct * this.snorm[n - 1 + m * 13] - this.k[m][n] * this.snorm[n - 2 + m * 13];
                     this.dp[m][n] = ct * this.dp[m][n - 1] - st * this.snorm[n - 1 + m * 13] - this.k[m][n] * this.dp[m][n - 2];
                 }
@@ -281,8 +301,9 @@
                 TIME ADJUST THE GAUSS COEFFICIENTS
                 */
                 this.tc[m][n] = this.c[m][n] + dt * this.cd[m][n];
-                if (m != 0)
+                if (m != 0) {
                     this.tc[n][m - 1] = this.c[n][m - 1] + dt * this.cd[n][m - 1];
+                }
                 /*
                 ACCUMULATE TERMS OF THE SPHERICAL HARMONIC EXPANSIONS
                 */
@@ -290,8 +311,7 @@
                 if (m == 0) {
                     temp1 = this.tc[m][n] * this.cp[m];
                     temp2 = this.tc[m][n] * this.sp[m];
-                }
-                else {
+                } else {
                     temp1 = this.tc[m][n] * this.cp[m] + this.tc[n][m - 1] * this.sp[m];
                     temp2 = this.tc[m][n] * this.sp[m] - this.tc[n][m - 1] * this.cp[m];
                 }
@@ -302,19 +322,21 @@
                 SPECIAL CASE:  NORTH/SOUTH GEOGRAPHIC POLES
                 */
                 if (st == 0.0 && m == 1) {
-                    if (n == 1)
+                    if (n == 1) {
                         this.pp[n] = this.pp[n - 1];
-                    else
+                    } else {
                         this.pp[n] = this.ct * this.pp[n - 1] - this.k[m][n] * this.pp[n - 2];
+                    }
                     parp = ar * this.pp[n];
                     bpp += (this.fm[m] * temp2 * parp);
                 }
             }
         }
-        if (st == 0.0)
+        if (st == 0.0) {
             bp = bpp;
-        else
+        } else {
             bp /= st;
+        }
         /*
             ROTATE MAGNETIC VECTOR COMPONENTS FROM SPHERICAL TO
             GEODETIC COORDINATES
@@ -627,7 +649,6 @@
     C            ELLIPSOID
     C
 
-
     */
 
     /** A class for geographical mathematics. */
@@ -676,8 +697,7 @@
             let normalizedMagVar;
             if (magneticVariation <= 180) {
                 normalizedMagVar = magneticVariation;
-            }
-            else {
+            } else {
                 normalizedMagVar = magneticVariation - 360;
             }
             return normalizedMagVar;
@@ -744,7 +764,7 @@
             console.log("destination? " + fpm.getDestination() ? "True" : "False");
             const destinationDistanceInFlightplan = fpm.getDestination().cumulativeDistanceInFP;
             console.log("destinationDistanceInFlightplan " + destinationDistanceInFlightplan);
-            const placeDistanceFromDestination = fpm.getWaypoint(placeIndex, NaN, true).cumulativeDistanceInFP;
+            const placeDistanceFromDestination = fpm.getWaypoint(placeIndex, NaN).cumulativeDistanceInFP;
             console.log("placeDistanceFromDestination " + placeDistanceFromDestination);
             const distanceFromDestination = destinationDistanceInFlightplan - placeDistanceFromDestination - distance;
             console.log("distanceFromDestination " + distanceFromDestination);
@@ -792,8 +812,7 @@
                                         console.log(wpt.icao);
                                         if (wpt.icao.trim() !== "") {
                                             yield fpln.addWaypoint(wpt.icao);
-                                        }
-                                        else if (wpt.ident === "Custom") {
+                                        } else if (wpt.ident === "Custom") {
                                             const cwpt = WaypointBuilder.fromCoordinates("CUST" + i, wpt.lla, fpln._parentInstrument);
                                             yield fpln.addUserWaypoint(cwpt);
                                         }
@@ -969,22 +988,17 @@
             if (turnDirection === exports.HoldTurnDirection.Right) {
                 if (courseDiff >= -130 && courseDiff <= 70) {
                     return exports.HoldEntry.Direct;
-                }
-                else if (courseDiff < -130 || courseDiff > 175) {
+                } else if (courseDiff < -130 || courseDiff > 175) {
                     return exports.HoldEntry.Teardrop;
-                }
-                else {
+                } else {
                     return exports.HoldEntry.Parallel;
                 }
-            }
-            else {
+            } else {
                 if (courseDiff >= -130 && courseDiff <= 70) {
                     return exports.HoldEntry.Direct;
-                }
-                else if (courseDiff > 70 || courseDiff < -175) {
+                } else if (courseDiff > 70 || courseDiff < -175) {
                     return exports.HoldEntry.Teardrop;
-                }
-                else {
+                } else {
                     return exports.HoldEntry.Parallel;
                 }
             }
@@ -1088,21 +1102,17 @@
                 let v1 = 0;
                 if (r1.designation.indexOf("L") != -1) {
                     v1 = 1;
-                }
-                else if (r1.designation.indexOf("C") != -1) {
+                } else if (r1.designation.indexOf("C") != -1) {
                     v1 = 2;
-                }
-                else if (r1.designation.indexOf("R") != -1) {
+                } else if (r1.designation.indexOf("R") != -1) {
                     v1 = 3;
                 }
                 let v2 = 0;
                 if (r2.designation.indexOf("L") != -1) {
                     v2 = 1;
-                }
-                else if (r2.designation.indexOf("C") != -1) {
+                } else if (r2.designation.indexOf("C") != -1) {
                     v2 = 2;
-                }
-                else if (r2.designation.indexOf("R") != -1) {
+                } else if (r2.designation.indexOf("R") != -1) {
                     v2 = 3;
                 }
                 return v1 - v2;
@@ -1226,8 +1236,7 @@
                     if (this._currentIndex === 0 && currentLeg.type === 10 && !this._addedProcedureStart) {
                         mappedLeg = this.mapExactFix(currentLeg, this._previousFix);
                         this._addedProcedureStart = true;
-                    }
-                    else {
+                    } else {
                         try {
                             switch (currentLeg.type) {
                                 case 3:
@@ -1238,8 +1247,7 @@
                                     //adding runway fixes
                                     if (currentLeg.fixIcao === '' || currentLeg.fixIcao[0] !== 'R') {
                                         mappedLeg = this.mapOriginRadialForDistance(currentLeg, this._previousFix);
-                                    }
-                                    else {
+                                    } else {
                                         isLegMappable = false;
                                     }
                                     break;
@@ -1271,8 +1279,7 @@
                                             if (leg.icao === prevLeg.icao && leg.infos.coordinates.lat === prevLeg.infos.coordinates.lat
                                                 && leg.infos.coordinates.long === prevLeg.infos.coordinates.long) {
                                                 isLegMappable = false;
-                                            }
-                                            else {
+                                            } else {
                                                 mappedLeg = leg;
                                             }
                                         }
@@ -1295,8 +1302,7 @@
                                     isLegMappable = false;
                                     break;
                             }
-                        }
-                        catch (err) {
+                        } catch (err) {
                             console.log(`LegsProcedure: Unexpected unmappable leg: ${err}`);
                         }
                         if (mappedLeg !== undefined) {
@@ -1304,8 +1310,7 @@
                                 mappedLeg.legAltitudeDescription = 1;
                                 mappedLeg.legAltitude1 = 100 * Math.round((currentLeg.altitude2 * 3.28084) / 100);
                                 mappedLeg.legAltitude2 = 100 * Math.round((currentLeg.altitude1 * 3.28084) / 100);
-                            }
-                            else {
+                            } else {
                                 mappedLeg.legAltitudeDescription = currentLeg.altDesc;
                                 mappedLeg.legAltitude1 = 100 * Math.round((currentLeg.altitude1 * 3.28084) / 100);
                                 mappedLeg.legAltitude2 = 100 * Math.round((currentLeg.altitude2 * 3.28084) / 100);
@@ -1318,8 +1323,7 @@
                     this._fixMinusTwo = this._previousFix;
                     this._previousFix = mappedLeg;
                     return mappedLeg;
-                }
-                else {
+                } else {
                     return undefined;
                 }
             });
@@ -1374,8 +1378,7 @@
         mapOriginRadialForDistance(leg, prevLeg) {
             if (leg.fixIcao.trim() !== '') {
                 return this.mapExactFix(leg, prevLeg);
-            }
-            else {
+            } else {
                 const origin = this._facilities.get(leg.originIcao);
                 const originIdent = origin.icao.substring(7, 12).trim();
                 const course = leg.course + GeoMath.getMagvar(prevLeg.infos.coordinates.lat, prevLeg.infos.coordinates.long);
@@ -1484,8 +1487,7 @@
             const facility = this._facilities.get(leg.fixIcao);
             if (facility) {
                 return RawDataMapper.toWaypoint(facility, this._instrument);
-            }
-            else {
+            } else {
                 const origin = this._facilities.get(leg.originIcao);
                 const originIdent = origin.icao.substring(7, 12).trim();
                 const coordinates = Avionics.Utils.bearingDistanceToCoordinates(leg.theta, leg.rho / 1852, origin.lat, origin.lon);
@@ -1623,21 +1625,37 @@
             this._segments = [new FlightPlanSegment(exports.SegmentType.Enroute, 0, [])];
         }
         /** The departure segment of the flight plan. */
-        get departure() { return this.getSegment(exports.SegmentType.Departure); }
+        get departure() {
+            return this.getSegment(exports.SegmentType.Departure);
+        }
         /** The enroute segment of the flight plan. */
-        get enroute() { return this.getSegment(exports.SegmentType.Enroute); }
+        get enroute() {
+            return this.getSegment(exports.SegmentType.Enroute);
+        }
         /** The arrival segment of the flight plan. */
-        get arrival() { return this.getSegment(exports.SegmentType.Arrival); }
+        get arrival() {
+            return this.getSegment(exports.SegmentType.Arrival);
+        }
         /** The approach segment of the flight plan. */
-        get approach() { return this.getSegment(exports.SegmentType.Approach); }
+        get approach() {
+            return this.getSegment(exports.SegmentType.Approach);
+        }
         /** The approach segment of the flight plan. */
-        get missed() { return this.getSegment(exports.SegmentType.Missed); }
+        get missed() {
+            return this.getSegment(exports.SegmentType.Missed);
+        }
         /** Whether the flight plan has an origin airfield. */
-        get hasOrigin() { return this.originAirfield; }
+        get hasOrigin() {
+            return this.originAirfield;
+        }
         /** Whether the flight plan has a destination airfield. */
-        get hasDestination() { return this.destinationAirfield; }
+        get hasDestination() {
+            return this.destinationAirfield;
+        }
         /** The currently active waypoint. */
-        get activeWaypoint() { return this.waypoints[this.activeWaypointIndex]; }
+        get activeWaypoint() {
+            return this.waypoints[this.activeWaypointIndex];
+        }
         /** The waypoints of the flight plan. */
         get waypoints() {
             const waypoints = [];
@@ -1741,8 +1759,7 @@
                 this.procedureDetails.originRunwayIndex = -1;
                 this.reflowSegments();
                 this.reflowDistances();
-            }
-            else if (mappedWaypoint.type === 'A' && index === undefined) {
+            } else if (mappedWaypoint.type === 'A' && index === undefined) {
                 this.destinationAirfield = mappedWaypoint;
                 this.procedureDetails.arrivalIndex = -1;
                 this.procedureDetails.arrivalRunwayIndex = -1;
@@ -1751,14 +1768,15 @@
                 this.procedureDetails.approachTransitionIndex = -1;
                 this.reflowSegments();
                 this.reflowDistances();
-            }
-            else {
+            } else {
                 let segment = segmentType !== undefined
                     ? this.getSegment(segmentType)
                     : this.findSegmentByWaypointIndex(index);
                 // hitting first waypoint in segment > enroute
                 if (segment.type > exports.SegmentType.Enroute && index == segment.offset) {
-                    const segIdx = this._segments.findIndex((seg) => { return seg.type == segment.type; });
+                    const segIdx = this._segments.findIndex((seg) => {
+                        return seg.type == segment.type;
+                    });
                     // is prev segment enroute?
                     const prevSeg = this._segments[segIdx - 1];
                     if (prevSeg.type == exports.SegmentType.Enroute) {
@@ -1773,20 +1791,17 @@
                         const segmentIndex = index - segment.offset;
                         if (segmentIndex < segment.waypoints.length) {
                             segment.waypoints.splice(segmentIndex, 0, mappedWaypoint);
-                        }
-                        else {
+                        } else {
                             segment.waypoints.push(mappedWaypoint);
                         }
-                    }
-                    else {
+                    } else {
                         segment.waypoints.push(mappedWaypoint);
                     }
                     this.reflowSegments();
                     this.reflowDistances();
                     if (this.activeWaypointIndex === 0 && this.length > 1) {
                         this.activeWaypointIndex = 1;
-                    }
-                    else if (this.activeWaypointIndex === 1 && waypoint.isRunway && segment.type === exports.SegmentType.Departure) {
+                    } else if (this.activeWaypointIndex === 1 && waypoint.isRunway && segment.type === exports.SegmentType.Departure) {
                         this.activeWaypointIndex = 2;
                     }
                 }
@@ -1801,11 +1816,9 @@
                 this.originAirfield = undefined;
                 this.reflowSegments();
                 this.reflowDistances();
-            }
-            else if (this.destinationAirfield && index === this.length - 1) {
+            } else if (this.destinationAirfield && index === this.length - 1) {
                 this.destinationAirfield = undefined;
-            }
-            else {
+            } else {
                 const segment = this.findSegmentByWaypointIndex(index);
                 if (segment) {
                     segment.waypoints.splice(index - segment.offset, 1);
@@ -2046,7 +2059,7 @@
             else {
               const coords1 = Avionics.Utils.bearingDistanceToCoordinates(planeHeading, interceptDistance / 2, lat, long);
               const coords2 = Avionics.Utils.bearingDistanceToCoordinates(planeHeading + (angleDiff / 2), interceptDistance / 2, coords1.lat, coords1.long);
-        
+
               return [createInterceptPoint(planeCoords), createInterceptPoint(coords1), createInterceptPoint(coords2)];
             }
             */
@@ -2092,8 +2105,7 @@
                     let runway;
                     if (selectedOriginRunwayIndex !== -1) {
                         runway = airportInfo.oneWayRunways[selectedOriginRunwayIndex];
-                    }
-                    else if (runwayIndex !== -1) {
+                    } else if (runwayIndex !== -1) {
                         runway = this.getRunway(airportInfo.oneWayRunways, airportInfo.departures[departureIndex].runwayTransitions[runwayIndex].name);
                     }
                     if (runway) {
@@ -2102,16 +2114,13 @@
                         if (selectedRunwayMod == "L" || selectedRunwayMod == "C" || selectedRunwayMod == "R") {
                             if (runway.designation.length == 2) {
                                 selectedRunwayOutput = "0" + runway.designation;
-                            }
-                            else {
+                            } else {
                                 selectedRunwayOutput = runway.designation;
                             }
-                        }
-                        else {
+                        } else {
                             if (runway.designation.length == 2) {
                                 selectedRunwayOutput = runway.designation;
-                            }
-                            else {
+                            } else {
                                 selectedRunwayOutput = "0" + runway.designation;
                             }
                         }
@@ -2232,8 +2241,7 @@
                     let runway;
                     if (approachIndex !== -1) {
                         runway = this.getRunway(destinationInfo.oneWayRunways, destinationInfo.approaches[approachIndex].runway);
-                    }
-                    else if (destinationRunwayIndex !== -1) {
+                    } else if (destinationRunwayIndex !== -1) {
                         runway = destinationInfo.oneWayRunways[destinationRunwayIndex];
                     }
                     if (runway) {
@@ -2242,16 +2250,13 @@
                         if (selectedRunwayMod == "L" || selectedRunwayMod == "C" || selectedRunwayMod == "R") {
                             if (runway.designation.length == 2) {
                                 selectedRunwayOutput = "0" + runway.designation;
-                            }
-                            else {
+                            } else {
                                 selectedRunwayOutput = runway.designation;
                             }
-                        }
-                        else {
+                        } else {
                             if (runway.designation.length == 2) {
                                 selectedRunwayOutput = runway.designation;
-                            }
-                            else {
+                            } else {
                                 selectedRunwayOutput = "0" + runway.designation;
                             }
                         }
@@ -2301,8 +2306,7 @@
             if (segment.waypoints.length === 0) {
                 this.removeSegment(segment.type);
                 segment = FlightPlanSegment.Empty;
-            }
-            else {
+            } else {
                 segment.waypoints[Math.min(Math.max((startIndex - 1) - segment.offset, 0), segment.waypoints.length - 1)].endsInDiscontinuity = true;
             }
             return { startIndex, segment };
@@ -2321,8 +2325,7 @@
                 if (runwayLetter === ' ' || runwayLetter === 'C') {
                     const runwayDirection = runwayName.trim();
                     runwayIndex = runways.findIndex(r => r.designation === runwayDirection || r.designation === `${runwayDirection}C`);
-                }
-                else {
+                } else {
                     runwayIndex = runways.findIndex(r => r.designation === runwayName);
                 }
                 if (runwayIndex !== -1) {
@@ -2370,8 +2373,7 @@
                     if (typeof obj[key] === 'object' && obj[key] && obj[key].scroll === undefined) {
                         if (Array.isArray(obj[key])) {
                             visitArray(obj[key]);
-                        }
-                        else {
+                        } else {
                             visitObject(obj[key]);
                         }
                         obj[key] = mapObject(obj[key], obj.type);
@@ -2382,8 +2384,7 @@
                 array.forEach((item, index) => {
                     if (Array.isArray(item)) {
                         visitArray(item);
-                    }
-                    else if (typeof item === 'object') {
+                    } else if (typeof item === 'object') {
                         visitObject(item);
                     }
                     array[index] = mapObject(item);
@@ -2498,8 +2499,7 @@
                 const newFpln = new ManagedFlightPlan();
                 newFpln.setParentInstrument(this._parentInstrument);
                 this._flightPlans.push(new ManagedFlightPlan());
-            }
-            else {
+            } else {
                 this._flightPlans = this._flightPlans.map(fp => ManagedFlightPlan.fromObject(fp, this._parentInstrument));
             }
         }
@@ -2524,8 +2524,7 @@
             if (index >= 0 && index < this._flightPlans.length) {
                 this._currentFlightPlanIndex = index;
                 callback(true);
-            }
-            else {
+            } else {
                 callback(false);
             }
         }
@@ -2564,7 +2563,9 @@
                 const copiedFlightPlan = this._flightPlans[index].copy();
                 copiedFlightPlan.activeWaypointIndex;
                 this._flightPlans[this._currentFlightPlanIndex] = copiedFlightPlan;
-                if (this._currentFlightPlanIndex === 0) ;
+                if (this._currentFlightPlanIndex === 0) {
+                    ;
+                }
                 this._updateFlightPlanVersion();
                 callback();
             });
@@ -2960,8 +2961,7 @@
             const waypoint = currentFlightPlan.getWaypoint(index);
             if (waypoint) {
                 callback(waypoint.additionalData[key]);
-            }
-            else {
+            } else {
                 callback(undefined);
             }
         }
@@ -3043,7 +3043,7 @@
          * @param flightPlanIndex The index of the flight plan to get the waypoint from. If omitted, will get from the current flight plan.
          * @param considerApproachWaypoints Whether or not to consider approach waypoints.
          */
-        getWaypoint(index, flightPlanIndex = NaN, considerApproachWaypoints) {
+        getWaypoint(index, flightPlanIndex = NaN) {
             if (isNaN(flightPlanIndex)) {
                 flightPlanIndex = this._currentFlightPlanIndex;
             }
@@ -3095,15 +3095,15 @@
                     .runwayTransitions[currentFlightPlan.procedureDetails.departureRunwayIndex]
                     .name.replace("RW", "");
                 const runway = currentFlightPlan.originAirfield.infos.oneWayRunways
-                    .find(r => { return r.designation.indexOf(depRunway) !== -1; });
+                    .find(r => {
+                        return r.designation.indexOf(depRunway) !== -1;
+                    });
                 if (runway) {
                     return runway;
-                }
-                else {
+                } else {
                     return undefined;
                 }
-            }
-            else if (currentFlightPlan.procedureDetails.originRunwayIndex !== -1) {
+            } else if (currentFlightPlan.procedureDetails.originRunwayIndex !== -1) {
                 return currentFlightPlan.originAirfield.infos.oneWayRunways[currentFlightPlan.procedureDetails.originRunwayIndex];
             }
             return undefined;
@@ -3398,7 +3398,9 @@
         activateApproach(callback = EmptyCallback.Void) {
             return __awaiter(this, void 0, void 0, function* () {
                 this._flightPlans[this._currentFlightPlanIndex];
-                if (!this.isActiveApproach()) ;
+                if (!this.isActiveApproach()) {
+                    ;
+                }
                 callback();
             });
         }
@@ -3475,8 +3477,7 @@
             // TODO: if we have an approach return last index
             if (currentFlightPlan.approach !== FlightPlanSegment.Empty) {
                 return currentFlightPlan.approach.offset - 1;
-            }
-            else {
+            } else {
                 return this.getWaypointsCount();
             }
         }
@@ -3586,8 +3587,7 @@
             const currentFlightPlan = this._flightPlans[this._currentFlightPlanIndex];
             if (currentFlightPlan.directTo.waypointIsInFlightPlan) {
                 return currentFlightPlan.waypoints[currentFlightPlan.directTo.planWaypointIndex];
-            }
-            else {
+            } else {
                 return currentFlightPlan.directTo.waypoint;
             }
         }
@@ -3685,12 +3685,10 @@
                 const initFpln = new ManagedFlightPlan();
                 initFpln.setParentInstrument(this._parentInstrument);
                 this._flightPlans.push(initFpln);
-            }
-            else {
+            } else {
                 if (window.localStorage.getItem(FlightPlanManager.FlightPlanCompressedKey) == "1") {
                     this._flightPlans = JSON.parse(LZUTF8.decompress(fpln, { inputEncoding: "StorageBinaryString" }));
-                }
-                else {
+                } else {
                     this._flightPlans = JSON.parse(fpln);
                 }
             }
@@ -3713,8 +3711,7 @@
                 if (fpJson.length > 2500000) {
                     fpJson = LZUTF8.compress(fpJson, { outputEncoding: "StorageBinaryString" });
                     window.localStorage.setItem(FlightPlanManager.FlightPlanCompressedKey, "1");
-                }
-                else {
+                } else {
                     window.localStorage.setItem(FlightPlanManager.FlightPlanCompressedKey, "0");
                 }
                 window.localStorage.setItem(FlightPlanManager.FlightPlanKey, fpJson);
@@ -3885,11 +3882,11 @@
     CJ4_MessageDefinitions._definitions = new Map([
         [exports.FMS_MESSAGE_ID.INIT_POS, new OperatingMessage([new MessageDefinition("INITIALIZE POSITION", exports.MESSAGE_TARGET.FMC)], exports.MESSAGE_LEVEL.Yellow, 50)],
         [exports.FMS_MESSAGE_ID.NO_FPLN, new OperatingMessage([new MessageDefinition("NO FLIGHT PLAN", exports.MESSAGE_TARGET.FMC),
-                new MessageDefinition("NO FLIGHT PLAN", exports.MESSAGE_TARGET.MAP_MID)], exports.MESSAGE_LEVEL.White, 20)],
+            new MessageDefinition("NO FLIGHT PLAN", exports.MESSAGE_TARGET.MAP_MID)], exports.MESSAGE_LEVEL.White, 20)],
         [exports.FMS_MESSAGE_ID.FPLN_DISCO, new OperatingMessage([new MessageDefinition("FPLN DISCONTINUITY", exports.MESSAGE_TARGET.FMC),
-                new MessageDefinition("DISCONTINUITY", exports.MESSAGE_TARGET.MAP_MID)], exports.MESSAGE_LEVEL.Yellow, 90)],
+            new MessageDefinition("DISCONTINUITY", exports.MESSAGE_TARGET.MAP_MID)], exports.MESSAGE_LEVEL.Yellow, 90)],
         [exports.FMS_MESSAGE_ID.CHK_SPD, new OperatingMessage([new MessageDefinition("CHECK SPEED", exports.MESSAGE_TARGET.FMC),
-                new MessageDefinition("SPD", exports.MESSAGE_TARGET.PFD_BOT)], exports.MESSAGE_LEVEL.Yellow, 80)],
+            new MessageDefinition("SPD", exports.MESSAGE_TARGET.PFD_BOT)], exports.MESSAGE_LEVEL.Yellow, 80)],
         [exports.FMS_MESSAGE_ID.CHK_ALT_SEL, new OperatingMessage([new MessageDefinition("CHECK ALT SEL", exports.MESSAGE_TARGET.FMC)], exports.MESSAGE_LEVEL.White, 70)],
         [exports.FMS_MESSAGE_ID.HOLD, new OperatingMessage([new MessageDefinition("HOLD", exports.MESSAGE_TARGET.PFD_BOT)], exports.MESSAGE_LEVEL.White, 70)],
         [exports.FMS_MESSAGE_ID.TOD, new OperatingMessage([new MessageDefinition("TOD", exports.MESSAGE_TARGET.PFD_BOT)], exports.MESSAGE_LEVEL.White, 50)],
@@ -4110,14 +4107,12 @@
             this._currentPage = value;
             if (this._currentPage > (this._pageCount - 1)) {
                 this._currentPage = 0;
-            }
-            else if (this._currentPage < 0) {
+            } else if (this._currentPage < 0) {
                 this._currentPage = (this._pageCount - 1);
             }
             if (this._currentPage == 0) {
                 this._offset = 0;
-            }
-            else {
+            } else {
                 this._offset = ((this._currentPage) * 6);
             }
         }
@@ -4206,8 +4201,7 @@
                     if (currentLat.toFixed(4) !== lat.toFixed(4) || currentLon.toFixed(4) !== long.toFixed(4)) {
                         yield startSearch();
                         yield stall(1000);
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }
@@ -4227,8 +4221,7 @@
                                 }
                                 numItems = currentNumItems;
                                 checkNumItems();
-                            }
-                            else {
+                            } else {
                                 resolve();
                             }
                         }, 250);
@@ -4470,8 +4463,7 @@
                 const radioState = this.radioSystem.radioStates[this.radioIndex];
                 if (this._fmc.inOut === undefined || this._fmc.inOut === '') {
                     CJ4_FMC_NavRadioPage.ShowPage1(this._fmc);
-                }
-                else {
+                } else {
                     this.handleFreqPressed(() => radioState.frequency, value => radioState.setManualFrequency(value));
                     this.render();
                     this.bindEvents();
@@ -4521,12 +4513,10 @@
                 if (isFinite(numValue) && numValue >= 108 && numValue <= 117.95 && RadioNav.isHz50Compliant(numValue)) {
                     setter(numValue);
                     this._fmc.inOut = '';
-                }
-                else {
+                } else {
                     this._fmc.showErrorMessage(this._fmc.defaultInputErrorMessage);
                 }
-            }
-            else {
+            } else {
                 this._fmc.inOut = getter().toFixed(2);
             }
         }
@@ -4587,8 +4577,7 @@
             this._activeMsgs.forEach((v, k) => {
                 if (msgToShow === undefined) {
                     msgToShow = v;
-                }
-                else {
+                } else {
                     if ((v.level > msgToShow.level) || (v.level === msgToShow.level && v.weight > msgToShow.weight)) {
                         msgToShow = v;
                     }
@@ -4651,8 +4640,7 @@
                 };
                 const msgJson = JSON.stringify(msgPacket); //, );
                 window.localStorage.setItem(CJ4_PFD_MessageReceiver.PFD_MSGS_KEY, msgJson);
-            }
-            else {
+            } else {
                 window.localStorage.setItem(CJ4_PFD_MessageReceiver.PFD_MSGS_KEY, "");
             }
         }
@@ -4670,8 +4658,7 @@
             filteredArr.forEach(v => {
                 if (returnMsg === undefined) {
                     returnMsg = v;
-                }
-                else {
+                } else {
                     if ((v.level > returnMsg.level) || (v.level === returnMsg.level && v.weight > returnMsg.weight)) {
                         returnMsg = v;
                     }
@@ -4733,20 +4720,17 @@
                     if (msgs.bot) {
                         const msg = JSON.parse(msgs.bot); // For some reason can't access properties when parsing back to CJ4_PFD_Message :(
                         this.botRightText = this.getMsgString(msg);
-                    }
-                    else if (this._botRightText !== "") {
+                    } else if (this._botRightText !== "") {
                         this.botRightText = "";
                     }
                     // get top msg
                     if (msgs.top) {
                         const msg = JSON.parse(msgs.top);
                         this.topText = this.getMsgString(msg);
-                    }
-                    else if (this._topText !== "") {
+                    } else if (this._topText !== "") {
                         this.topText = "";
                     }
-                }
-                else {
+                } else {
                     this.topText = "";
                     this.botRightText = "";
                 }
@@ -4763,8 +4747,7 @@
                         _isBlinking: (fmcMsgLevel == exports.MESSAGE_LEVEL.Yellow && Date.now() - this._fmcMsgTimestamp < 5000)
                     };
                     this.botLeftText = this.getMsgString(fakeMsg);
-                }
-                else if (fmcMsgLevel === -1) {
+                } else if (fmcMsgLevel === -1) {
                     this.botLeftText = "";
                 }
                 this._elapsedTime = 0;
@@ -4815,8 +4798,7 @@
                         this.element.classList.add('blinking');
                         this.blinkTimeout = setTimeout(() => this.element.classList.remove('blinking'), 4000);
                     }
-                }
-                else {
+                } else {
                     this.valueSpan.textContent = '';
                     this.element.classList.remove('blinking');
                 }
@@ -4831,8 +4813,7 @@
                 this.currentlyIsFailed = isFailed;
                 if (isFailed) {
                     this.valueSpan.classList.add('fail');
-                }
-                else {
+                } else {
                     this.valueSpan.classList.remove('fail');
                 }
             }
@@ -4846,29 +4827,39 @@
     */
     class OAuthPkce {
         // eslint-disable-next-line no-var
-        static sha256(r) { function t(r, t) { return r >>> t | r << 32 - t; } for (var h, n, o = Math.pow, e = o(2, 32), f = "", a = [], l = 8 * r.length, g = h = h || [], c = k = k || [], i = c.length, s = {}, u = 2; i < 64; u++)
-            if (!s[u]) {
-                for (h = 0; h < 313; h += u)
-                    s[h] = u;
-                g[i] = o(u, .5) * e | 0, c[i++] = o(u, 1 / 3) * e | 0;
-            } for (r += ""; r.length % 64 - 56;)
-            r += "\0"; for (h = 0; h < r.length; h++) {
-            if ((n = r.charCodeAt(h)) >> 8)
-                return;
-            a[h >> 2] |= n << (3 - h) % 4 * 8;
-        } for (a[a.length] = l / e | 0, a[a.length] = l, n = 0; n < a.length;) {
-            var v = a.slice(n, n += 16), k = g;
-            for (g = g.slice(0, 8), h = 0; h < 64; h++) {
-                var d = v[h - 15], p = v[h - 2], w = g[0], A = g[4], C = g[7] + (t(A, 6) ^ t(A, 11) ^ t(A, 25)) + (A & g[5] ^ ~A & g[6]) + c[h] + (v[h] = h < 16 ? v[h] : v[h - 16] + (t(d, 7) ^ t(d, 18) ^ d >>> 3) + v[h - 7] + (t(p, 17) ^ t(p, 19) ^ p >>> 10) | 0);
-                (g = [C + ((t(w, 2) ^ t(w, 13) ^ t(w, 22)) + (w & g[1] ^ w & g[2] ^ g[1] & g[2])) | 0].concat(g))[4] = g[4] + C | 0;
-            }
-            for (h = 0; h < 8; h++)
-                g[h] = g[h] + k[h] | 0;
-        } for (h = 0; h < 8; h++)
-            for (n = 3; n + 1; n--) {
-                var M = g[h] >> 8 * n & 255;
-                f += (M < 16 ? 0 : "") + M.toString(16);
-            } return f; }
+        static sha256(r) {
+            function t(r, t) {
+                return r >>> t | r << 32 - t;
+            } for (var h, n, o = Math.pow, e = o(2, 32), f = "", a = [], l = 8 * r.length, g = h = h || [], c = k = k || [], i = c.length, s = {}, u = 2; i < 64; u++) {
+                if (!s[u]) {
+                    for (h = 0; h < 313; h += u) {
+                        s[h] = u;
+                    }
+                    g[i] = o(u, .5) * e | 0, c[i++] = o(u, 1 / 3) * e | 0;
+                }
+            } for (r += ""; r.length % 64 - 56;) {
+                r += "\0";
+            } for (h = 0; h < r.length; h++) {
+                if ((n = r.charCodeAt(h)) >> 8) {
+                    return;
+                }
+                a[h >> 2] |= n << (3 - h) % 4 * 8;
+            } for (a[a.length] = l / e | 0, a[a.length] = l, n = 0; n < a.length;) {
+                var v = a.slice(n, n += 16), k = g;
+                for (g = g.slice(0, 8), h = 0; h < 64; h++) {
+                    var d = v[h - 15], p = v[h - 2], w = g[0], A = g[4], C = g[7] + (t(A, 6) ^ t(A, 11) ^ t(A, 25)) + (A & g[5] ^ ~A & g[6]) + c[h] + (v[h] = h < 16 ? v[h] : v[h - 16] + (t(d, 7) ^ t(d, 18) ^ d >>> 3) + v[h - 7] + (t(p, 17) ^ t(p, 19) ^ p >>> 10) | 0);
+                    (g = [C + ((t(w, 2) ^ t(w, 13) ^ t(w, 22)) + (w & g[1] ^ w & g[2] ^ g[1] & g[2])) | 0].concat(g))[4] = g[4] + C | 0;
+                }
+                for (h = 0; h < 8; h++) {
+                    g[h] = g[h] + k[h] | 0;
+                }
+            } for (h = 0; h < 8; h++) {
+                for (n = 3; n + 1; n--) {
+                    var M = g[h] >> 8 * n & 255;
+                    f += (M < 16 ? 0 : "") + M.toString(16);
+                }
+            } return f;
+        }
         static getRandomBytes(length) {
             const bytes = new Uint8Array(length);
             window.crypto.getRandomValues(bytes);
@@ -4972,12 +4963,10 @@
                 if (method === 'post' && body) {
                     if (body instanceof Map) {
                         xhr.send(urlencodeFormData(body));
-                    }
-                    else {
+                    } else {
                         xhr.send(JSON.stringify(body));
                     }
-                }
-                else {
+                } else {
                     xhr.send();
                 }
             });
@@ -5033,8 +5022,7 @@
                         (this.hasAccessToken && (Date.now() - this._accessTokenTimestamp) > 900000)) {
                         yield this.refreshAccessToken();
                     }
-                }
-                else {
+                } else {
                     yield this.linkAccount();
                 }
             });
@@ -5079,8 +5067,7 @@
                         }
                     }
                     return chartsObj;
-                }
-                else {
+                } else {
                     return this._chartListCache.get(icao);
                 }
             });
@@ -5124,8 +5111,7 @@
                         }
                     }
                     return true;
-                }
-                else {
+                } else {
                     throw ("Auth failed");
                 }
             });
@@ -5303,8 +5289,7 @@
                     // if (this._zoom === 1) {
                     //   this.drawRect(ctx);
                     // }
-                }
-                else {
+                } else {
                     ctx.fillStyle = "#cccac8";
                     ctx.textAlign = "center";
                     ctx.font = "26px Collins ProLine";
@@ -5407,8 +5392,7 @@
                     if (this._zoom === 1) {
                         this.xOffset = -(chartCtrX / (this.isPortrait ? 2.0 : 1.6)) + (this._canvas.width / 2);
                         this.yOffset = -(chartCtrY / (this.isPortrait ? 2.0 : 1.6)) + (this._canvas.height / 2);
-                    }
-                    else {
+                    } else {
                         this.xOffset = -(chartCtrX * this._zoom) + (this._canvas.width / 2);
                         this.yOffset = -(chartCtrY * this._zoom) + (this._canvas.height / 2);
                     }
@@ -5557,8 +5541,7 @@
                             }
                         }
                         return true;
-                    }
-                    catch (err) {
+                    } catch (err) {
                         console.error("Something went wrong with charts");
                     }
                 }
@@ -5704,13 +5687,11 @@
                 if (chart !== undefined) {
                     if (chart.id !== undefined) {
                         this._chartSelectCallback(chart);
-                    }
-                    else {
+                    } else {
                         // multiple charts, go to selection
                         this._multiChartCallback(chart.icao_airport_identifier, CHART_TYPE[chart.type.category]);
                     }
-                }
-                else {
+                } else {
                     // dirtiest haxx
                     const type = CHART_TYPE[this._model.getFlatChartKeys()[this._selectedIndex].toUpperCase()];
                     const icao = (this._selectedIndex > 3) ? this._model.destination : this._model.origin;
@@ -5758,8 +5739,7 @@
             const itemCount = this._model.getFlatChartIndex().length;
             if (this._selectedIndex < 0) {
                 this._selectedIndex = itemCount - 1;
-            }
-            else if (this._selectedIndex >= itemCount) {
+            } else if (this._selectedIndex >= itemCount) {
                 this._selectedIndex = 0;
             }
         }
@@ -5866,8 +5846,7 @@
                             const bMatch = b.index_number.match(/(\d*)-(\d*)([A-Z])?/);
                             if (aMatch[1] === bMatch[1]) {
                                 return parseInt(aMatch[2]) - parseInt(bMatch[2]);
-                            }
-                            else {
+                            } else {
                                 return parseInt(aMatch[1]) - parseInt(bMatch[1]);
                             }
                         });
@@ -5981,14 +5960,12 @@
             if (this._selectedIndex > this.PAGE_SIZE - 1 || (this._currentPage > 0 && this._selectedIndex === 0)) {
                 if (this._selectedIndex === 0) {
                     this._currentPage--;
-                }
-                else {
+                } else {
                     this._currentPage++;
                 }
                 this._selectedIndex = 0;
                 this.render();
-            }
-            else {
+            } else {
                 // decrease index if not on page 1 to accomodate for "prev charts" line
                 const idx = (this._currentPage === 0) ? this._selectedIndex : this._selectedIndex - 1;
                 this._selectCallback(this._model.charts[idx + (this._currentPage * this.PAGE_SIZE)]);
@@ -5999,8 +5976,7 @@
             const itemCount = this._container.querySelectorAll("tr").length;
             if (this._selectedIndex < 0) {
                 this._selectedIndex = itemCount - 1;
-            }
-            else if (this._selectedIndex >= itemCount) {
+            } else if (this._selectedIndex >= itemCount) {
                 this._selectedIndex = 0;
             }
         }
@@ -6071,8 +6047,7 @@
                         case "Lwr_Push_ESC":
                             if (this._mode === CHARTS_MENU_MODE.INDEX) {
                                 this.hide();
-                            }
-                            else {
+                            } else {
                                 this._mode = CHARTS_MENU_MODE.INDEX;
                                 this._views.delete(CHARTS_MENU_MODE.ANYCHART);
                                 this._views.delete(CHARTS_MENU_MODE.LIST);
@@ -6126,20 +6101,17 @@
                         wpt: CJ4_FMC_PilotWaypointParser.parseFullLatLong(matchFullLatLong, fmc),
                         offset: 0
                     };
-                }
-                else if (matchShorhandLatLongEnd) {
+                } else if (matchShorhandLatLongEnd) {
                     newWaypoint = {
                         wpt: CJ4_FMC_PilotWaypointParser.parseShorthandLatLongEnd(matchShorhandLatLongEnd, fmc),
                         offset: 0
                     };
-                }
-                else if (matchShorthandLatLongMid) {
+                } else if (matchShorthandLatLongMid) {
                     newWaypoint = {
                         wpt: CJ4_FMC_PilotWaypointParser.parseShorthandLatLongMid(matchShorthandLatLongMid, fmc),
                         offset: 0
                     };
-                }
-                else if (matchPlaceBearingDistance) {
+                } else if (matchPlaceBearingDistance) {
                     const placeBearingWaypoint = yield CJ4_FMC_PilotWaypointParser.parsePlaceBearingDistance(matchPlaceBearingDistance, fmc);
                     if (placeBearingWaypoint) {
                         newWaypoint = {
@@ -6147,8 +6119,7 @@
                             offset: 0
                         };
                     }
-                }
-                else if (matchAlongTrackOffset) {
+                } else if (matchAlongTrackOffset) {
                     // 1 = Reference Ident
                     // 2 = Distance from Reference
                     // 3 = Ident
@@ -6175,14 +6146,12 @@
                     wpt: CJ4_FMC_PilotWaypointParser.parseFullLatLong(matchFullLatLong, fmc),
                     offset: false
                 };
-            }
-            else if (matchShorhandLatLongEnd) {
+            } else if (matchShorhandLatLongEnd) {
                 newWaypoint = {
                     wpt: CJ4_FMC_PilotWaypointParser.parseShorthandLatLongEnd(matchShorhandLatLongEnd, fmc),
                     offset: false
                 };
-            }
-            else if (matchShorthandLatLongMid) {
+            } else if (matchShorthandLatLongMid) {
                 newWaypoint = {
                     wpt: CJ4_FMC_PilotWaypointParser.parseShorthandLatLongMid(matchShorthandLatLongMid, fmc),
                     offset: false
@@ -6281,8 +6250,7 @@
                     const distance = parseFloat(matchPlaceBearingDistance[3]);
                     const ident = CJ4_FMC_PilotWaypointParser.procMatch(matchPlaceBearingDistance[4], CJ4_FMC_PilotWaypointParser.getIndexedName(referenceWaypoint.ident, fmc));
                     return WaypointBuilder.fromPlaceBearingDistance(ident, referenceCoordinates, bearing, distance, fmc);
-                }
-                else {
+                } else {
                     return undefined;
                 }
             });
@@ -6300,8 +6268,7 @@
                 const waypointIndex = waypoints.findIndex(x => x.ident === currentName);
                 if (waypointIndex === -1) {
                     return currentName;
-                }
-                else {
+                } else {
                     currentIndex++;
                 }
             }
@@ -6376,8 +6343,7 @@
         const svVal = svObj.getValue(svCacheTs);
         if (svVal !== undefined) {
             return svVal;
-        }
-        else {
+        } else {
             const newVal = oldGetSimVar(name, unit, dataSource);
             svObj.setValue(newVal, svCacheTs);
             return newVal;
@@ -6403,6 +6369,503 @@
     };
     clearSv();
 
+    var ControlLaw;
+    (function (ControlLaw) {
+        /**
+         * The only parameter for the Heading law is the desired heading.
+         */
+        ControlLaw[ControlLaw["HEADING"] = 1] = "HEADING";
+        /**
+         * The only parameter for the Track law is the desired course.
+         */
+        ControlLaw[ControlLaw["TRACK"] = 2] = "TRACK";
+        /**
+         * The lateral path law allows for complex lateral path traversal. It requires three parameters:
+         * - Crosstrack Error (XTE)
+         * - Track Angle Error (TAE)
+         * - Roll Angle (Phi)
+         */
+        ControlLaw[ControlLaw["LATERAL_PATH"] = 3] = "LATERAL_PATH";
+    })(ControlLaw || (ControlLaw = {}));
+
+    const EARTH_RADIUS_NM = 3440.1;
+    const mod = (x, n) => x - Math.floor(x / n) * n;
+    class Leg {
+    }
+    class TFLeg extends Leg {
+        constructor(from, to) {
+            super();
+            this.from = from;
+            this.to = to;
+        }
+        get bearing() {
+            return Avionics.Utils.computeGreatCircleHeading(this.from.infos.coordinates, this.to.infos.coordinates);
+        }
+        getGuidanceParameters(ppos, trueTrack) {
+            const fromLatLongAlt = this.from.infos.coordinates;
+            const desiredTrack = this.bearing;
+            const trackAngleError = mod(desiredTrack - trueTrack + 180, 360) - 180;
+            // crosstrack error
+            const bearingAC = Avionics.Utils.computeGreatCircleHeading(fromLatLongAlt, ppos);
+            const bearingAB = desiredTrack;
+            const distanceAC = Avionics.Utils.computeDistance(fromLatLongAlt, ppos);
+            const desiredOffset = 0;
+            const actualOffset = (Math.asin(Math.sin(Avionics.Utils.DEG2RAD * (distanceAC / EARTH_RADIUS_NM))
+                * Math.sin(Avionics.Utils.DEG2RAD * (bearingAC - bearingAB))) / Avionics.Utils.DEG2RAD) * EARTH_RADIUS_NM;
+            const crossTrackError = desiredOffset - actualOffset;
+            return {
+                law: ControlLaw.LATERAL_PATH,
+                trackAngleError,
+                crossTrackError,
+                phiCommand: 0,
+            };
+        }
+        getDistanceToGo(ppos) {
+            const aircraftToTerminationBearing = Avionics.Utils.computeGreatCircleHeading(ppos, this.to.infos.coordinates);
+            let aircraftLegBearing;
+            if (aircraftToTerminationBearing < 180) {
+                aircraftLegBearing = aircraftToTerminationBearing + 180;
+            } else {
+                const bearingCompositeAngle = 360 - aircraftToTerminationBearing;
+                const bearingComplementaryAngle = 180 - bearingCompositeAngle;
+                aircraftLegBearing = mod((bearingComplementaryAngle + this.bearing) + 90, 360);
+            }
+            const absDtg = Avionics.Utils.computeGreatCircleDistance(ppos, this.to.infos.coordinates);
+            // @todo should be abeam distance
+            if (aircraftLegBearing >= 90 && aircraftLegBearing <= 270) {
+                return absDtg;
+            }
+            return -absDtg;
+        }
+        get distance() {
+            return Avionics.Utils.computeGreatCircleDistance(this.from.infos.coordinates, this.to.infos.coordinates);
+        }
+        isAbeam(ppos) {
+            const bearingAC = Avionics.Utils.computeGreatCircleHeading(this.from.infos.coordinates, ppos);
+            const headingAC = Math.abs(Avionics.Utils.diffAngle(this.bearing, bearingAC));
+            if (headingAC > 90) {
+                // if we're even not abeam of the starting point
+                return false;
+            }
+            const distanceAC = Avionics.Utils.computeDistance(this.from.infos.coordinates, ppos);
+            const distanceAX = Math.cos(headingAC * Avionics.Utils.DEG2RAD) * distanceAC;
+            // if we're too far away from the starting point to be still abeam of the ending point
+            return distanceAX <= this.distance;
+        }
+        toString() {
+            return `<TFLeg from=${this.from} to=${this.to}>`;
+        }
+    }
+    class Transition {
+    }
+    /**
+     * A type I transition uses a fixed turn radius between two fix-referenced legs.
+     */
+    class Type1Transition extends Transition {
+        constructor(previousLeg, nextLeg, radius, clockwise) {
+            super();
+            this.previousLeg = previousLeg;
+            this.nextLeg = nextLeg;
+            this.radius = radius;
+            this.clockwise = clockwise;
+        }
+        get angle() {
+            const bearingFrom = this.previousLeg.bearing;
+            const bearingTo = this.nextLeg.bearing;
+            return Math.abs(Avionics.Utils.diffAngle(bearingFrom, bearingTo));
+        }
+        /**
+         * Returns the center of the turning circle, with radius distance from both
+         * legs, i.e. min_distance(previous, center) = min_distance(next, center) = radius.
+         */
+        get center() {
+            const bisecting = (180 - this.angle) / 2;
+            const distanceCenterToWaypoint = this.radius / Math.sin(bisecting * Avionics.Utils.DEG2RAD);
+            const { lat, long } = this.previousLeg.to.infos.coordinates.toLatLong();
+            const inboundReciprocal = mod(this.previousLeg.bearing + 180, 360);
+            return Avionics.Utils.bearingDistanceToCoordinates(mod(inboundReciprocal + (this.clockwise ? -bisecting : bisecting), 360), distanceCenterToWaypoint, lat, long);
+        }
+        isAbeam(ppos) {
+            const [inbound] = this.getTurningPoints();
+            const bearingAC = Avionics.Utils.computeGreatCircleHeading(inbound, ppos);
+            const headingAC = Math.abs(Avionics.Utils.diffAngle(this.previousLeg.bearing, bearingAC));
+            return headingAC <= 90;
+        }
+        get distance() {
+            const circumference = 2 * Math.PI * this.radius;
+            return circumference / 360 * this.angle;
+        }
+        getTurningPoints() {
+            const bisecting = (180 - this.angle) / 2;
+            const distanceTurningPointToWaypoint = this.radius / Math.tan(bisecting * Avionics.Utils.DEG2RAD);
+            const { lat, long } = this.previousLeg.to.infos.coordinates.toLatLong();
+            const inbound = Avionics.Utils.bearingDistanceToCoordinates(mod(this.previousLeg.bearing + 180, 360), distanceTurningPointToWaypoint, lat, long);
+            const outbound = Avionics.Utils.bearingDistanceToCoordinates(this.nextLeg.bearing, distanceTurningPointToWaypoint, lat, long);
+            return [inbound, outbound];
+        }
+        /**
+         * Returns the distance to the termination point
+         *
+         * @param _ppos
+         */
+        getDistanceToGo(_ppos) {
+            return 0;
+        }
+        getTrackDistanceToTerminationPoint(ppos) {
+            // In order to make the angles easier, we rotate the entire frame of reference so that the line from the center
+            // towards the intersection point (the bisector line) is at 180°. Thus, the bisector is crossed when the
+            // aircraft reaches 180° (rotated) bearing as seen from the center point.
+            const brgInverseBisector = Avionics.Utils.computeGreatCircleHeading(this.center, this.previousLeg.to.infos.coordinates);
+            const correctiveFactor = 180 - brgInverseBisector;
+            const minBearing = this.clockwise ? 180 - this.angle / 2 : 180;
+            const maxBearing = this.clockwise ? 180 : 180 + this.angle / 2;
+            const rotatedBearing = mod(Avionics.Utils.computeGreatCircleHeading(this.center, ppos) + correctiveFactor, 360);
+            const limitedBearing = Math.min(Math.max(rotatedBearing, minBearing), maxBearing);
+            const remainingArcDegs = this.clockwise ? 180 - limitedBearing : limitedBearing - 180;
+            return (2 * Math.PI * this.radius) / 360 * remainingArcDegs;
+        }
+        getGuidanceParameters(ppos, trueTrack) {
+            const { center } = this;
+            const bearingPpos = Avionics.Utils.computeGreatCircleHeading(center, ppos);
+            const desiredTrack = mod(this.clockwise ? bearingPpos + 90 : bearingPpos - 90, 360);
+            const trackAngleError = mod(desiredTrack - trueTrack, 360);
+            const distanceFromCenter = Avionics.Utils.computeGreatCircleDistance(center, ppos);
+            const crossTrackError = this.clockwise
+                ? distanceFromCenter - this.radius
+                : this.radius - distanceFromCenter;
+            const phiCommand = this.clockwise ? 25 : -25;
+            return {
+                law: ControlLaw.LATERAL_PATH,
+                trackAngleError,
+                crossTrackError,
+                phiCommand,
+            };
+        }
+        toString() {
+            return `Type1Transition<radius=${this.radius} clockwisew=${this.clockwise}>`;
+        }
+    }
+    class Geometry {
+        constructor(transitions, legs) {
+            this.transitions = transitions;
+            this.legs = legs;
+        }
+        /**
+         *
+         * @param ppos
+         * @param trueTrack
+         * @example
+         * const a = SimVar.GetSimVarValue("PLANE LATITUDE", "degree latitude"),
+         * const b = SimVar.GetSimVarValue("PLANE LONGITUDE", "degree longitude")
+         * const ppos = new LatLongAlt(a, b);
+         * const trueTrack = SimVar.GetSimVarValue("GPS GROUND TRUE TRACK", "degree");
+         * getGuidanceParameters(ppos, trueTrack);
+         */
+        getGuidanceParameters(ppos, trueTrack) {
+            // first, check if we're abeam with one of the transitions (start or end)
+            const fromTransition = this.transitions.get(1);
+            if (fromTransition && fromTransition.isAbeam(ppos)) {
+                return fromTransition.getGuidanceParameters(ppos, trueTrack);
+            }
+            const toTransition = this.transitions.get(2);
+            if (toTransition && toTransition.isAbeam(ppos)) {
+                return toTransition.getGuidanceParameters(ppos, trueTrack);
+            }
+            // otherwise perform straight point-to-point guidance for the first leg
+            const activeLeg = this.legs.get(1);
+            if (activeLeg) {
+                return activeLeg.getGuidanceParameters(ppos, trueTrack);
+            }
+            return null;
+        }
+        getDistanceToGo(ppos) {
+            const activeLeg = this.legs.get(1);
+            if (activeLeg) {
+                return activeLeg.getDistanceToGo(ppos);
+            }
+            return null;
+        }
+        shouldSequenceLeg(ppos) {
+            const terminatingTransition = this.transitions.get(2);
+            if (terminatingTransition) {
+                const tdttp = terminatingTransition.getTrackDistanceToTerminationPoint(ppos);
+                return tdttp < 0.001;
+            }
+            const activeLeg = this.legs.get(1);
+            if (activeLeg) {
+                return activeLeg.getDistanceToGo(ppos) < 0.001;
+            }
+            return false;
+        }
+    }
+
+    const mod$1 = (x, n) => x - Math.floor(x / n) * n;
+    /**
+     * This class will guide the aircraft by predicting a flight path and
+     * calculating the autopilot inputs to follow the predicted flight path.
+     */
+    class GuidanceManager {
+        constructor(flightPlanManager) {
+            this.flightPlanManager = flightPlanManager;
+        }
+        getActiveLeg() {
+            const activeIndex = this.flightPlanManager.getActiveWaypointIndex();
+            const from = this.flightPlanManager.getWaypoint(activeIndex - 1);
+            const to = this.flightPlanManager.getWaypoint(activeIndex);
+            if (!from || !to) {
+                return null;
+            }
+            if (from.endsInDiscontinuity) {
+                return null;
+            }
+            return new TFLeg(from, to);
+        }
+        getNextLeg() {
+            const activeIndex = this.flightPlanManager.getActiveWaypointIndex();
+            const from = this.flightPlanManager.getWaypoint(activeIndex);
+            const to = this.flightPlanManager.getWaypoint(activeIndex + 1);
+            if (!from || !to) {
+                return null;
+            }
+            if (from.endsInDiscontinuity) {
+                return null;
+            }
+            return new TFLeg(from, to);
+        }
+        /**
+         * The active leg path geometry, used for immediate autoflight.
+         */
+        getActiveLegPathGeometry() {
+            const activeLeg = this.getActiveLeg();
+            const nextLeg = this.getNextLeg();
+            if (!activeLeg) {
+                return null;
+            }
+            const legs = new Map([[1, activeLeg]]);
+            const transitions = new Map();
+            if (nextLeg) {
+                legs.set(2, nextLeg);
+                const kts = Math.max(SimVar.GetSimVarValue('AIRSPEED TRUE', 'knots'), 150); // knots, i.e. nautical miles per hour
+                // bank angle limits, always assume limit 2 for now @ 25 degrees between 150 and 300 knots
+                let bankAngleLimit = 25;
+                if (kts < 150) {
+                    bankAngleLimit = 15 + Math.min(kts / 150, 1) * (25 - 15);
+                } else if (kts > 300) {
+                    bankAngleLimit = 25 - Math.min((kts - 300) / 150, 1) * (25 - 19);
+                }
+                // turn radius
+                const xKr = (Math.pow(kts, 2) / (9.81 * Math.tan(bankAngleLimit * Avionics.Utils.DEG2RAD))) / 6080.2;
+                // turn direction
+                const courseChange = mod$1(nextLeg.bearing - activeLeg.bearing + 180, 360) - 180;
+                const cw = courseChange >= 0;
+                transitions.set(2, new Type1Transition(activeLeg, nextLeg, xKr, cw));
+            }
+            return new Geometry(transitions, legs);
+        }
+        /**
+         * The full leg path geometry, used for the ND and predictions on the F-PLN page.
+         *
+         * @param onlyFirstContinuousSegment if set to `true`, only the first segment before any discontinuities will be returned. If set to `false`,
+         *                                   all segments will be return, regardless of discontinuities
+         */
+        getMultipleLegGeometry(onlyFirstContinuousSegment = true) {
+            const activeLeg = this.getActiveLeg();
+            const nextLeg = this.getNextLeg();
+            if (!activeLeg) {
+                return null;
+            }
+            const legs = new Map([[1, activeLeg]]);
+            const transitions = new Map();
+            if (nextLeg) {
+                legs.set(2, nextLeg);
+                const kts = Math.max(SimVar.GetSimVarValue('AIRSPEED TRUE', 'knots'), 150); // knots, i.e. nautical miles per hour
+                // bank angle limits, always assume limit 2 for now @ 25 degrees between 150 and 300 knots
+                let bankAngleLimit = 25;
+                if (kts < 150) {
+                    bankAngleLimit = 15 + Math.min(kts / 150, 1) * (25 - 15);
+                } else if (kts > 300) {
+                    bankAngleLimit = 25 - Math.min((kts - 300) / 150, 1) * (25 - 19);
+                }
+                // turn radius
+                const xKr = (Math.pow(kts, 2) / (9.81 * Math.tan(bankAngleLimit * Avionics.Utils.DEG2RAD))) / 6080.2;
+                // turn direction
+                const courseChange = mod$1(nextLeg.bearing - activeLeg.bearing + 180, 360) - 180;
+                const cw = courseChange >= 0;
+                transitions.set(2, new Type1Transition(activeLeg, nextLeg, xKr, cw));
+            }
+            const activeIndex = this.flightPlanManager.getActiveWaypointIndex();
+            const wpCount = this.flightPlanManager.getCurrentFlightPlan().length;
+            for (let i = activeIndex + 1; i < wpCount; i++) {
+                const from = this.flightPlanManager.getWaypoint(i);
+                const to = this.flightPlanManager.getWaypoint(i + 1);
+                if (!from || !to) {
+                    continue;
+                }
+                if (from.endsInDiscontinuity) {
+                    if (onlyFirstContinuousSegment) {
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+                legs.set(legs.size + 1, new TFLeg(from, to));
+            }
+            return new Geometry(transitions, legs);
+        }
+    }
+
+    class LnavDriver {
+        constructor(guidanceController) {
+            this.ppos = new LatLongAlt();
+            this.guidanceController = guidanceController;
+            this.lastAvail = null;
+            this.lastLaw = null;
+            this.lastXTE = null;
+            this.lastTAE = null;
+            this.lastPhi = null;
+        }
+        init() {
+            console.log('[FMGC/Guidance] LnavDriver initialized!');
+        }
+        update(_deltaTime) {
+            let available = false;
+            const geometry = this.guidanceController.guidanceManager.getActiveLegPathGeometry();
+            if (geometry !== null) {
+                this.ppos.lat = SimVar.GetSimVarValue('PLANE LATITUDE', 'degree latitude');
+                this.ppos.long = SimVar.GetSimVarValue('PLANE LONGITUDE', 'degree longitude');
+                const trueTrack = SimVar.GetSimVarValue('GPS GROUND TRUE TRACK', 'degree');
+                const params = geometry.getGuidanceParameters(this.ppos, trueTrack);
+                if (this.lastLaw !== params.law) {
+                    this.lastLaw = params.law;
+                    SimVar.SetSimVarValue('L:A32NX_FG_CURRENT_LATERAL_LAW', 'number', params.law);
+                }
+                if (params) {
+                    switch (params.law) {
+                        case ControlLaw.LATERAL_PATH:
+                            const { crossTrackError, trackAngleError, phiCommand, } = params;
+                            if (!this.lastAvail) {
+                                SimVar.SetSimVarValue('L:A32NX_FG_AVAIL', 'Bool', true);
+                                this.lastAvail = true;
+                            }
+                            if (crossTrackError !== this.lastXTE) {
+                                SimVar.SetSimVarValue('L:A32NX_FG_CROSS_TRACK_ERROR', 'nautical miles', crossTrackError);
+                                this.lastXTE = crossTrackError;
+                            }
+                            if (trackAngleError !== this.lastTAE) {
+                                SimVar.SetSimVarValue('L:A32NX_FG_TRACK_ANGLE_ERROR', 'degree', trackAngleError);
+                                this.lastTAE = trackAngleError;
+                            }
+                            if (phiCommand !== this.lastPhi) {
+                                SimVar.SetSimVarValue('L:A32NX_FG_PHI_COMMAND', 'degree', phiCommand);
+                                this.lastPhi = phiCommand;
+                            }
+                            break;
+                        default:
+                            throw new Error(`Invalid control law: ${params.law}`);
+                    }
+                    available = true;
+                }
+                if (geometry.shouldSequenceLeg(this.ppos)) {
+                    const currentLeg = geometry.legs.get(1);
+                    if (currentLeg instanceof TFLeg && currentLeg.to.endsInDiscontinuity) {
+                        this.sequenceDiscontinuity(currentLeg);
+                    } else {
+                        this.sequenceLeg(currentLeg);
+                    }
+                }
+            }
+            if (!available && this.lastAvail !== false) {
+                SimVar.SetSimVarValue('L:A32NX_FG_AVAIL', 'Bool', false);
+                SimVar.SetSimVarValue('L:A32NX_FG_CROSS_TRACK_ERROR', 'nautical miles', 0);
+                SimVar.SetSimVarValue('L:A32NX_FG_TRACK_ANGLE_ERROR', 'degree', 0);
+                SimVar.SetSimVarValue('L:A32NX_FG_PHI_COMMAND', 'degree', 0);
+                this.lastAvail = false;
+                this.lastTAE = null;
+                this.lastXTE = null;
+                this.lastPhi = null;
+            }
+        }
+        sequenceLeg(_leg) {
+            console.log('[FMGC/Guidance] LNAV - sequencing leg');
+            let wpIndex = this.guidanceController.flightPlanManager.getActiveWaypointIndex();
+            this.guidanceController.flightPlanManager.setActiveWaypointIndex(++wpIndex);
+        }
+        sequenceDiscontinuity(_leg) {
+            console.log('[FMGC/Guidance] LNAV - sequencing discontinuity');
+            // Lateral mode is NAV
+            const lateralModel = SimVar.GetSimVarValue('L:A32NX_FMA_LATERAL_MODE', 'Enum');
+            const verticalMode = SimVar.GetSimVarValue('L:A32NX_FMA_VERTICAL_MODE', 'Enum');
+            if (lateralModel === LateralMode.NAV) {
+                // Set HDG (current heading)
+                SimVar.SetSimVarValue('H:A320_Neo_FCU_HDG_PULL', 'number', 0);
+                SimVar.SetSimVarValue('L:A32NX_AUTOPILOT_HEADING_SELECTED', 'number', Simplane.getHeadingMagnetic());
+            }
+            // Vertical mode is DES, OP DES, CLB or OP CLB
+            if (verticalMode === VerticalMode.DES || verticalMode === VerticalMode.OP_DES
+                || verticalMode === VerticalMode.CLB || verticalMode === VerticalMode.OP_CLB) {
+                // Set V/S
+                SimVar.SetSimVarValue('H:A320_Neo_FCU_VS_PULL', 'number', 0);
+            }
+            // Triple click
+            Coherent.call('PLAY_INSTRUMENT_SOUND', '3click');
+            this.sequenceLeg(_leg);
+        }
+        sequenceManual(_leg) {
+            console.log('[FMGC/Guidance] LNAV - sequencing MANUAL');
+        }
+    }
+    var LateralMode;
+    (function (LateralMode) {
+        LateralMode[LateralMode["NONE"] = 0] = "NONE";
+        LateralMode[LateralMode["HDG"] = 10] = "HDG";
+        LateralMode[LateralMode["TRACK"] = 11] = "TRACK";
+        LateralMode[LateralMode["NAV"] = 20] = "NAV";
+        LateralMode[LateralMode["LOC_CPT"] = 30] = "LOC_CPT";
+        LateralMode[LateralMode["LOC_TRACK"] = 31] = "LOC_TRACK";
+        LateralMode[LateralMode["LAND"] = 32] = "LAND";
+        LateralMode[LateralMode["FLARE"] = 33] = "FLARE";
+        LateralMode[LateralMode["ROLL_OUT"] = 34] = "ROLL_OUT";
+        LateralMode[LateralMode["RWY"] = 40] = "RWY";
+        LateralMode[LateralMode["RWY_TRACK"] = 41] = "RWY_TRACK";
+        LateralMode[LateralMode["GA_TRACK"] = 50] = "GA_TRACK";
+    })(LateralMode || (LateralMode = {}));
+    var VerticalMode;
+    (function (VerticalMode) {
+        VerticalMode[VerticalMode["NONE"] = 0] = "NONE";
+        VerticalMode[VerticalMode["ALT"] = 10] = "ALT";
+        VerticalMode[VerticalMode["ALT_CPT"] = 11] = "ALT_CPT";
+        VerticalMode[VerticalMode["OP_CLB"] = 12] = "OP_CLB";
+        VerticalMode[VerticalMode["OP_DES"] = 13] = "OP_DES";
+        VerticalMode[VerticalMode["VS"] = 14] = "VS";
+        VerticalMode[VerticalMode["FPA"] = 15] = "FPA";
+        VerticalMode[VerticalMode["ALT_CST"] = 20] = "ALT_CST";
+        VerticalMode[VerticalMode["ALT_CST_CPT"] = 21] = "ALT_CST_CPT";
+        VerticalMode[VerticalMode["CLB"] = 22] = "CLB";
+        VerticalMode[VerticalMode["DES"] = 23] = "DES";
+        VerticalMode[VerticalMode["GS_CPT"] = 30] = "GS_CPT";
+        VerticalMode[VerticalMode["GS_TRACK"] = 31] = "GS_TRACK";
+        VerticalMode[VerticalMode["LAND"] = 32] = "LAND";
+        VerticalMode[VerticalMode["FLARE"] = 33] = "FLARE";
+        VerticalMode[VerticalMode["ROLL_OUT"] = 34] = "ROLL_OUT";
+        VerticalMode[VerticalMode["SRS"] = 40] = "SRS";
+        VerticalMode[VerticalMode["SRS_GA"] = 41] = "SRS_GA";
+    })(VerticalMode || (VerticalMode = {}));
+
+    class GuidanceController {
+        constructor(flightPlanManager, guidanceManager) {
+            this.flightPlanManager = flightPlanManager;
+            this.guidanceManager = guidanceManager;
+            this.lnavDriver = new LnavDriver(this);
+        }
+        init() {
+            console.log('[FMGC/Guidance] GuidanceController initialized!');
+            this.lnavDriver.init();
+        }
+        update(deltaTime) {
+            this.lnavDriver.update(deltaTime);
+        }
+    }
+
     exports.CJ4NavRadioState = CJ4NavRadioState;
     exports.CJ4_FGSDisplaySlot = CJ4_FGSDisplaySlot;
     exports.CJ4_FMC_MessageReceiver = CJ4_FMC_MessageReceiver;
@@ -6425,6 +6888,8 @@
     exports.FlightPlanSegment = FlightPlanSegment;
     exports.GPS = GPS;
     exports.GeoMath = GeoMath;
+    exports.GuidanceController = GuidanceController;
+    exports.GuidanceManager = GuidanceManager;
     exports.HoldDetails = HoldDetails;
     exports.ManagedFlightPlan = ManagedFlightPlan;
     exports.Message = Message;

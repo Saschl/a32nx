@@ -34,3 +34,6 @@ export * from "./cj4/CJ4_MapSymbols";
 
 export * from "./utils/SimVarCache";
 export * from "./utils/NavigraphApi";
+
+export * from "./guidance/GuidanceManager";
+export * from "./guidance/GuidanceController";

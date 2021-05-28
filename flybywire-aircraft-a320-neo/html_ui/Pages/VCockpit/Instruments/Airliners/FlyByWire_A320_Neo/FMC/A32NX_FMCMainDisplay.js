@@ -188,7 +188,9 @@ class FMCMainDisplay extends BaseAirliners {
         this.managedSpeedDescendMach = .78;
         // this.managedSpeedDescendMachIsPilotEntered = false;
         this.cruiseFlightLevelTimeOut = undefined;
-        this._flightGuidance = new Guidance(new FlightPlanManager(this), {});
+        //this._flightGuidance = new Guidance(new FlightPlanManager(this), {});
+        this.guidanceManager = new GuidanceManager(new FlightPlanManager(this));
+        this.guidanceController = new GuidanceController(this.guidanceManager.flightPlanManager, this.guidanceManager);
     }
 
     Init() {
@@ -326,8 +328,8 @@ class FMCMainDisplay extends BaseAirliners {
             this.updateProgDistance();
         }
 
-        if (this._flightGuidance) {
-            this._flightGuidance.update(_deltaTime);
+        if (this.guidanceController) {
+            this.guidanceController.update(_deltaTime);
         }
     }
 

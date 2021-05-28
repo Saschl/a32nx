@@ -275,6 +275,7 @@ class A320_Neo_CDU_MainDisplay extends FMCMainDisplay {
         }, NXApi.updateRate);
 
         SimVar.SetSimVarValue("L:A32NX_GPS_PRIMARY_LOST_MSG", "Bool", 0).then();
+        NXDataStore.set("A32NX_DID_PAUSE", "0");
     }
 
     onUpdate(_deltaTime) {
@@ -310,6 +311,15 @@ class A320_Neo_CDU_MainDisplay extends FMCMainDisplay {
      */
     updateMCDU() {
         if (this.isAnEngineOn()) {
+            const currentAltitude = Simplane.getAltitude();
+            const tod = currentAltitude / 100 / 3 + 20;
+            if (NXDataStore.get("A32NX_DID_PAUSE", "0") === "0" && this.flightPlanManager.getDestination()) {
+                const dist = this.flightPlanManager.getDestination().liveDistanceTo.toFixed(0);
+                if (dist <= tod && dist > 0) {
+                    SimVar.SetSimVarValue('K:PAUSE_SET', 'Boolean', 1);
+                    NXDataStore.set("A32NX_DID_PAUSE", "1");
+                }
+            }
             if (!this.initB) {
                 this.initB = true;
                 setTimeout(() => {

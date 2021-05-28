@@ -175,6 +175,7 @@ declare class LatLongAlt {
   lat: number;
   long: number;
   alt: number;
+  toLatLong();
 }
 
 declare class SimVar {
