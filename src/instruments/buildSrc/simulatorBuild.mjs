@@ -61,10 +61,12 @@ export default getInputs()
                     path,
                     imports: [
                         '/JS/dataStorage.js',
-                        '/Pages/VCockpit/Instruments/FlightElements/Waypoint.js'
+                        '/Pages/VCockpit/Instruments/FlightElements/Waypoint.js',
+                        '/JS/fmgc/LzUtf8.js',
+
                     ],
                     config,
-                    isInstrument
+                    isInstrument,
                 }),
             ],
         };

@@ -1,5 +1,11 @@
 const MAX_FIX_ROW = 5;
 class CDUFlightPlanPage {
+
+    //method to calculate ETE
+    static calcETEseconds(distance, currGS) {
+        const groundSpeed = currGS < 100 ? 400 : currGS;
+        return (distance / groundSpeed) * 3600;
+    }
     static ShowPage(mcdu, offset = 0) {
         //mcdu.flightPlanManager.updateWaypointDistances(false /* approach */);
         //mcdu.flightPlanManager.updateWaypointDistances(true /* approach */);
@@ -52,6 +58,11 @@ class CDUFlightPlanPage {
             if (approachRunway) {
                 destCell += Avionics.Utils.formatRunway(approachRunway.designation);
             }
+            const utcTime = SimVar.GetGlobalVarValue("ZULU TIME", "seconds");
+            const eta = this.calcETEseconds(fpm.getDestination().cumulativeDistanceInFP, Simplane.getGroundSpeed());
+            fpm.getDestination().liveETATo = eta;
+            fpm.getDestination().liveUTCTo = utcTime + eta;
+
         }
         let rows = [[""], [""], [""], [""], [""], [""], [""], [""], [""], [""], [""], [""],];
         let rowsCount = 5;
@@ -75,10 +86,10 @@ class CDUFlightPlanPage {
             let destDistCell = "---";
             let destEFOBCell = "---";
             if (fpm.getDestination()) {
-                destDistCell = fpm.getDestination().liveDistanceTo.toFixed(0);
+                destDistCell = fpm.getDestination().cumulativeDistanceInFP.toFixed(0);
                 destEFOBCell = (mcdu.getDestEFOB(isFlying) * mcdu._conversionWeight).toFixed(1);
                 if (isFlying) {
-                    destTimeCell = FMCMainDisplay.secondsToUTC(fpm.getDestination().liveUTCTo);
+                    destTimeCell = FMCMainDisplay.secondsToUTC(fpm.getDestination().cumulativeDistanceInFP);
                 } else {
                     destTimeCell = FMCMainDisplay.secondsTohhmm(fpm.getDestination().liveETATo);
                 }
@@ -199,11 +210,12 @@ class CDUFlightPlanPage {
                 }
                 apprElev = apprElev.padStart(6,"\xa0");
                 if (fpm.getDestination()) {
-                    destDistCell = fpm.getDestination().liveDistanceTo.toFixed(0);
+                    destDistCell = fpm.getDestination().cumulativeDistanceInFP.toFixed(0);
+
                     if (isFlying) {
-                        destTimeCell = FMCMainDisplay.secondsToUTC(fpm.getDestination().liveUTCTo);
+                        destTimeCell = FMCMainDisplay.secondsToUTC(fpm.getDestination.liveUTCTo);
                     } else {
-                        destTimeCell = FMCMainDisplay.secondsTohhmm(fpm.getDestination().liveETATo);
+                        destTimeCell = FMCMainDisplay.secondsTohhmm(fpm.getDestination.liveETATo);
                     }
                     mcdu.leftInputDelay[fixRow] = () => {
                         return mcdu.getDelaySwitchPage();
@@ -281,7 +293,7 @@ class CDUFlightPlanPage {
                                 airwayName = "\xa0" + airway.name;
                             }
                         }
-                        const distance = (waypoint === fpm.getActiveWaypoint() ? waypoint.liveDistanceTo : waypoint.distanceInFP);
+                        const distance = (waypoint === fpm.getActiveWaypoint() ? fpm.getDistanceToActiveWaypoint() : waypoint.distanceInFP);
                         let dstnc;
                         if (i === 1) {
                             dstnc = distance.toFixed(0).toString() + "NM";
