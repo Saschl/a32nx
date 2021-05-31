@@ -144,7 +144,7 @@ class CDUAvailableArrivalsPage {
                             mcdu.onLeftInput[i + 2] = () => {
                                 const runways = airportInfo.oneWayRunways;
                                 const arrivalRunwayIndex = runways.findIndex(t => {
-                                    return t.designation === selectedApproach.runway;
+                                    return t.designation === selectedApproach.runway.trim();
                                 });
                                 mcdu.flightPlanManager.setArrivalRunwayIndex(arrivalRunwayIndex);
                                 mcdu.setArrivalProcIndex(starIndex, () => {
