@@ -94,7 +94,7 @@ class CDUAvailableArrivalsPage {
             } else {
                 const matchingArrivals = [];
                 if (selectedApproach) {
-                    const selectedRunway = selectedApproach.runway;
+                    const selectedRunway = selectedApproach.runway.trim();
                     for (let i = 0; i < airportInfo.arrivals.length; i++) {
                         const arrival = airportInfo.arrivals[i];
                         if (arrival.runwayTransitions.length) {
