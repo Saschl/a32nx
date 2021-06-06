@@ -141,12 +141,16 @@ class CDUAvailableArrivalsPage {
                                 color = "green";
                             }
                             rows[2 * i] = ["{" + star.name + "[color]" + color];
+
                             mcdu.onLeftInput[i + 2] = () => {
-                                const runways = airportInfo.oneWayRunways;
-                                const arrivalRunwayIndex = runways.findIndex(t => {
-                                    return t.designation === selectedApproach.runway;
+                                const landingRunway = mcdu.flightPlanManager.getApproachRunway();
+                                console.log("approach runway: " + landingRunway.designation);
+                                const arrivalRunwayIndex = star.runwayTransitions.findIndex(t => {
+                                    return t.name.indexOf("RW" + landingRunway.designation) != -1;
                                 });
-                                mcdu.flightPlanManager.setArrivalRunwayIndex(arrivalRunwayIndex);
+                                if (arrivalRunwayIndex != -1) {
+                                    mcdu.flightPlanManager.setArrivalRunwayIndex(arrivalRunwayIndex);
+                                }
                                 mcdu.setArrivalProcIndex(starIndex, () => {
                                     if (mcdu.flightPlanManager.getApproachIndex() > -1) {
                                         CDUAvailableArrivalsPage.ShowViasPage(mcdu, airport);

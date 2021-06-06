@@ -143,12 +143,12 @@ class CDUFlightPlanPage {
         }
         const waypointsWithDiscontinuities = [];
         const routeFirstWaypointIndex = 1 + fpm.getDepartureWaypointsCount();
-        const routeLastWaypointIndex = fpm.getWaypointsCount() - 2 - fpm.getArrivalWaypointsCount();
+        const routeLastWaypointIndex = fpm.getEnRouteWaypointsLastIndex();
         let first = 0;
         if (fpm.isActiveApproach()) {
-            first = fpm.getWaypointsCount() - 1;
+            first = 0;
         } else {
-            first = Math.max(0, fpm.getActiveWaypointIndex() - 1);
+            first = 0;//Math.max(0, fpm.getActiveWaypointIndex() - 1);
         }
         if (mcdu.currentFlightPhase <= FmgcFlightPhases.TAKEOFF) {
             first = 0;
@@ -449,6 +449,13 @@ class CDUFlightPlanPage {
                             addLsk(0, (value) => {
                                 if (value === FMCMainDisplay.clrValue) {
                                     if (waypoint.discontinuityCanBeCleared) {
+                                        /*   let actualIndex = index;
+                                        mcdu.flightPlanManager.getAllWaypoints()
+                                            .forEach((element, i) => {
+                                                if (element.ident = waypoint.ident) {
+                                                    actualIndex = i;
+                                                }
+                                            }); */
                                         mcdu.clearDiscontinuity(index, () => {
                                             CDUFlightPlanPage.ShowPage(mcdu, offset);
                                         }, true);

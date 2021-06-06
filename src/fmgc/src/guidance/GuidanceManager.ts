@@ -61,34 +61,38 @@ export class GuidanceManager {
         }
 
         const legs = new Map<number, Leg>([[1, activeLeg]]);
+
         const transitions = new Map<number, Transition>();
 
         if (nextLeg) {
             legs.set(2, nextLeg);
 
-            const kts = Math.max(SimVar.GetSimVarValue('AIRSPEED TRUE', 'knots'), 150); // knots, i.e. nautical miles per hour
+            if (!this.flightPlanManager.getCurrentFlightPlan().directTo.isActive) {
+                const kts = Math.max(SimVar.GetSimVarValue('AIRSPEED TRUE', 'knots'), 150);
+                // knots, i.e. nautical miles per hour
 
-            // bank angle limits, always assume limit 2 for now @ 25 degrees between 150 and 300 knots
-            let bankAngleLimit = 25;
-            if (kts < 150) {
-                bankAngleLimit = 15 + Math.min(kts / 150, 1) * (25 - 15);
-            } else if (kts > 300) {
-                bankAngleLimit = 25 - Math.min((kts - 300) / 150, 1) * (25 - 19);
+                // bank angle limits, always assume limit 2 for now @ 25 degrees between 150 and 300 knots
+                let bankAngleLimit = 25;
+                if (kts < 150) {
+                    bankAngleLimit = 15 + Math.min(kts / 150, 1) * (25 - 15);
+                } else if (kts > 300) {
+                    bankAngleLimit = 25 - Math.min((kts - 300) / 150, 1) * (25 - 19);
+                }
+
+                // turn radius
+                const xKr = (kts ** 2 / (9.81 * Math.tan(bankAngleLimit * Avionics.Utils.DEG2RAD))) / 6080.2;
+
+                // turn direction
+                const courseChange = mod(nextLeg.bearing - activeLeg.bearing + 180, 360) - 180;
+                const cw = courseChange >= 0;
+
+                transitions.set(2, new Type1Transition(
+                    activeLeg,
+                    nextLeg,
+                    xKr,
+                    cw,
+                ));
             }
-
-            // turn radius
-            const xKr = (kts ** 2 / (9.81 * Math.tan(bankAngleLimit * Avionics.Utils.DEG2RAD))) / 6080.2;
-
-            // turn direction
-            const courseChange = mod(nextLeg.bearing - activeLeg.bearing + 180, 360) - 180;
-            const cw = courseChange >= 0;
-
-            transitions.set(2, new Type1Transition(
-                activeLeg,
-                nextLeg,
-                xKr,
-                cw,
-            ));
         }
 
         return new Geometry(transitions, legs);
@@ -156,7 +160,6 @@ export class GuidanceManager {
                     continue;
                 }
             }
-
             legs.set(legs.size + 1, new TFLeg(from, to));
         }
 

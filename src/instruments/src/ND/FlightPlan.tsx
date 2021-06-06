@@ -9,6 +9,7 @@ import { useSimVar } from '@instruments/common/simVars';
 import { FlightPlanManager } from '@fmgc/flightplanning/FlightPlanManager';
 import { WayPoint } from '@fmgc/types/fstypes/FSTypes';
 import { MapParameters } from './utils/MapParameters';
+import { DebugInfo } from './DebugInfo';
 
 export type FlightPathProps = {
     x?: number,
@@ -22,6 +23,7 @@ export type FlightPathProps = {
 export const FlightPlan: FC<FlightPathProps> = ({ x = 0, y = 0, flightPlanManager, mapParams, clipPath, debug = false }) => {
     const [guidanceManager] = useState(() => new GuidanceManager(flightPlanManager));
     const flightPlan = useCurrentFlightPlan();
+    const [debugToggle] = useSimVar('L:A32NX_ND_DEBUG', 'Boolean', 500);
 
     const [geometry, setGeometry] = useState(() => guidanceManager.getMultipleLegGeometry(false));
 
@@ -32,15 +34,14 @@ export const FlightPlan: FC<FlightPathProps> = ({ x = 0, y = 0, flightPlanManage
     if (geometry) {
         return (
             <Layer x={x} y={y}>
-                {flightPlan.visibleWaypoints.map((waypoint) => (
-                    <Waypoint key={waypoint.ident} waypoint={waypoint} mapParams={mapParams} />
-                ))}
+                {flightPlan.visibleWaypoints.map((waypoint) => (<Waypoint key={waypoint.ident} waypoint={waypoint} mapParams={mapParams} />))}
                 <path d={makePathFromGeometry(geometry, mapParams)} stroke="#00ff00" strokeWidth={2} fill="none" clipPath={clipPath} />
-                {debug && (
+                {debugToggle && (
                     Array.from(geometry.legs.values()).map((leg) => (
                         <DebugLeg leg={leg} mapParams={mapParams} />
                     ))
                 )}
+                {debugToggle && (<DebugInfo />)}
             </Layer>
         );
     }

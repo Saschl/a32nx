@@ -30,6 +30,11 @@ class A320_Neo_CDU_MainDisplay extends FMCMainDisplay {
     get isInteractive() {
         return NXDataStore.get("MCDU_KB_INPUT", "DISABLED") === "ENABLED";
     }
+
+    static calcETEseconds(distance, currGS) {
+        const groundSpeed = currGS < 100 ? 400 : currGS;
+        return (distance / groundSpeed) * 3600;
+    }
     connectedCallback() {
         super.connectedCallback();
         RegisterViewListener("JS_LISTENER_KEYEVENT", () => {
@@ -348,6 +353,7 @@ class A320_Neo_CDU_MainDisplay extends FMCMainDisplay {
         }, NXApi.updateRate);
 
         SimVar.SetSimVarValue("L:A32NX_GPS_PRIMARY_LOST_MSG", "Bool", 0).then();
+        NXDataStore.set("A32NX_DID_PAUSE", "0");
     }
 
     onUpdate(_deltaTime) {
@@ -375,7 +381,35 @@ class A320_Neo_CDU_MainDisplay extends FMCMainDisplay {
      * The INIT page B reverts to the FUEL PRED page 15 seconds after the first engine start and cannot be accessed after engine start.
      */
     updateMCDU() {
+        let destinationDistanceFlightplan = 0;
+        if (this.flightPlanManager.getDestination()) {
+            const destination = this.flightPlanManager.getDestination();
+            if (this.flightPlanManager.getActiveWaypoint()) {
+                const activeWaypointDist = new Number(this.flightPlanManager.getDistanceToActiveWaypoint());
+                destinationDistanceFlightplan = new Number(destination.cumulativeDistanceInFP - this.flightPlanManager.getActiveWaypoint().cumulativeDistanceInFP + activeWaypointDist);
+            } else {
+                destinationDistanceFlightplan = destination.cumulativeDistanceInFP;
+            }
+            const utcTime = SimVar.GetGlobalVarValue("ZULU TIME", "seconds");
+
+            const eta = A320_Neo_CDU_MainDisplay.calcETEseconds(destinationDistanceFlightplan, Simplane.getGroundSpeed());
+            const utcTo = eta + utcTime;
+
+            this.flightPlanManager.getDestination().liveETATo = eta;
+            this.flightPlanManager.getDestination().liveUTCTo = utcTime + eta;
+            this.flightPlanManager.getDestination().liveDistanceTo = destinationDistanceFlightplan;
+            const currentAltitude = Simplane.getAltitude();
+            const tod = currentAltitude / 100 / 3 + 20;
+            if (NXDataStore.get("A32NX_DID_PAUSE", "0") === "0" && this.flightPlanManager.getDestination()) {
+                const dist = destinationDistanceFlightplan.toFixed(0);
+                if (dist <= tod && dist > 0) {
+                    //SimVar.SetSimVarValue('K:PAUSE_ON', 'Boolean', 1);
+                    NXDataStore.set("A32NX_DID_PAUSE", "1");
+                }
+            }
+        }
         if (this.isAnEngineOn()) {
+
             if (!this.initB) {
                 this.initB = true;
                 setTimeout(() => {

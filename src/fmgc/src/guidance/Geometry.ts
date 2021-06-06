@@ -19,7 +19,7 @@ export abstract class Leg implements Guidable {
      *
      * @param ppos {LatLong} the current position of the aircraft
      */
-    abstract getDistanceToGo(ppos: LatLong): NauticalMiles;
+    abstract getDistanceToGo(ppos: LatLongAlt): NauticalMiles;
 
     abstract isAbeam(ppos);
 }
@@ -91,7 +91,7 @@ export class TFLeg extends Leg {
      *
      * @param ppos {LatLong} the current position of the aircraft
      */
-    getAircraftToLegBearing(ppos: LatLong): number {
+    getAircraftToLegBearing(ppos: LatLongAlt): number {
         const aircraftToTerminationBearing = Avionics.Utils.computeGreatCircleHeading(ppos, this.to.infos.coordinates);
 
         // Rotate frame of reference to 0deg
@@ -111,7 +111,7 @@ export class TFLeg extends Leg {
         return aircraftToLegBearing;
     }
 
-    getDistanceToGo(ppos: LatLong): NauticalMiles {
+    getDistanceToGo(ppos: LatLongAlt): NauticalMiles {
         const aircraftLegBearing = this.getAircraftToLegBearing(ppos);
 
         const absDtg = Avionics.Utils.computeGreatCircleDistance(ppos, this.to.infos.coordinates);

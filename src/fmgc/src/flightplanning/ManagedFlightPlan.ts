@@ -642,6 +642,7 @@ export class ManagedFlightPlan {
 
         this.addWaypoint(turningPoint, index);
         this.activeWaypointIndex = index + 1;
+        this.directTo.isActive = true;
 
         const deleteCount = this.activeWaypointIndex - 1;
 
@@ -737,7 +738,13 @@ export class ManagedFlightPlan {
                 const waypoint = await procedure.getNext();
 
                 if (waypoint !== undefined) {
-                    this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    const index = this.waypoints.findIndex((wp) => wp.ident === waypoint.ident);
+                    if (index === -1) {
+                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    } else {
+                        this.removeWaypoint(index);
+                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    }
                 }
             }
         }
@@ -787,8 +794,14 @@ export class ManagedFlightPlan {
                 // eslint-disable-next-line no-await-in-loop
                 const waypoint = await procedure.getNext();
 
-                if (waypoint) {
-                    this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                if (waypoint !== undefined) {
+                    const index = this.waypoints.findIndex((wp) => wp.ident === waypoint.ident);
+                    if (index === -1) {
+                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    } else {
+                        this.removeWaypoint(index);
+                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    }
                 }
             }
         }
@@ -840,7 +853,13 @@ export class ManagedFlightPlan {
                 const waypoint = await procedure.getNext();
 
                 if (waypoint !== undefined) {
-                    this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    const index = this.waypoints.findIndex((wp) => wp.ident === waypoint.ident);
+                    if (index === -1) {
+                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    } else {
+                        this.removeWaypoint(index);
+                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
+                    }
                 }
             }
 
