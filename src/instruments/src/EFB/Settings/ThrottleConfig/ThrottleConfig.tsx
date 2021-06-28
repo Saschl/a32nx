@@ -221,7 +221,8 @@ const ThrottleConfig: React.FC<Props> = (props: Props) => {
         <div className="flex flex-col pt-4 text-center">
             <div className="rounded-xl py-6">
 
-                <div className="flex flex-row justify-center bg-gray-800 mt-auto mb-8 p-4 w-full divide divide-x-2 divide-gray-500">
+                <div className="flex flex-row rounded-2xl justify-center bg-navy-lighter mt-auto mb-8 p-4 w-full divide divide-x-2 divide-gray-500">
+
 
                     <div className="flex flex-col">
                         <ThrottleAssistant
@@ -245,51 +246,96 @@ const ThrottleConfig: React.FC<Props> = (props: Props) => {
                                 className="ml-4 mr-auto hover:bg-blue-600 hover:border-blue-600"
                             />
                         </div>
+
+                </div>
+
+                {parseInt(isDualAxis) === 1 && (
+                    <div className="flex flex-row justify-center rounded-xl">
+                        <div className="ml-4" />
+
+                        <BaseThrottleConfig
+                            mappingsAxisOne={mappingsAxisOne}
+                            disabled={false}
+                            throttleNumber={1}
+                            throttleCount={parseInt(isDualAxis) === 0 ? 2 : 1}
+                            activeIndex={selectedIndex}
+                            initialize={initialize}
+                            setInitialize={setInitialize}
+                        />
+                        <div className="mr-8 ml-8 mt-auto mb-auto">
+                            {navigationBar}
+                        </div>
+                        <BaseThrottleConfig
+                            mappingsAxisOne={mappingsAxisTwo}
+                            disabled={false}
+                            throttleNumber={2}
+                            throttleCount={1}
+                            activeIndex={selectedIndex}
+                            initialize={initialize}
+                            setInitialize={setInitialize}
+                        />
+                        <div className="mr-4" />
                     </div>
+                )}
 
-                </div>
+                {parseInt(isDualAxis) === 0
+                    && (
+                        <div className="flex flex-row ml-4 justify-center rounded-xl">
+                            <BaseThrottleConfig
+                                mappingsAxisOne={mappingsAxisOne}
+                                mappingsAxisTwo={mappingsAxisTwo}
+                                disabled={false}
+                                throttleNumber={1}
+                                throttleCount={2}
+                                activeIndex={selectedIndex}
+                                initialize={initialize}
+                                setInitialize={setInitialize}
+                            />
+                            <div className="ml-8 mt-auto mb-auto">
+                                {navigationBar}
+                            </div>
+                        </div>
+                    )}
+            </div>
 
-                <div className="text-xl text-red-600">{isConfigValid().length > 0 ? isConfigValid()[0] : ''}</div>
+            <div className="text-xl text-red-600">{isConfigValid().length > 0 ? isConfigValid()[0] : ''}</div>
+            <div className="bg-navy-lighter flex flex-row-reverse h-16 p-2 w-full mt-40 mb-2 rounded-2xl">
 
-                <div className="bg-gray-800 flex flex-row-reverse h-12 w-full fixed bottom-0 mb-2">
-
-                    <Button
-                        text="Save &amp; Apply"
-                        type={BUTTON_TYPE.GREEN}
-                        onClick={() => {
-                            if (isConfigValid()) {
-                                syncToDisk(1);
-                                applyLocalVar(1);
-                            }
-                        }}
-                        disabled={!isConfigValid}
-                        className={`ml-2 mr-4 ${isConfigValid().length === 0 ? 'bg-green-500 border-green-500 hover:bg-green-600 hover:border-green-600' : 'opacity-30'}`}
-                    />
-                    <Button
-                        text="Apply"
-                        type={BUTTON_TYPE.BLUE}
-                        onClick={() => applyLocalVar(1)}
-                        className={`ml-2 ${isConfigValid().length === 0 ? 'bg-blue-500 border-blue-500 hover:bg-blue-600 hover:border-blue-600' : 'bg-gray-500 opacity-30'}`}
-                    />
-                    <Button
-                        text="Load From File"
-                        type={BUTTON_TYPE.BLUE}
-                        onClick={() => {
-                            syncToThrottle(1);
-                            setTimeout(() => {
-                                setInitialize(true);
-                            }, 1000);
-                        }}
-                        className="ml-2 hover:bg-blue-600 hover:border-blue-600"
-                    />
-                    <Button
-                        text="Back"
-                        type={BUTTON_TYPE.BLUE}
-                        onClick={() => props.onClose()}
-                        className="ml-4 mr-auto hover:bg-blue-600 hover:border-blue-600"
-                    />
-
-                </div>
+                <Button
+                    text="Save &amp; Apply"
+                    type={BUTTON_TYPE.GREEN}
+                    onClick={() => {
+                        if (isConfigValid()) {
+                            syncToDisk(1);
+                            applyLocalVar(1);
+                        }
+                    }}
+                    disabled={!isConfigValid}
+                    className={`ml-2 mr-4 ${isConfigValid().length === 0 ? 'bg-green-500 border-green-500 hover:bg-green-600 hover:border-green-600' : 'opacity-30'}`}
+                />
+                <Button
+                    text="Apply"
+                    type={BUTTON_TYPE.BLUE}
+                    onClick={() => applyLocalVar(1)}
+                    className={`ml-2 ${isConfigValid().length === 0 ? 'bg-blue-500 border-blue-500 hover:bg-blue-600 hover:border-blue-600' : 'bg-gray-500 opacity-30'}`}
+                />
+                <Button
+                    text="Load From File"
+                    type={BUTTON_TYPE.BLUE}
+                    onClick={() => {
+                        syncToThrottle(1);
+                        setTimeout(() => {
+                            setInitialize(true);
+                        }, 1000);
+                    }}
+                    className="ml-2 hover:bg-blue-600 hover:border-blue-600"
+                />
+                <Button
+                    text="Back"
+                    type={BUTTON_TYPE.BLUE}
+                    onClick={() => props.onClose()}
+                    className="ml-4 mr-auto hover:bg-blue-600 hover:border-blue-600"
+                />
             </div>
         </div>
     );
