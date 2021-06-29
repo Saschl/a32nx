@@ -107,11 +107,12 @@ export class ManagedFlightPlan {
 
         const firstData = this.computeActiveWaypointStatistics(ppos);
 
-        return [firstData, ...(this.waypoints.map((waypoint) => ({
+        return [firstData, ...(this.visibleWaypoints.map((waypoint) => ({
             ident: waypoint.ident,
             bearingInFp: waypoint.bearingInFP,
-            distanceFromPpos: firstData.distanceFromPpos + waypoint.cumulativeDistanceInFP,
-            timeFromPpos: this.computeWaypointEta(waypoint.cumulativeDistanceInFP),
+            distanceFromPpos: waypoint.cumulativeDistanceInFP - this.activeWaypoint.cumulativeDistanceInFP + firstData.distanceFromPpos,
+            timeFromPpos: this.computeWaypointTime(waypoint.cumulativeDistanceInFP - this.activeWaypoint.cumulativeDistanceInFP + firstData.distanceFromPpos),
+            etaFromPpos: this.computeWaypointEta(waypoint.cumulativeDistanceInFP - this.activeWaypoint.cumulativeDistanceInFP + firstData.distanceFromPpos),
         })))];
     }
 
@@ -132,20 +133,27 @@ export class ManagedFlightPlan {
             ident: this.activeWaypoint.ident,
             bearingInFp,
             distanceFromPpos,
-            timeFromPpos: this.computeWaypointEta(distanceFromPpos),
+            timeFromPpos: this.computeWaypointTime(distanceFromPpos),
         };
     }
 
-    // FIXME THIS IS COMPLETELY WRONG!
-    // This should return ETA based on GMT time.
-    private computeWaypointEta(distance: number) {
-        const acSpeed = SimVar.GetSimVarValue('AIRSPEED TRUE', 'knots');
+    // TODO is this accurate? Logic is same like in the old FPM
+    private computeWaypointTime(distance: number) {
+        const groundSpeed = Simplane.getGroundSpeed();
 
-        if (acSpeed < 100) {
-            return undefined;
+        if (groundSpeed < 100) {
+            return (distance / 400) * 3600;
         }
 
-        return (distance / acSpeed) * 3600;
+        return (distance / groundSpeed) * 3600;
+    }
+
+    private computeWaypointEta(distance: number) {
+        const eta = this.computeWaypointTime(distance);
+
+        const utcTime = SimVar.GetGlobalVarValue('ZULU TIME', 'seconds');
+
+        return eta + utcTime;
     }
 
     /** The parent instrument this flight plan is attached to locally. */
@@ -732,19 +740,13 @@ export class ManagedFlightPlan {
                 procedure = new LegsProcedure(legs, origin, this._parentInstrument);
             }
 
-            let waypointIndex = segment.offset;
+            const waypointIndex = segment.offset;
             while (procedure.hasNext()) {
                 // eslint-disable-next-line no-await-in-loop
                 const waypoint = await procedure.getNext();
 
                 if (waypoint !== undefined) {
-                    const index = this.waypoints.findIndex((wp) => wp.ident === waypoint.ident);
-                    if (index === -1) {
-                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
-                    } else {
-                        this.removeWaypoint(index);
-                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
-                    }
+                    this.addWaypointAvoidingDuplicates(waypoint, waypointIndex, segment);
                 }
             }
         }
@@ -794,14 +796,8 @@ export class ManagedFlightPlan {
                 // eslint-disable-next-line no-await-in-loop
                 const waypoint = await procedure.getNext();
 
-                if (waypoint !== undefined) {
-                    const index = this.waypoints.findIndex((wp) => wp.ident === waypoint.ident);
-                    if (index === -1) {
-                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
-                    } else {
-                        this.removeWaypoint(index);
-                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
-                    }
+                if (waypoint) {
+                    this.addWaypointAvoidingDuplicates(waypoint, ++waypointIndex, segment.type);
                 }
             }
         }
@@ -853,13 +849,7 @@ export class ManagedFlightPlan {
                 const waypoint = await procedure.getNext();
 
                 if (waypoint !== undefined) {
-                    const index = this.waypoints.findIndex((wp) => wp.ident === waypoint.ident);
-                    if (index === -1) {
-                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
-                    } else {
-                        this.removeWaypoint(index);
-                        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
-                    }
+                    this.addWaypointAvoidingDuplicates(waypoint, ++waypointIndex, segment.type);
                 }
             }
 
@@ -1029,5 +1019,14 @@ export class ManagedFlightPlan {
 
         visitObject(plan);
         return plan;
+    }
+
+    private addWaypointAvoidingDuplicates(waypoint, waypointIndex, segment): void {
+        const index = this.waypoints.findIndex((wp) => wp.ident === waypoint.ident);
+
+        if (index !== -1 && index === waypointIndex + 1) {
+            this.removeWaypoint(index);
+        }
+        this.addWaypoint(waypoint, ++waypointIndex, segment.type);
     }
 }
