@@ -14,6 +14,11 @@ export interface WaypointStats {
      */
     distanceFromPpos: number;
 
+     /**
+     * Distance in flight plan in nautical miles
+     */
+    distanceInFP: number;
+
     /**
      * Predicted time from PPOS in seconds
      */
