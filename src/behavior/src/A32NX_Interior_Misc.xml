@@ -103,32 +103,32 @@
     Template for beacon light switches
     -->
     <Template Name="FBW_Airbus_LIGHTING_Switch_Light_Beacon_Template">
-        <UseTemplate Name="ASOBO_LIGHTING_Switch_Light_Template">
-            <DefaultTemplateParameters>
-                <ANIMTIP_0>TT:COCKPIT.TOOLTIPS.BEACON_LIGHT_OFF</ANIMTIP_0>
-                <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.BEACON_LIGHT_ON</ANIMTIP_1>
-                <WWISE_EVENT_1>lswitch</WWISE_EVENT_1>
-                <WWISE_EVENT_2>lswitch</WWISE_EVENT_2>
-                <NORMALIZED_TIME_1>0.1</NORMALIZED_TIME_1>
-                <NORMALIZED_TIME_2>0.5</NORMALIZED_TIME_2>
-            </DefaultTemplateParameters>
-
+        <Parameters Type="Default">
+            <ANIMTIP_0>TT:COCKPIT.TOOLTIPS.BEACON_LIGHT_OFF</ANIMTIP_0>
+            <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.BEACON_LIGHT_ON</ANIMTIP_1>
+            <WWISE_EVENT_1>lswitch</WWISE_EVENT_1>
+            <WWISE_EVENT_2>lswitch</WWISE_EVENT_2>
+            <NORMALIZED_TIME_1>0.1</NORMALIZED_TIME_1>
+            <NORMALIZED_TIME_2>0.5</NORMALIZED_TIME_2>
+            <INTERACTION_TYPE>SWITCH</INTERACTION_TYPE>
             <LIGHT_TYPE>BEACON</LIGHT_TYPE>
-        </UseTemplate>
+        </Parameters>
+        <UseTemplate Name="ASOBO_LIGHTING_Light_Template"></UseTemplate>
     </Template>
 
     <!--
     Template for wing light switches
     -->
     <Template Name="FBW_Airbus_LIGHTING_Switch_Light_Wing_Template">
-        <UseTemplate Name="ASOBO_LIGHTING_Switch_Light_Template">
-            <LIGHT_TYPE>WING</LIGHT_TYPE>
+        <Parameters Type="Default">
+            <SIMVAR_INDEX>0</SIMVAR_INDEX>
+            <WWISE_EVENT>lswitch</WWISE_EVENT>
             <WWISE_EVENT_1>lswitch</WWISE_EVENT_1>
             <WWISE_EVENT_2>lswitch</WWISE_EVENT_2>
-            <NORMALIZED_TIME_1>0.1</NORMALIZED_TIME_1>
-            <NORMALIZED_TIME_2>0.5</NORMALIZED_TIME_2>
-            <ANIMTIP_0>TT:COCKPIT.TOOLTIPS.PANEL_DEICE_WING_LIGHT_OFF</ANIMTIP_0>
-            <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.PANEL_DEICE_WING_LIGHT_ON</ANIMTIP_1>
+            <INTERACTION_TYPE>SWITCH</INTERACTION_TYPE>
+			<LIGHT_TYPE>WING</LIGHT_TYPE>
+        </Parameters>
+        <UseTemplate Name="ASOBO_LIGHTING_Light_Template">
         </UseTemplate>
     </Template>
 
@@ -144,9 +144,11 @@
             <NORMALIZED_TIME_1>0.1</NORMALIZED_TIME_1>
             <NORMALIZED_TIME_2>0.5</NORMALIZED_TIME_2>
         </DefaultTemplateParameters>
-        <UseTemplate Name="ASOBO_LIGHTING_Switch_Light_Template">
+        <UseTemplate Name="ASOBO_LIGHTING_Light_Template">
             <LIGHT_TYPE>LANDING</LIGHT_TYPE>
-            <KEY_ID>LANDING_LIGHTS_TOGGLE</KEY_ID>
+            <TYPE>Retractable</TYPE>
+            <INTERACTION_TYPE>SWITCH</INTERACTION_TYPE>
+            <KEY_ID_TOGGLE>LANDING_LIGHTS_TOGGLE</KEY_ID_TOGGLE>
         </UseTemplate>
     </Template>
 

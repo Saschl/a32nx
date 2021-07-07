@@ -1407,12 +1407,8 @@
                 <!-- WING -->
                 <UseTemplate Name="FBW_Airbus_LIGHTING_Switch_Light_Wing_Template">
                     <NODE_ID>SWITCH_OVHD_EXTLT_WING</NODE_ID>
-                    <PART_ID>EXTLT_WING</PART_ID>
                     <ANIM_NAME>SWITCH_OVHD_EXTLT_WING</ANIM_NAME>
 
-                    <WWISE_EVENT>lswitch</WWISE_EVENT>
-                    <WWISE_EVENT_1>lswitch</WWISE_EVENT_1>
-                    <WWISE_EVENT_2>lswitch</WWISE_EVENT_2>
                 </UseTemplate>
 
                 <UseTemplate Name="ASOBO_LIGHTING_Switch_Light_Navigation_Template">
@@ -1440,19 +1436,18 @@
                     </UPDATE_CODE>
                 </UseTemplate>
 
-                <UseTemplate Name="ASOBO_LIGHTING_Switch_Light_Double_Template">
+                <UseTemplate Name="ASOBO_LIGHTING_Switch_Light_Landing_Template">
                     <NODE_ID>SWITCH_OVHD_EXTLT_NOSE</NODE_ID>
-                    <PART_ID>LIGHTING_Switch_Light_Double</PART_ID>
                     <ANIM_NAME>SWITCH_OVHD_EXTLT_NOSE</ANIM_NAME>
-                    <LIGHT_TYPE1>LANDING</LIGHT_TYPE1>
-                    <KEY_ID1>LANDING_LIGHTS_TOGGLE</KEY_ID1>
-                    <LIGHT_TYPE2>TAXI</LIGHT_TYPE2>
-                    <SIMVAR_INDEX1>1</SIMVAR_INDEX1>
-                    <SIMVAR_INDEX2>1</SIMVAR_INDEX2>
+                    <LIGHT_TYPE>LANDING</LIGHT_TYPE>
+                    <LIGHT_TYPE_2>TAXI</LIGHT_TYPE_2>
+
+                    <SIMVAR_INDEX_1>2</SIMVAR_INDEX_1>
+                    <SIMVAR_INDEX_2>2</SIMVAR_INDEX_2>
                     <ANIMTIP_0>TT:COCKPIT.TOOLTIPS.NOSE_LIGHT_SET_TO</ANIMTIP_0>
                     <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.NOSE_LIGHT_SET_TAXI</ANIMTIP_1>
                     <ANIMTIP_2>TT:COCKPIT.TOOLTIPS.NOSE_LIGHT_SET_OFF</ANIMTIP_2>
-
+                    <TYPE>TwoSimvars</TYPE>
                     <WWISE_EVENT>lswitch</WWISE_EVENT>
                 </UseTemplate>
 
