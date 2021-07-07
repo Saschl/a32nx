@@ -1205,7 +1205,7 @@
                 </UseTemplate>
 
                 <!-- APU START -->
-                <UseTemplate Name="FBW_Airbus_APU_Starter_Switch">
+                <UseTemplate Name="ASOBO_ELECTRICAL_Push_APU_Starter_Template">
                     <NODE_ID>PUSH_OVHD_APU_START</NODE_ID>
                     <PART_ID>ELECTRICAL_Switch_APU_Starter</PART_ID>
                     <EXTRA_CONDITION>(L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON, Bool)</EXTRA_CONDITION>
@@ -1244,7 +1244,7 @@
                     <NODE_ID>SWITCH_OVHD_EXTLT_STROBE</NODE_ID>
                     <PART_ID>EXTLT_STROBE</PART_ID>
                     <ANIM_NAME>SWITCH_OVHD_EXTLT_STROBE</ANIM_NAME>
-                    <HAS_AUTO>True</HAS_AUTO>
+                    <TYPE>Auto</TYPE>
                     <INVERT_ANIM>True</INVERT_ANIM>
                     <POTENTIOMETER>24</POTENTIOMETER>
                     <ANIMTIP_0>TT:COCKPIT.TOOLTIPS.STROBE_LIGHT_ON</ANIMTIP_0>
@@ -1387,11 +1387,11 @@
                     <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.LANDING_LIGHT_L_ON</ANIMTIP_1>
                     <ANIMTIP_2>TT:COCKPIT.TOOLTIPS.LANDING_LIGHT_L_RETRACT</ANIMTIP_2>
 
-                    <RETRACTABLE/>
+                    <TYPE>Retractable</TYPE>
                 </UseTemplate>
 
                 <!-- LANDING RIGHT -->
-                <UseTemplate Name="FBW_Airbus_LIGHTING_Switch_Light_Landing_Template">
+                <UseTemplate Name="ASOBO_LIGHTING_Switch_Light_Landing_Template">
                     <NODE_ID>SWITCH_OVHD_EXTLT_LANDR</NODE_ID>
                     <ANIM_NAME>SWITCH_OVHD_EXTLT_LANDR</ANIM_NAME>
                     <Part_ID>LANDING_Light_R</Part_ID>
@@ -1401,7 +1401,7 @@
                     <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.LANDING_LIGHT_R_ON</ANIMTIP_1>
                     <ANIMTIP_2>TT:COCKPIT.TOOLTIPS.LANDING_LIGHT_R_RETRACT</ANIMTIP_2>
 
-                    <RETRACTABLE/>
+                    <TYPE>Retractable</TYPE>
                 </UseTemplate>
 
                 <!-- WING -->
@@ -1442,11 +1442,12 @@
                     <LIGHT_TYPE>LANDING</LIGHT_TYPE>
                     <LIGHT_TYPE_2>TAXI</LIGHT_TYPE_2>
 
-                    <SIMVAR_INDEX_1>2</SIMVAR_INDEX_1>
-                    <SIMVAR_INDEX_2>2</SIMVAR_INDEX_2>
+                    <SIMVAR_INDEX_1>1</SIMVAR_INDEX_1>
+                    <SIMVAR_INDEX_2>1</SIMVAR_INDEX_2>
                     <ANIMTIP_0>TT:COCKPIT.TOOLTIPS.NOSE_LIGHT_SET_TO</ANIMTIP_0>
                     <ANIMTIP_1>TT:COCKPIT.TOOLTIPS.NOSE_LIGHT_SET_TAXI</ANIMTIP_1>
                     <ANIMTIP_2>TT:COCKPIT.TOOLTIPS.NOSE_LIGHT_SET_OFF</ANIMTIP_2>
+                    <TT_DESCRIPTION_ID>@TT_Package.AIRLINER_LIGHTING_SWITCH_LIGHT_NOSE_ACTION</TT_DESCRIPTION_ID>
                     <TYPE>TwoSimvars</TYPE>
                     <WWISE_EVENT>lswitch</WWISE_EVENT>
                 </UseTemplate>
