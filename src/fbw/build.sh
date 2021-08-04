@@ -120,6 +120,6 @@ popd
   --export-table \
   --gc-sections \
   -O3 --lto-O3 \
-  -lc++ -lc++abi -lc \
+  -lc++ -lc++abi \
   ${DIR}/obj/*.o \
   -o $OUTPUT

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <math.h>
 #include "RegPolynomials.h"
 #include "SimVars.h"
 #include "Tables.h"
@@ -133,7 +132,7 @@ class EngineControl {
       } else {
         engine = 2;
       }
-      // Obtain EGT imbalance (Max 20ï¿½C)
+      // Obtain EGT imbalance (Max 20ºC)
       egt_imbalance = (rand() % 20) + 1;
 
       // Obtain FF imbalance (Max 36 Kg/h)
@@ -331,7 +330,7 @@ class EngineControl {
     }
   }
 
-  // FBW Exhaust Gas Temperature (in ï¿½ Celsius)
+  // FBW Exhaust Gas Temperature (in º Celsius)
   // Updates EGT with realistic values visualized in the ECAM
   void updateEGT(int engine,
                  double Imbalance,
@@ -400,7 +399,7 @@ class EngineControl {
     return cflowNX;
   }
 
-  // FBW Oil Qty, Pressure and Temperature (in Quarts, PSI and ï¿½ Celsius)
+  // FBW Oil Qty, Pressure and Temperature (in Quarts, PSI and º Celsius)
   // Updates Oil with realistic values visualized in the SD
   void updateOil(int engine, double Imbalance, double thrust, double simN2, double deltaTime) {
     if (engine == 1) {
@@ -426,7 +425,7 @@ class EngineControl {
     oilBurn = (0.00011111 * deltaTime);
     oilQtyActual = oilQtyActual - oilBurn;
     oilTotalActual = oilTotalActual - oilBurn;
-
+    
     //--------------------------------------------
     // Oil Pressure
     //--------------------------------------------
@@ -626,7 +625,7 @@ class EngineControl {
     generateEngineImbalance(1);
     Imbalance = simVars->getEngineImbalance();
     EngineImbalanced = imbalance_extractor(Imbalance, 1);
-
+    
 
     // Checking engine imbalance
     if (EngineImbalanced != engine) {
@@ -654,7 +653,7 @@ class EngineControl {
       else {
         simVars->setEngine2TotalOil(idleOil - paramImbalance);
       }
-
+      
     }
     simVars->setEngine1State(0);
     simVars->setEngine2State(0);
@@ -684,7 +683,7 @@ class EngineControl {
       SimConnect_SetDataOnSimObject(hSimConnect, DataTypesID::OilControls, SIMCONNECT_OBJECT_ID_USER, 0, 0, sizeof(temperature),
                                     &temperature);
     }
-    //std::cout << "INIT FADEC: OnGround= " << simOnGround << " Eng1= " << engine1Combustion << " Eng2= " << engine2Combustion << std::flush;
+    //std::cout << "INIT FADEC: OnGround= " << simOnGround << " Eng1= " << engine1Combustion << " Eng2= " << engine2Combustion << std::flush;  
   }
 
   void update(double deltaTime) {

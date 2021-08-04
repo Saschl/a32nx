@@ -45,6 +45,6 @@ clang++ \
   --export-table \
   --gc-sections \
   -O3 --lto-O3 \
-  -lc++ -lc++abi -lc \
+  -lc++ -lc++abi \
    fadec.o \
   -o $OUTPUT
