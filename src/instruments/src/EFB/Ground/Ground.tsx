@@ -2,6 +2,7 @@ import { connect } from 'react-redux';
 import React, { useEffect, useState } from 'react';
 import { IconCornerDownLeft, IconCornerDownRight, IconArrowDown, IconHandStop, IconTruck, IconBriefcase, IconBuildingArch, IconArchive, IconPlug, IconTir } from '@tabler/icons';
 import './Ground.scss';
+import useInterval from '@instruments/common/useInterval';
 import fuselage from '../Assets/320neo-outline-upright.svg';
 import { useSimVar, useSplitSimVar } from '../../Common/simVars';
 import Button, { BUTTON_TYPE } from '../Components/Button/Button';
@@ -34,6 +35,7 @@ export const Ground = ({
 
     const [, setPushBackWait] = useSimVar('Pushback Wait', 'bool', 100);
     const [pushBackAttached] = useSimVar('Pushback Attached', 'bool', 1000);
+    const [rudderPosition] = useSimVar('A:RUDDER POSITION', 'number', 10);
 
     const [tugDirection, setTugDirection] = useState(0);
     const [tugActive, setTugActive] = useState(false);
@@ -47,6 +49,27 @@ export const Ground = ({
      * allows a direction to be selected directly
      * rather than first backwards and after that the direction
      */
+
+/*     useInterval(() => {
+        if (tugActive && !tugRequestOnly) {
+            // computeAndSetTugHeading(rudderPosition > 8192 ? 180 + rudderPosition / 90 : 180 - rudderPosition / 90);
+            if (rudderPosition >= -0.05 && rudderPosition <= 0.05) {
+                computeAndSetTugHeading(0);
+            } else {
+                const direction = rudderPosition <= 0 ? -1 : 1;
+                const targetHeading = direction === -1 ? Math.abs(rudderPosition) / 0.0111 : 360 - rudderPosition / 0.0111;
+                let intermediateTarget = direction === -1 ? 0 : 360;
+
+                if (intermediateTarget + 5 * direction < targetHeading) {
+                    intermediateTarget += 5 * direction;
+                } else {
+                    intermediateTarget = targetHeading;
+                }
+
+                computeAndSetTugHeading(intermediateTarget);
+            }
+        }
+    }, 50); */
     useEffect(() => {
         if (pushBack === 0 && tugDirection !== 0) {
             computeAndSetTugHeading(tugDirection);
@@ -60,6 +83,12 @@ export const Ground = ({
                 }, 100);
                 setPushBackWaitTimerHandle(timer);
             }
+
+        if (tugActive && !tugRequestOnly) {
+            const direction = rudderPosition <= 0 ? -1 : 1;
+            const targetHeading = direction === -1 ? Math.abs(rudderPosition) / 0.0111 : 360 - rudderPosition / 0.0111;
+            computeAndSetTugHeading(targetHeading);
+        }
         } else if (pushBackWaitTimerHandle !== -1) {
             clearInterval(pushBackWaitTimerHandle);
             setPushBackWaitTimerHandle(-1);
@@ -80,7 +109,7 @@ export const Ground = ({
         setTugDirection(direction);
     };
 
-    const togglePushback = (callOnly: boolean = false) => {
+    const togglePushback = (callOnly = false) => {
         setPushBack(!pushBack);
         setTugActive(!tugActive);
         setTugRequestOnly(callOnly);
@@ -148,7 +177,7 @@ export const Ground = ({
         const disabledIndex = disabledButtons.indexOf(disabledId);
 
         if (gameSync > 0.5 && (index !== -1 || disabledIndex !== -1)) {
-            const button: StatefulButton = activeButtons[index];
+                const button: StatefulButton = activeButtons[index];
             if (button && button.state === STATE_WAITING) {
                 button.state = STATE_ACTIVE;
                 setActiveButtons(activeButtons);

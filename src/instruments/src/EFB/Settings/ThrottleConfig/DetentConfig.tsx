@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { usePersistentProperty } from '../../../Common/persistence';
 
 import Button, { BUTTON_TYPE } from '../../Components/Button/Button';
 import Input from '../../Components/Form/Input/Input';
 import { ProgressBar } from '../../Components/Progress/Progress';
+import { debounce } from 'lodash';
 
 interface Props {
     upperBoundDetentSetter,
@@ -15,7 +16,6 @@ interface Props {
     throttlePosition,
     index,
     barPosition: string,
-    expertMode: boolean,
     initialize: boolean,
     setInitialize,
 }
@@ -25,7 +25,6 @@ const DetentConfig: React.FC<Props> = (props: Props) => {
 
     const [deadZone, setDeadZone] = usePersistentProperty(`THROTTLE_${props.throttleNumber}DETENT_${props.index}_RANGE`, '0.05');
 
-    const [previousMode, setPreviousMode] = useState(props.expertMode);
     const [axisValue, setAxisValue] = usePersistentProperty(`THROTTLE_${props.throttleNumber}AXIS_${props.index}_VALUE`);
 
     const setFromTo = (throttle1Position, settingLower, settingUpper, deadZone: number, overrideValue?: string) => {
@@ -43,6 +42,15 @@ const DetentConfig: React.FC<Props> = (props: Props) => {
         settingUpper.forEach((f) => f(axisValue + deadZone > 1 ? 1 : axisValue + deadZone));
     };
 
+
+  const changeHandler = (deadZoneNew: number) => {
+    applyDeadzone(props.lowerBoundDetentSetter, props.upperBoundDetentSetter, parseFloat(axisValue), parseFloat(deadZoneNew));
+  };
+
+    const debouncedChangeHandler = useMemo(
+        () => debounce(changeHandler, 300)
+      , []);
+
     useEffect(() => {
         // initialize persistent values from previous configurations
         if (!axisValue || props.initialize) {
@@ -55,8 +63,7 @@ const DetentConfig: React.FC<Props> = (props: Props) => {
             applyDeadzone(props.lowerBoundDetentSetter, props.upperBoundDetentSetter, axisValue, parseFloat(deadZone));
             props.setInitialize(false);
         }
-        setPreviousMode(props.expertMode);
-    }, [axisValue, props, setAxisValue, deadZone, setDeadZone]);
+    }, [axisValue, props, deadZone]);
 
     return (
         <div className="mb-2 w-full h-96 justify-between items-center p-2 flex flex-row flex-shrink-0">
@@ -84,21 +91,18 @@ const DetentConfig: React.FC<Props> = (props: Props) => {
                 </div>
             ) }
 
-            <div>
-                {!props.expertMode
-                && (
-                    <div className="flex flex-col w-full">
+            <>
+            <div className="flex flex-col w-full">
                         <Input
                             label="Deadband +/-"
                             className=" w-52 dark-option mb-4"
                             value={deadZone}
-                            onChange={(deadZone) => {
-                                if (parseFloat(deadZone) >= 0.01) {
-                                    if (previousMode === props.expertMode) {
-                                        applyDeadzone(props.lowerBoundDetentSetter, props.upperBoundDetentSetter, parseFloat(axisValue), parseFloat(deadZone));
+                            onChange={(deadZoneNew) => {
+                                if (parseFloat(deadZoneNew) >= 0.01) {
+                                        debouncedChangeHandler(deadZoneNew);
                                         setShowWarning(false);
-                                        setDeadZone(parseFloat(deadZone).toFixed(2));
-                                    }
+                                        setDeadZone(parseFloat(deadZoneNew).toFixed(2));
+
                                 } else {
                                     setShowWarning(true);
                                 }
@@ -113,45 +117,11 @@ const DetentConfig: React.FC<Props> = (props: Props) => {
                             type={BUTTON_TYPE.NONE}
                         />
                     </div>
-                ) }
-                {props.expertMode
-                && (
-                    <div>
-                        <Input
-                            label="Configure End"
-                            className="dark-option w-36 mr-0"
-                            value={!props.expertMode ? deadZone : props.upperBoundDetentGetter.toFixed(2)}
-                            onChange={(deadZone) => {
-                                if (previousMode === props.expertMode && deadZone.length > 1 && !Number.isNaN(Number(deadZone))) {
-                                    const dz = Math.abs((Math.abs(props.upperBoundDetentGetter) - Math.abs(props.lowerBoundDetentGetter)));
-                                    setAxisValue(dz / 2);
-                                    setDeadZone(dz.toFixed(2));
-                                    props.upperBoundDetentSetter.forEach((f) => f(parseFloat(deadZone)));
-                                    setShowWarning(false);
-                                }
-                            }}
-                        />
-                        <Input
-                            label={props.expertMode ? 'Configure Start' : 'Configure Range'}
-                            className="dark-option mt-2 w-36"
-                            value={!props.expertMode ? deadZone : props.lowerBoundDetentGetter.toFixed(2)}
-                            onChange={(deadZone) => {
-                                if (previousMode === props.expertMode && deadZone.length > 1 && !Number.isNaN(Number(deadZone))) {
-                                    const dz = Math.abs((Math.abs(props.upperBoundDetentGetter) - Math.abs(props.lowerBoundDetentGetter)));
-                                    setAxisValue(dz / 2);
-                                    setDeadZone(dz.toFixed(2));
-                                    props.lowerBoundDetentSetter.forEach((f) => f(parseFloat(deadZone)));
-                                    setShowWarning(false);
-                                }
-                            }}
-                        />
-                    </div>
-                ) }
                 {showWarning && (
                     <h1 className="mt-4 text-red-600 text-xl">Please enter a valid deadzone (min. 0.1)</h1>
                 )}
 
-            </div>
+            </>
             {props.barPosition === 'right'
             && (
                 <div className="ml-8 h-full">
