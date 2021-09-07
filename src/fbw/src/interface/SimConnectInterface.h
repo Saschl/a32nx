@@ -70,6 +70,8 @@ class SimConnectInterface {
     A32NX_FCU_ALT_SET,
     A32NX_FCU_ALT_PUSH,
     A32NX_FCU_ALT_PULL,
+    A32NX_FCU_ALT_INCREMENT_TOGGLE,
+    A32NX_FCU_ALT_INCREMENT_SET,
     A32NX_FCU_VS_INC,
     A32NX_FCU_VS_DEC,
     A32NX_FCU_VS_SET,
@@ -169,7 +171,8 @@ class SimConnectInterface {
                std::shared_ptr<RudderTrimHandler> rudderTrimHandler,
                double keyChangeAileron,
                double keyChangeElevator,
-               double keyChangeRudder);
+               double keyChangeRudder,
+               bool disableXboxCompatibilityRudderPlusMinus);
 
   void disconnect();
 
@@ -261,6 +264,7 @@ class SimConnectInterface {
   double flightControlsKeyChangeAileron = 0.0;
   double flightControlsKeyChangeElevator = 0.0;
   double flightControlsKeyChangeRudder = 0.0;
+  bool disableXboxCompatibilityRudderPlusMinus = false;
 
   std::unique_ptr<LocalVariable> idFcuEventSetSPEED;
   std::unique_ptr<LocalVariable> idFcuEventSetHDG;
