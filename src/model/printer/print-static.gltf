@@ -32,6 +32,433 @@
             "count": 4,
             "type": "VEC4",
             "name": "Plane.005_vertices#0_NORMAL"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 20,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.005_vertices#0_TEXCOORD_0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 24,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.005_vertices#0_TEXCOORD_1"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 28,
+            "componentType": 5123,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.005_vertices#0_COLOR_0"
+        },
+        {
+            "bufferView": 1,
+            "componentType": 5123,
+            "count": 6,
+            "type": "SCALAR",
+            "name": "Plane.005_indices#0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 144,
+            "componentType": 5126,
+            "count": 4,
+            "min": [
+                -0.0555090606212616,
+                -0.03104165941476822,
+                -0.03804390877485275
+            ],
+            "max": [
+                0.0555090606212616,
+                0.03104165568947792,
+                0.03804390877485275
+            ],
+            "type": "VEC3",
+            "name": "Plane.006_vertices#0_POSITION"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 156,
+            "componentType": 5120,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.006_vertices#0_TANGENT"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 160,
+            "componentType": 5120,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.006_vertices#0_NORMAL"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 164,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.006_vertices#0_TEXCOORD_0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 168,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.006_vertices#0_TEXCOORD_1"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 172,
+            "componentType": 5123,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.006_vertices#0_COLOR_0"
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 12,
+            "componentType": 5123,
+            "count": 6,
+            "type": "SCALAR",
+            "name": "Plane.006_indices#0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 288,
+            "componentType": 5126,
+            "count": 4,
+            "min": [
+                -0.0555090606212616,
+                -0.03104165941476822,
+                -0.03804390877485275
+            ],
+            "max": [
+                0.0555090606212616,
+                0.03104165568947792,
+                0.03804390877485275
+            ],
+            "type": "VEC3",
+            "name": "Plane.007_vertices#0_POSITION"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 300,
+            "componentType": 5120,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.007_vertices#0_TANGENT"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 304,
+            "componentType": 5120,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.007_vertices#0_NORMAL"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 308,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.007_vertices#0_TEXCOORD_0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 312,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.007_vertices#0_TEXCOORD_1"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 316,
+            "componentType": 5123,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.007_vertices#0_COLOR_0"
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 24,
+            "componentType": 5123,
+            "count": 6,
+            "type": "SCALAR",
+            "name": "Plane.007_indices#0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 432,
+            "componentType": 5126,
+            "count": 4,
+            "min": [
+                -0.0555090606212616,
+                -0.03104165941476822,
+                -0.03804390877485275
+            ],
+            "max": [
+                0.0555090606212616,
+                0.03104165568947792,
+                0.03804390877485275
+            ],
+            "type": "VEC3",
+            "name": "Plane.009_vertices#0_POSITION"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 444,
+            "componentType": 5120,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.009_vertices#0_TANGENT"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 448,
+            "componentType": 5120,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.009_vertices#0_NORMAL"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 452,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.009_vertices#0_TEXCOORD_0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 456,
+            "componentType": 5122,
+            "count": 4,
+            "type": "VEC2",
+            "name": "Plane.009_vertices#0_TEXCOORD_1"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 460,
+            "componentType": 5123,
+            "count": 4,
+            "type": "VEC4",
+            "name": "Plane.009_vertices#0_COLOR_0"
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 36,
+            "componentType": 5123,
+            "count": 6,
+            "type": "SCALAR",
+            "name": "Plane.009_indices#0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 576,
+            "componentType": 5126,
+            "count": 24,
+            "min": [
+                -0.012413792312145234,
+                -0.0010344827314838768,
+                -0.016551723703742029
+            ],
+            "max": [
+                0.012413792312145234,
+                0.0010344827314838768,
+                0.016551723703742029
+            ],
+            "type": "VEC3",
+            "name": "Cube_vertices#0_POSITION"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 588,
+            "componentType": 5120,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube_vertices#0_TANGENT"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 592,
+            "componentType": 5120,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube_vertices#0_NORMAL"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 596,
+            "componentType": 5122,
+            "count": 24,
+            "type": "VEC2",
+            "name": "Cube_vertices#0_TEXCOORD_0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 600,
+            "componentType": 5122,
+            "count": 24,
+            "type": "VEC2",
+            "name": "Cube_vertices#0_TEXCOORD_1"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 604,
+            "componentType": 5123,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube_vertices#0_COLOR_0"
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 48,
+            "componentType": 5123,
+            "count": 36,
+            "type": "SCALAR",
+            "name": "Cube_indices#0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 1440,
+            "componentType": 5126,
+            "count": 24,
+            "min": [
+                -0.012413792312145234,
+                -0.0010344827314838768,
+                -0.016551723703742029
+            ],
+            "max": [
+                0.012413792312145234,
+                0.0010344827314838768,
+                0.016551723703742029
+            ],
+            "type": "VEC3",
+            "name": "Cube.001_vertices#0_POSITION"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 1452,
+            "componentType": 5120,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube.001_vertices#0_TANGENT"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 1456,
+            "componentType": 5120,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube.001_vertices#0_NORMAL"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 1460,
+            "componentType": 5122,
+            "count": 24,
+            "type": "VEC2",
+            "name": "Cube.001_vertices#0_TEXCOORD_0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 1464,
+            "componentType": 5122,
+            "count": 24,
+            "type": "VEC2",
+            "name": "Cube.001_vertices#0_TEXCOORD_1"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 1468,
+            "componentType": 5123,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube.001_vertices#0_COLOR_0"
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 120,
+            "componentType": 5123,
+            "count": 36,
+            "type": "SCALAR",
+            "name": "Cube.001_indices#0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 2304,
+            "componentType": 5126,
+            "count": 24,
+            "min": [
+                -0.024827584624290468,
+                -0.0010344827314838768,
+                -0.004137930925935507
+            ],
+            "max": [
+                0.024827584624290468,
+                0.0010344827314838768,
+                0.004137930925935507
+            ],
+            "type": "VEC3",
+            "name": "Cube.002_vertices#0_POSITION"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 2316,
+            "componentType": 5120,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube.002_vertices#0_TANGENT"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 2320,
+            "componentType": 5120,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube.002_vertices#0_NORMAL"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 2324,
+            "componentType": 5122,
+            "count": 24,
+            "type": "VEC2",
+            "name": "Cube.002_vertices#0_TEXCOORD_0"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 2328,
+            "componentType": 5122,
+            "count": 24,
+            "type": "VEC2",
+            "name": "Cube.002_vertices#0_TEXCOORD_1"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 2332,
+            "componentType": 5123,
+            "count": 24,
+            "type": "VEC4",
+            "name": "Cube.002_vertices#0_COLOR_0"
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 192,
+            "componentType": 5123,
+            "count": 36,
+            "type": "SCALAR",
+            "name": "Cube.002_indices#0"
         }
     ],
     "asset": {
@@ -64,6 +491,13 @@
             "byteStride": 36,
             "target": 34962,
             "name": "BufferViewVertexND"
+        },
+        {
+            "buffer": 0,
+            "byteLength": 264,
+            "byteOffset": 3168,
+            "target": 34963,
+            "name": "BufferViewIndex"
         }
     ],
     "extensionsUsed": [
@@ -103,6 +537,7 @@
                         "POSITION": 0,
                         "TANGENT": 1
                     },
+                    "indices": 6,
                     "material": 0,
                     "mode": 4,
                     "extras": {
@@ -125,6 +560,7 @@
                         "POSITION": 7,
                         "TANGENT": 8
                     },
+                    "indices": 13,
                     "material": 0,
                     "mode": 4,
                     "extras": {
@@ -147,6 +583,7 @@
                         "POSITION": 14,
                         "TANGENT": 15
                     },
+                    "indices": 20,
                     "material": 0,
                     "mode": 4,
                     "extras": {
@@ -169,6 +606,7 @@
                         "POSITION": 21,
                         "TANGENT": 22
                     },
+                    "indices": 27,
                     "material": 0,
                     "mode": 4,
                     "extras": {
@@ -191,6 +629,7 @@
                         "POSITION": 28,
                         "TANGENT": 29
                     },
+                    "indices": 34,
                     "material": 1,
                     "mode": 4,
                     "extras": {
@@ -213,6 +652,7 @@
                         "POSITION": 35,
                         "TANGENT": 36
                     },
+                    "indices": 41,
                     "material": 1,
                     "mode": 4,
                     "extras": {
@@ -235,6 +675,7 @@
                         "POSITION": 42,
                         "TANGENT": 43
                     },
+                    "indices": 48,
                     "material": 1,
                     "mode": 4,
                     "extras": {

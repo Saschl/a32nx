@@ -4,12 +4,8 @@
             "bufferView": 0,
             "componentType": 5126,
             "count": 20,
-            "min": [
-                0.041666666666666664
-            ],
-            "max": [
-                0.8333333333333334
-            ],
+            "min": [0.041666666666666664],
+            "max": [0.8333333333333334],
             "type": "SCALAR"
         },
         {
@@ -199,21 +195,13 @@
             "name": "BufferViewIndex"
         }
     ],
-    "extensionsUsed": [
-        "ASOBO_normal_map_convention",
-        "ASOBO_asset_optimized"
-    ],
+    "extensionsUsed": ["ASOBO_normal_map_convention", "ASOBO_asset_optimized"],
     "materials": [
         {
             "name": "$PRINT",
             "doubleSided": true,
             "pbrMetallicRoughness": {
-                "baseColorFactor": [
-                    0.8,
-                    0.8,
-                    0.8,
-                    1
-                ],
+                "baseColorFactor": [0.8, 0.8, 0.8, 1],
                 "metallicFactor": 0,
                 "roughnessFactor": 0.9
             }
@@ -227,9 +215,7 @@
                         "COLOR_0": 9,
                         "NORMAL": 6,
                         "POSITION": 4,
-                        "TANGENT": 5,
-                        "TEXCOORD_0": 7,
-                        "TEXCOORD_1": 8
+                        "TANGENT": 5
                     },
                     "indices": 10,
                     "material": 0,
@@ -266,9 +252,7 @@
     "scene": 0,
     "scenes": [
         {
-            "nodes": [
-                0
-            ],
+            "nodes": [0],
             "name": "Scene"
         }
     ],
