@@ -110,6 +110,11 @@ pub(super) struct A320Hydraulic {
     blue_epump_flow_id: VariableIdentifier,
     ptu_high_pitch_sound_id: VariableIdentifier,
 
+    tiller_input_id: VariableIdentifier,
+    rudder_input_id: VariableIdentifier,
+    steering_output_id: VariableIdentifier,
+    steering_output: f64,
+
     core_hydraulic_updater: FixedStepLoop,
     physics_updater: MaxFixedStepLoop,
 
@@ -197,6 +202,11 @@ impl A320Hydraulic {
             yellow_epump_flow_id: context.get_identifier("HYD_YELLOW_EPUMP_FLOW".to_owned()),
             blue_epump_flow_id: context.get_identifier("HYD_BLUE_EPUMP_FLOW".to_owned()),
             ptu_high_pitch_sound_id: context.get_identifier("HYD_PTU_HIGH_PITCH_SOUND".to_owned()),
+
+            tiller_input_id: context.get_identifier("TILLER_HANDLE_POSITION".to_owned()),
+            rudder_input_id: context.get_identifier("RUDDER_PEDAL_POSITION".to_owned()),
+            steering_output_id: context.get_identifier("NOSE_WHEEL_POSITION".to_owned()),
+            steering_output: 0.5,
 
             core_hydraulic_updater: FixedStepLoop::new(Self::HYDRAULIC_SIM_TIME_STEP),
             physics_updater: MaxFixedStepLoop::new(Self::HYDRAULIC_SIM_MAX_TIME_STEP_MILLISECONDS),
@@ -787,6 +797,17 @@ impl SimulationElement for A320Hydraulic {
             &self.ptu_high_pitch_sound_id,
             self.is_ptu_running_high_pitch_sound(),
         );
+
+        println!("HYD WRITE: steering {:.3} ", self.steering_output);
+        writer.write(&self.steering_output_id, self.steering_output);
+    }
+
+    fn read(&mut self, reader: &mut SimulatorReader) {
+        let tiller: f64 = reader.read(&self.tiller_input_id);
+        let rudder: f64 = reader.read(&self.rudder_input_id);
+
+        println!("HYD READ: tiller {:.3}  rudder {:.3}", tiller, rudder);
+        self.steering_output = tiller;
     }
 }
 

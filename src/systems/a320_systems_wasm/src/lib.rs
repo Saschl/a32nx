@@ -46,6 +46,7 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
             ])
             .with_auxiliary_power_unit("OVHD_APU_START_PB_IS_AVAILABLE".to_owned(), 8)?
             .with::<Brakes>()?
+            .with::<NoweWheelSteering>()?
             .with::<Autobrakes>()?
             .with::<CargoDoors>()?
             .with_failures(vec![
@@ -568,6 +569,157 @@ impl SimulatorAspect for Brakes {
         self.reset_keyboard_events();
         self.transmit_client_events(sim_connect)?;
         self.transmit_masked_inputs();
+
+        Ok(())
+    }
+}
+
+struct NoweWheelSteering {
+    tiller_handle_id: VariableIdentifier,
+    rudder_pedal_input_id: VariableIdentifier,
+    rudder_position_input_variable: AircraftVariable,
+
+    steering_position_output_id: VariableIdentifier,
+
+    rudder_pedal_input: NamedVariable,
+    rudder_pedal_value: f64,
+    rudder_position: f64,
+
+    steering_angle_output_output: f64,
+
+    id_tiller_handle_angle: sys::DWORD,
+    tiller_handle_angle: f64,
+
+    id_nose_wheel_angle: sys::DWORD,
+}
+
+impl MsfsAspectCtor for NoweWheelSteering {
+    fn new(
+        registry: &mut MsfsVariableRegistry,
+        sim_connect: &mut SimConnect,
+    ) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            tiller_handle_id: registry.get("TILLER_HANDLE_POSITION".to_owned()),
+            rudder_pedal_input_id: registry.get("RUDDER_PEDAL_POSITION".to_owned()),
+
+            rudder_position_input_variable: AircraftVariable::from(
+                "RUDDER POSITION",
+                "Position",
+                0,
+            )?,
+
+            steering_position_output_id: registry.get("NOSE_WHEEL_POSITION".to_owned()),
+
+            rudder_pedal_input: NamedVariable::from("A32NX_RUDDER_PEDAL_POSITION"),
+            rudder_pedal_value: 0.5,
+            rudder_position: 0.5,
+
+            steering_angle_output_output: 0.5,
+
+            id_tiller_handle_angle: sim_connect
+                .map_client_event_to_sim_event("AXIS_MIXTURE4_SET", true)?,
+            tiller_handle_angle: 0.5,
+
+            id_nose_wheel_angle: sim_connect.map_client_event_to_sim_event("STEERING_SET", true)?,
+        })
+    }
+}
+
+impl NoweWheelSteering {
+    fn set_tiller_handle(&mut self, simconnect_value: u32) {
+        self.tiller_handle_angle = sim_connect_32k_pos_to_f64(simconnect_value);
+    }
+
+    fn set_steering_output(&mut self, steering_position: f64) {
+        self.steering_angle_output_output = steering_position;
+    }
+
+    fn tiller_handle_position(&self) -> f64 {
+        self.tiller_handle_angle
+    }
+
+    fn rudder_pedal_position(&self) -> f64 {
+        self.rudder_pedal_value
+    }
+
+    fn synchronise_with_sim(&mut self) {
+        let rudder_percent: f64 = self.rudder_pedal_input.get_value();
+        self.rudder_pedal_value = (rudder_percent + 100.) / 200.;
+
+        let rudder_position: f64 = self.rudder_position_input_variable.get();
+        self.rudder_position = (rudder_position + 1.) / 2.;
+
+        println!(
+            "RUDDER position input: {:.3} Raw pos read {:.3} Position actual {:.3}",
+            self.rudder_pedal_value, rudder_position, self.rudder_position
+        );
+    }
+
+    fn transmit_client_events(
+        &mut self,
+        sim_connect: &mut SimConnect,
+    ) -> Result<(), Box<dyn Error>> {
+        println!(
+            "transmit_client_events : desired out {:.3} rudder_corrected {:.3}",
+            self.steering_angle_output_output,
+            self.steering_angle_output_output - (0.5 - self.rudder_position)
+        );
+        sim_connect.transmit_client_event(
+            SIMCONNECT_OBJECT_ID_USER,
+            self.id_nose_wheel_angle,
+            f64_to_sim_connect_32k_pos(
+                self.steering_angle_output_output - (0.5 - self.rudder_position),
+            ),
+        )?;
+
+        Ok(())
+    }
+}
+impl SimulatorAspect for NoweWheelSteering {
+    fn read(&mut self, identifier: &VariableIdentifier) -> Option<f64> {
+        if identifier == &self.tiller_handle_id {
+            Some(self.tiller_handle_position())
+        } else if identifier == &self.rudder_pedal_input_id {
+            Some(self.rudder_pedal_position())
+        } else {
+            None
+        }
+    }
+
+    fn write(&mut self, identifier: &VariableIdentifier, value: f64) -> bool {
+        if identifier == &self.steering_position_output_id {
+            self.set_steering_output(value);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn handle_message(&mut self, message: &SimConnectRecv) -> bool {
+        match message {
+            SimConnectRecv::Event(e) => {
+                if e.id() == self.id_tiller_handle_angle {
+                    self.set_tiller_handle(e.data());
+                    println!(
+                        "Steer angle TILLER (mixture4) event input: {:.3}",
+                        self.tiller_handle_angle
+                    );
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    fn pre_tick(&mut self, delta: Duration) {
+        //self.synchronise_with_sim();
+    }
+
+    fn post_tick(&mut self, sim_connect: &mut SimConnect) -> Result<(), Box<dyn Error>> {
+        self.synchronise_with_sim();
+        self.transmit_client_events(sim_connect)?;
 
         Ok(())
     }
