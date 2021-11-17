@@ -17,6 +17,7 @@ use uom::si::{
 
 pub mod brake_circuit;
 pub mod linear_actuator;
+pub mod nose_steering;
 pub mod update_iterator;
 
 pub trait PressureSource {
