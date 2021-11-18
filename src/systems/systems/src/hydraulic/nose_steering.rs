@@ -20,35 +20,35 @@ pub trait SteeringController {
     fn requested_position(&self) -> Angle;
 }
 
+use crate::hydraulic::linear_actuator::Actuator;
+
 /// Computes steering angle based on steering target and input speed
-struct SteeringAngleLimiter {
+pub struct SteeringAngleLimiter {
     speed_map: [f64; 5],
     angle_output: [f64; 5],
 }
 impl SteeringAngleLimiter {
-    fn new(speed_map: [f64; 5], angle_output: [f64; 5]) -> SteeringAngleLimiter {
+    pub fn new(speed_map: [f64; 5], angle_output: [f64; 5]) -> SteeringAngleLimiter {
         SteeringAngleLimiter {
             speed_map,
             angle_output,
         }
     }
 
-    fn angle_from_speed(&self, speed: Velocity, angle: Angle) -> Angle {
+    /// Gets final steering angle based on current speed, and required turning ratio
+    /// Ratio is from -1.0 (full left) to 1 (full right)
+    pub fn angle_from_speed(&self, speed: Velocity, steering_ratio_requested: Ratio) -> Angle {
         let max_angle = Angle::new::<degree>(interpolation(
             &self.speed_map,
             &self.angle_output,
             speed.get::<knot>(),
         ));
 
-        if angle.get::<degree>() > 0. {
-            max_angle.min(angle)
-        } else {
-            -max_angle.max(angle)
-        }
+        Angle::new::<degree>(max_angle.get::<degree>() * steering_ratio_requested.get::<ratio>())
     }
 }
 
-struct SteeringActuator {
+pub struct SteeringActuator {
     position_id: VariableIdentifier,
 
     current_speed: AngularVelocity,
@@ -71,7 +71,7 @@ impl SteeringActuator {
 
     const REFERENCE_PRESS_FOR_NOMINAL_SPEED_PSI: f64 = 2000.;
 
-    fn new(
+    pub fn new(
         context: &mut InitContext,
         max_half_angle: Angle,
         nominal_speed: AngularVelocity,
@@ -97,7 +97,7 @@ impl SteeringActuator {
         }
     }
 
-    fn update(
+    pub fn update(
         &mut self,
         context: &UpdateContext,
         current_pressure: Pressure,
@@ -146,12 +146,13 @@ impl SteeringActuator {
     }
 
     fn update_flow(&mut self, context: &UpdateContext, current_pressure: Pressure) {
-        let angular_position_delta = Angle::new::<radian>(
-            self.current_speed.get::<radian_per_second>() * context.delta_as_secs_f64(),
+        let angular_position_delta_abs = Angle::new::<radian>(
+            self.current_speed.get::<radian_per_second>().abs() * context.delta_as_secs_f64(),
         );
 
         let linear_position_delta = Length::new::<meter>(
-            angular_position_delta.get::<radian>() * self.angular_to_linear_ratio.get::<ratio>(),
+            angular_position_delta_abs.get::<radian>()
+                * self.angular_to_linear_ratio.get::<ratio>(),
         );
 
         // TODO different if unpressurised by pushback pin
@@ -165,8 +166,22 @@ impl SteeringActuator {
 
     fn position_normalized(&self) -> Ratio {
         Ratio::new::<ratio>(
-            self.current_position.get::<radian>() / 2. * self.max_half_angle.get::<radian>() + 0.5,
+            self.current_position.get::<radian>() / self.max_half_angle.get::<radian>(),
         )
+    }
+}
+impl Actuator for SteeringActuator {
+    fn used_volume(&self) -> Volume {
+        self.total_volume_to_actuator
+    }
+
+    fn reservoir_return(&self) -> Volume {
+        self.total_volume_to_reservoir
+    }
+
+    fn reset_accumulators(&mut self) {
+        self.total_volume_to_reservoir = Volume::new::<gallon>(0.);
+        self.total_volume_to_actuator = Volume::new::<gallon>(0.);
     }
 }
 impl SimulationElement for SteeringActuator {
@@ -237,8 +252,9 @@ mod tests {
                 .update(context, self.pressure, &self.controller);
 
             println!(
-                "Steering feedback {:.3} deg, Speed {:.3} rad/s, Target {:.1} deg , Pressure {:.0}",
+                "Steering feedback {:.3} deg, Norm pos {:.1}, Speed {:.3} rad/s, Target {:.1} deg , Pressure {:.0}",
                 self.steering_actuator.position_feedback().get::<degree>(),
+                self.steering_actuator.position_normalized().get::<ratio>(),
                 self.steering_actuator
                     .current_speed
                     .get::<radian_per_second>(),
@@ -278,8 +294,8 @@ mod tests {
             actuator_position_init
         ));
 
-        let normalized_position :f64 =test_bed.read_by_name("NOSE_WHEEL_POSITION");
-        assert!(normalized_position == 0.5);
+        let normalized_position: f64 = test_bed.read_by_name("NOSE_WHEEL_POSITION");
+        assert!(normalized_position == 0.);
     }
 
     #[test]
@@ -323,6 +339,11 @@ mod tests {
             Angle::new::<degree>(75.)
         ));
 
+        assert!(
+            test_bed.query(|a| a.steering_actuator.position_normalized())
+                == Ratio::new::<ratio>(1.)
+        );
+
         test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(-90.)));
         test_bed.run_multiple_frames(Duration::from_secs(6));
 
@@ -330,6 +351,11 @@ mod tests {
             test_bed.query(|a| a.steering_actuator.position_feedback()),
             Angle::new::<degree>(-75.)
         ));
+
+        assert!(
+            test_bed.query(|a| a.steering_actuator.position_normalized())
+                == Ratio::new::<ratio>(-1.)
+        );
     }
 
     #[test]
@@ -342,8 +368,7 @@ mod tests {
         test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
         test_bed.command(|a| {
             a.command_steer_angle(
-                angle_limiter
-                    .angle_from_speed(Velocity::new::<knot>(20.), Angle::new::<degree>(90.)),
+                angle_limiter.angle_from_speed(Velocity::new::<knot>(20.), Ratio::new::<ratio>(1.)),
             )
         });
 
@@ -357,7 +382,7 @@ mod tests {
         test_bed.command(|a| {
             a.command_steer_angle(
                 angle_limiter
-                    .angle_from_speed(Velocity::new::<knot>(20.), Angle::new::<degree>(-90.)),
+                    .angle_from_speed(Velocity::new::<knot>(20.), Ratio::new::<ratio>(-1.)),
             )
         });
 

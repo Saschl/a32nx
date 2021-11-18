@@ -4,7 +4,7 @@ use std::time::Duration;
 use uom::si::{
     acceleration::meter_per_second_squared,
     angle::degree,
-    angular_velocity::revolution_per_minute,
+    angular_velocity::{radian_per_second, revolution_per_minute},
     f64::*,
     length::meter,
     mass::kilogram,
@@ -27,6 +27,7 @@ use systems::{
             HydraulicLinearActuatorAssembly, LinearActuatedRigidBodyOnHingeAxis, LinearActuator,
             LinearActuatorMode,
         },
+        nose_steering::{SteeringActuator, SteeringAngleLimiter, SteeringController},
         update_iterator::{FixedStepLoop, MaxFixedStepLoop},
         ElectricPump, EngineDrivenPump, Fluid, HydraulicLoop, HydraulicLoopController,
         PowerTransferUnit, PowerTransferUnitController, PressureSwitch, PumpController,
@@ -110,10 +111,7 @@ pub(super) struct A320Hydraulic {
     blue_epump_flow_id: VariableIdentifier,
     ptu_high_pitch_sound_id: VariableIdentifier,
 
-    tiller_input_id: VariableIdentifier,
-    rudder_input_id: VariableIdentifier,
-    steering_output_id: VariableIdentifier,
-    steering_output: f64,
+    nose_steering: SteeringActuator,
 
     core_hydraulic_updater: FixedStepLoop,
     physics_updater: MaxFixedStepLoop,
@@ -203,10 +201,13 @@ impl A320Hydraulic {
             blue_epump_flow_id: context.get_identifier("HYD_BLUE_EPUMP_FLOW".to_owned()),
             ptu_high_pitch_sound_id: context.get_identifier("HYD_PTU_HIGH_PITCH_SOUND".to_owned()),
 
-            tiller_input_id: context.get_identifier("TILLER_HANDLE_POSITION".to_owned()),
-            rudder_input_id: context.get_identifier("RUDDER_PEDAL_POSITION".to_owned()),
-            steering_output_id: context.get_identifier("NOSE_WHEEL_POSITION".to_owned()),
-            steering_output: 0.5,
+            nose_steering: SteeringActuator::new(
+                context,
+                Angle::new::<degree>(75.),
+                AngularVelocity::new::<radian_per_second>(0.5),
+                Length::new::<meter>(0.15),
+                Ratio::new::<ratio>(0.15),
+            ),
 
             core_hydraulic_updater: FixedStepLoop::new(Self::HYDRAULIC_SIM_TIME_STEP),
             physics_updater: MaxFixedStepLoop::new(Self::HYDRAULIC_SIM_MAX_TIME_STEP_MILLISECONDS),
@@ -531,6 +532,9 @@ impl A320Hydraulic {
         lgciu1: &impl LgciuInterface,
         lgciu2: &impl LgciuInterface,
     ) {
+        self.nose_steering
+            .update(context, self.yellow_loop.pressure(), &self.brake_computer);
+
         // Process brake logic (which circuit brakes) and send brake demands (how much)
         self.brake_computer.update_brake_demands(
             context,
@@ -594,6 +598,9 @@ impl A320Hydraulic {
 
         self.yellow_loop
             .update_actuator_volumes(self.aft_cargo_door.actuator());
+
+        self.yellow_loop
+            .update_actuator_volumes(&mut self.nose_steering);
     }
 
     fn update_blue_actuators_volume(&mut self) {}
@@ -777,6 +784,8 @@ impl SimulationElement for A320Hydraulic {
         self.braking_circuit_altn.accept(visitor);
         self.braking_force.accept(visitor);
 
+        self.nose_steering.accept(visitor);
+
         visitor.visit(self);
     }
 
@@ -797,17 +806,6 @@ impl SimulationElement for A320Hydraulic {
             &self.ptu_high_pitch_sound_id,
             self.is_ptu_running_high_pitch_sound(),
         );
-
-        println!("HYD WRITE: steering {:.3} ", self.steering_output);
-        writer.write(&self.steering_output_id, self.steering_output);
-    }
-
-    fn read(&mut self, reader: &mut SimulatorReader) {
-        let tiller: f64 = reader.read(&self.tiller_input_id);
-        let rudder: f64 = reader.read(&self.rudder_input_id);
-
-        println!("HYD READ: tiller {:.3}  rudder {:.3}", tiller, rudder);
-        self.steering_output = tiller;
     }
 }
 
@@ -1308,6 +1306,11 @@ struct A320HydraulicBrakeComputerUnit {
     left_brake_pedal_input_id: VariableIdentifier,
     right_brake_pedal_input_id: VariableIdentifier,
 
+    ground_speed_id: VariableIdentifier,
+
+    rudder_pedal_input_id: VariableIdentifier,
+    tiller_handle_input_id: VariableIdentifier,
+
     autobrake_controller: A320AutobrakeController,
     parking_brake_demand: bool,
     is_gear_lever_down: bool,
@@ -1323,9 +1326,24 @@ struct A320HydraulicBrakeComputerUnit {
 
     alternate_brake_pressure_limit: Pressure,
     normal_brake_pressure_limit: Pressure,
+
+    tiller_handle_position: Ratio,
+    rudder_pedal_position: Ratio,
+
+    pedal_steering_limiter: SteeringAngleLimiter,
+    tiller_steering_limiter: SteeringAngleLimiter,
+    final_steering_position_request: Angle,
+
+    ground_speed: Velocity,
 }
 /// Implements brakes computers logic
 impl A320HydraulicBrakeComputerUnit {
+    const SPEED_MAP_FOR_PEDAL_ACTION_KNOT: [f64; 5] = [0., 40., 130., 1500.0, 2800.0];
+    const STEERING_ANGLE_FOR_PEDAL_ACTION_DEGREE: [f64; 5] = [6., 6., 0., 0., 0.];
+
+    const SPEED_MAP_FOR_TILLER_ACTION_KNOT: [f64; 5] = [0., 20., 70., 1500.0, 2800.0];
+    const STEERING_ANGLE_FOR_TILLER_ACTION_DEGREE: [f64; 5] = [75., 75., 0., 0., 0.];
+
     // Minimum pressure hysteresis on green until main switched on ALTN brakes
     // Feedback by Cpt. Chaos — 25/04/2021 #pilot-feedback
     const MIN_PRESSURE_BRAKE_ALTN_HYST_LO: f64 = 1305.;
@@ -1348,7 +1366,12 @@ impl A320HydraulicBrakeComputerUnit {
             right_brake_pedal_input_id: context
                 .get_identifier("RIGHT_BRAKE_PEDAL_INPUT".to_owned()),
 
+            ground_speed_id: context.get_identifier("GPS GROUND SPEED".to_owned()),
+            rudder_pedal_input_id: context.get_identifier("RUDDER_PEDAL_POSITION".to_owned()),
+            tiller_handle_input_id: context.get_identifier("TILLER_HANDLE_POSITION".to_owned()),
+
             autobrake_controller: A320AutobrakeController::new(context),
+
             // Position of parking brake lever
             parking_brake_demand: true,
             is_gear_lever_down: true,
@@ -1369,6 +1392,20 @@ impl A320HydraulicBrakeComputerUnit {
             anti_skid_activated: true,
             alternate_brake_pressure_limit: Pressure::new::<psi>(3000.),
             normal_brake_pressure_limit: Pressure::new::<psi>(3000.),
+
+            tiller_handle_position: Ratio::new::<ratio>(0.),
+            rudder_pedal_position: Ratio::new::<ratio>(0.),
+            pedal_steering_limiter: SteeringAngleLimiter::new(
+                Self::SPEED_MAP_FOR_PEDAL_ACTION_KNOT,
+                Self::STEERING_ANGLE_FOR_PEDAL_ACTION_DEGREE,
+            ),
+            tiller_steering_limiter: SteeringAngleLimiter::new(
+                Self::SPEED_MAP_FOR_TILLER_ACTION_KNOT,
+                Self::STEERING_ANGLE_FOR_TILLER_ACTION_DEGREE,
+            ),
+            final_steering_position_request: Angle::new::<degree>(0.),
+
+            ground_speed: Velocity::new::<knot>(0.),
         }
     }
 
@@ -1424,6 +1461,8 @@ impl A320HydraulicBrakeComputerUnit {
         lgciu2: &impl LgciuInterface,
         autobrake_panel: &AutobrakePanel,
     ) {
+        self.update_steering_demands(context, lgciu1);
+
         self.update_normal_braking_availability(&green_loop.pressure());
         self.update_brake_pressure_limitation();
 
@@ -1517,6 +1556,36 @@ impl A320HydraulicBrakeComputerUnit {
             .max(Ratio::new::<ratio>(0.));
     }
 
+    fn update_steering_demands(
+        &mut self,
+        context: &UpdateContext,
+        lgciu1: &impl LgciuInterface,
+    ) {
+        let steer_angle_from_rudder = self
+            .pedal_steering_limiter
+            .angle_from_speed(self.ground_speed(), self.rudder_pedal_position);
+        let steer_angle_from_tiller = self
+            .tiller_steering_limiter
+            .angle_from_speed(self.ground_speed(), self.tiller_handle_position);
+
+        self.final_steering_position_request =
+            if self.anti_skid_activated && lgciu1.nose_gear_compressed(false) {
+                // TODO why -steer_angle_from_rudder : don't ask I don't know
+                // Check direction of all inputs from msfs
+                -steer_angle_from_rudder + steer_angle_from_tiller
+            } else {
+                Angle::new::<degree>(0.)
+            };
+
+        println!(
+            "Ped {:.1} Till {:.1} Spd kts {:.1} Final Angle {:.1}",
+            self.rudder_pedal_position.get::<ratio>(),
+            self.tiller_handle_position.get::<ratio>(),
+            self.ground_speed.get::<knot>(),
+            self.final_steering_position_request.get::<degree>()
+        );
+    }
+
     fn send_brake_demands(&mut self, norm: &mut BrakeCircuit, altn: &mut BrakeCircuit) {
         norm.set_brake_press_limit(self.normal_brake_pressure_limit);
         norm.set_brake_demand_left(self.left_brake_green_output);
@@ -1526,8 +1595,11 @@ impl A320HydraulicBrakeComputerUnit {
         altn.set_brake_demand_left(self.left_brake_yellow_output);
         altn.set_brake_demand_right(self.right_brake_yellow_output);
     }
-}
 
+    fn ground_speed(&self) -> Velocity {
+        self.ground_speed
+    }
+}
 impl SimulationElement for A320HydraulicBrakeComputerUnit {
     fn accept<T: SimulationElementVisitor>(&mut self, visitor: &mut T) {
         self.autobrake_controller.accept(visitor);
@@ -1542,6 +1614,17 @@ impl SimulationElement for A320HydraulicBrakeComputerUnit {
             Ratio::new::<ratio>(reader.read(&self.left_brake_pedal_input_id));
         self.right_brake_pilot_input =
             Ratio::new::<ratio>(reader.read(&self.right_brake_pedal_input_id));
+
+        self.tiller_handle_position =
+            Ratio::new::<ratio>(reader.read(&self.tiller_handle_input_id));
+        self.rudder_pedal_position = Ratio::new::<ratio>(reader.read(&self.rudder_pedal_input_id));
+
+        self.ground_speed = reader.read(&self.ground_speed_id);
+    }
+}
+impl SteeringController for A320HydraulicBrakeComputerUnit {
+    fn requested_position(&self) -> Angle {
+        self.final_steering_position_request
     }
 }
 

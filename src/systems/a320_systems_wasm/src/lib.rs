@@ -631,15 +631,15 @@ impl NoweWheelSteering {
     }
 
     fn set_steering_output(&mut self, steering_position: f64) {
-        self.steering_angle_output_output = steering_position;
+        self.steering_angle_output_output = steering_position / 2. + 0.5;
     }
 
     fn tiller_handle_position(&self) -> f64 {
-        self.tiller_handle_angle
+        self.tiller_handle_angle * 2. - 1.
     }
 
     fn rudder_pedal_position(&self) -> f64 {
-        self.rudder_pedal_value
+        self.rudder_pedal_value * 2. - 1.
     }
 
     fn synchronise_with_sim(&mut self) {
@@ -660,8 +660,9 @@ impl NoweWheelSteering {
         sim_connect: &mut SimConnect,
     ) -> Result<(), Box<dyn Error>> {
         println!(
-            "transmit_client_events : desired out {:.3} rudder_corrected {:.3}",
+            "transmit_client_events : desired out {:.3} rudder_position {:.3} rudder_corrected {:.3}",
             self.steering_angle_output_output,
+            self.rudder_position,
             self.steering_angle_output_output - (0.5 - self.rudder_position)
         );
         sim_connect.transmit_client_event(
