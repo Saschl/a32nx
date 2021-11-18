@@ -700,10 +700,6 @@ impl SimulatorAspect for NoweWheelSteering {
             SimConnectRecv::Event(e) => {
                 if e.id() == self.id_tiller_handle_angle {
                     self.set_tiller_handle(e.data());
-                    println!(
-                        "Steer angle TILLER (mixture4) event input: {:.3}",
-                        self.tiller_handle_angle
-                    );
                     true
                 } else {
                     false
@@ -714,11 +710,10 @@ impl SimulatorAspect for NoweWheelSteering {
     }
 
     fn pre_tick(&mut self, delta: Duration) {
-        //self.synchronise_with_sim();
+        self.synchronise_with_sim();
     }
 
     fn post_tick(&mut self, sim_connect: &mut SimConnect) -> Result<(), Box<dyn Error>> {
-        self.synchronise_with_sim();
         self.transmit_client_events(sim_connect)?;
 
         Ok(())

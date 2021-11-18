@@ -1,6 +1,6 @@
 use crate::shared::interpolation;
 use crate::simulation::{
-    InitContext, SimulationElement, SimulationElementVisitor, SimulatorWriter, UpdateContext,
+    InitContext, Read, SimulationElement, SimulationElementVisitor, SimulatorWriter, UpdateContext,
     VariableIdentifier, Write,
 };
 use std::time::Duration;
@@ -20,15 +20,14 @@ pub trait SteeringController {
     fn requested_position(&self) -> Angle;
 }
 
-/// Computes desired angle from a [0;1] steering command
-/// Uses an input speed to limit the max commanded steering input
-struct SteeringAngleCommandFromSpeed {
+/// Computes steering angle based on steering target and input speed
+struct SteeringAngleLimiter {
     speed_map: [f64; 5],
     angle_output: [f64; 5],
 }
-impl SteeringAngleCommandFromSpeed {
-    fn new(speed_map: [f64; 5], angle_output: [f64; 5]) -> SteeringAngleCommandFromSpeed {
-        SteeringAngleCommandFromSpeed {
+impl SteeringAngleLimiter {
+    fn new(speed_map: [f64; 5], angle_output: [f64; 5]) -> SteeringAngleLimiter {
+        SteeringAngleLimiter {
             speed_map,
             angle_output,
         }
@@ -50,6 +49,8 @@ impl SteeringAngleCommandFromSpeed {
 }
 
 struct SteeringActuator {
+    position_id: VariableIdentifier,
+
     current_speed: AngularVelocity,
     current_position: Angle,
 
@@ -71,12 +72,15 @@ impl SteeringActuator {
     const REFERENCE_PRESS_FOR_NOMINAL_SPEED_PSI: f64 = 2000.;
 
     fn new(
+        context: &mut InitContext,
         max_half_angle: Angle,
         nominal_speed: AngularVelocity,
         actuator_diamter: Length,
         angular_to_linear_ratio: Ratio,
     ) -> Self {
         Self {
+            position_id: context.get_identifier("NOSE_WHEEL_POSITION".to_owned()),
+
             current_speed: AngularVelocity::new::<radian_per_second>(0.),
             current_position: Angle::new::<radian>(0.),
 
@@ -158,6 +162,17 @@ impl SteeringActuator {
     fn position_feedback(&self) -> Angle {
         self.current_position
     }
+
+    fn position_normalized(&self) -> Ratio {
+        Ratio::new::<ratio>(
+            self.current_position.get::<radian>() / 2. * self.max_half_angle.get::<radian>() + 0.5,
+        )
+    }
+}
+impl SimulationElement for SteeringActuator {
+    fn write(&self, writer: &mut SimulatorWriter) {
+        writer.write(&self.position_id, self.position_normalized().get::<ratio>());
+    }
 }
 
 #[cfg(test)]
@@ -165,7 +180,7 @@ mod tests {
 
     use super::*;
 
-    use crate::simulation::test::{SimulationTestBed, TestBed};
+    use crate::simulation::test::{ReadByName, SimulationTestBed, TestBed};
     use crate::simulation::{Aircraft, SimulationElement};
     use std::time::Duration;
     use uom::si::{angle::degree, pressure::psi};
@@ -232,24 +247,45 @@ mod tests {
             );
         }
     }
-    impl SimulationElement for TestAircraft {}
+    impl SimulationElement for TestAircraft {
+        fn accept<T: SimulationElementVisitor>(&mut self, visitor: &mut T) {
+            self.steering_actuator.accept(visitor);
+            visitor.visit(self);
+        }
+    }
+
+    #[test]
+    fn writes_its_states() {
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
+
+        test_bed.run();
+
+        assert!(test_bed.contains_variable_with_name("NOSE_WHEEL_POSITION"));
+    }
 
     #[test]
     fn init_with_zero_angle() {
-        let mut test_bed = SimulationTestBed::new(|_| TestAircraft::new(steering_actuator()));
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
 
         let actuator_position_init = test_bed.query(|a| a.steering_actuator.position_feedback());
 
         test_bed.run_multiple_frames(Duration::from_secs(1));
 
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback()) == actuator_position_init
-        );
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            actuator_position_init
+        ));
+
+        let normalized_position :f64 =test_bed.read_by_name("NOSE_WHEEL_POSITION");
+        assert!(normalized_position == 0.5);
     }
 
     #[test]
     fn steering_not_moving_without_pressure() {
-        let mut test_bed = SimulationTestBed::new(|_| TestAircraft::new(steering_actuator()));
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
 
         let actuator_position_init = test_bed.query(|a| a.steering_actuator.position_feedback());
         test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(0.)));
@@ -257,53 +293,49 @@ mod tests {
 
         test_bed.run_multiple_frames(Duration::from_secs(1));
 
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback()) == actuator_position_init
-        );
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            actuator_position_init
+        ));
 
         test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(-90.)));
 
         test_bed.run_multiple_frames(Duration::from_secs(1));
 
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback()) == actuator_position_init
-        );
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            actuator_position_init
+        ));
     }
 
     #[test]
     fn steering_moving_with_pressure_to_max_pos_less_than_3s() {
-        let mut test_bed = SimulationTestBed::new(|_| TestAircraft::new(steering_actuator()));
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
 
         test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
         test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(90.)));
 
         test_bed.run_multiple_frames(Duration::from_secs(3));
 
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback())
-                >= Angle::new::<degree>(74.)
-        );
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback())
-                <= Angle::new::<degree>(76.)
-        );
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            Angle::new::<degree>(75.)
+        ));
 
         test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(-90.)));
         test_bed.run_multiple_frames(Duration::from_secs(6));
 
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback())
-                >= Angle::new::<degree>(-76.)
-        );
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback())
-                <= Angle::new::<degree>(-74.)
-        );
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            Angle::new::<degree>(-75.)
+        ));
     }
 
     #[test]
     fn steering_moving_only_by_6_deg_at_20_knot() {
-        let mut test_bed = SimulationTestBed::new(|_| TestAircraft::new(steering_actuator()));
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
 
         let angle_limiter = pedal_steer_command();
 
@@ -317,12 +349,10 @@ mod tests {
 
         test_bed.run_multiple_frames(Duration::from_secs(3));
 
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback()) >= Angle::new::<degree>(5.)
-        );
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback()) <= Angle::new::<degree>(7.)
-        );
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            Angle::new::<degree>(6.)
+        ));
 
         test_bed.command(|a| {
             a.command_steer_angle(
@@ -333,18 +363,15 @@ mod tests {
 
         test_bed.run_multiple_frames(Duration::from_secs(6));
 
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback())
-                >= Angle::new::<degree>(-7.)
-        );
-        assert!(
-            test_bed.query(|a| a.steering_actuator.position_feedback())
-                <= Angle::new::<degree>(-5.)
-        );
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            Angle::new::<degree>(-6.)
+        ));
     }
 
-    fn steering_actuator() -> SteeringActuator {
+    fn steering_actuator(context: &mut InitContext) -> SteeringActuator {
         SteeringActuator::new(
+            context,
             Angle::new::<degree>(75.),
             AngularVelocity::new::<radian_per_second>(0.5),
             Length::new::<meter>(0.15),
@@ -352,10 +379,16 @@ mod tests {
         )
     }
 
-    fn pedal_steer_command() -> SteeringAngleCommandFromSpeed {
-        const speed_map: [f64; 5] = [0., 40., 130., 1500.0, 2800.0];
-        const steering_angle: [f64; 5] = [6., 6., 0., 0., 0.];
+    fn pedal_steer_command() -> SteeringAngleLimiter {
+        const SPEED_MAP: [f64; 5] = [0., 40., 130., 1500.0, 2800.0];
+        const STEERING_ANGLE: [f64; 5] = [6., 6., 0., 0., 0.];
 
-        SteeringAngleCommandFromSpeed::new(speed_map, steering_angle)
+        SteeringAngleLimiter::new(SPEED_MAP, STEERING_ANGLE)
+    }
+
+    fn is_equal_angle(a1: Angle, a2: Angle) -> bool {
+        const EPSILON_DEGREE: f64 = 0.1;
+
+        (a1 - a2).abs() <= Angle::new::<degree>(EPSILON_DEGREE)
     }
 }
