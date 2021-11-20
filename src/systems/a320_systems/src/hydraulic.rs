@@ -481,8 +481,11 @@ impl A320Hydraulic {
         lgciu1: &impl LgciuInterface,
         lgciu2: &impl LgciuInterface,
     ) {
-        self.nose_steering
-            .update(context, self.yellow_loop.pressure(), &self.brake_computer);
+        self.nose_steering.update(
+            context,
+            self.yellow_circuit.system_pressure(),
+            &self.brake_computer,
+        );
 
         // Process brake logic (which circuit brakes) and send brake demands (how much)
         self.brake_computer.update_brake_demands(
@@ -547,7 +550,7 @@ impl A320Hydraulic {
         self.yellow_circuit
             .update_actuator_volumes(self.aft_cargo_door.actuator());
 
-        self.yellow_loop
+        self.yellow_circuit
             .update_actuator_volumes(&mut self.nose_steering);
     }
 
@@ -1529,11 +1532,7 @@ impl A320HydraulicBrakeComputerUnit {
             .max(Ratio::new::<ratio>(0.));
     }
 
-    fn update_steering_demands(
-        &mut self,
-        context: &UpdateContext,
-        lgciu1: &impl LgciuInterface,
-    ) {
+    fn update_steering_demands(&mut self, context: &UpdateContext, lgciu1: &impl LgciuInterface) {
         let steer_angle_from_rudder = self
             .pedal_steering_limiter
             .angle_from_speed(self.ground_speed(), self.rudder_pedal_position);

@@ -179,7 +179,7 @@ impl Actuator for SteeringActuator {
         self.total_volume_to_reservoir
     }
 
-    fn reset_accumulators(&mut self) {
+    fn reset_volumes(&mut self) {
         self.total_volume_to_reservoir = Volume::new::<gallon>(0.);
         self.total_volume_to_actuator = Volume::new::<gallon>(0.);
     }
