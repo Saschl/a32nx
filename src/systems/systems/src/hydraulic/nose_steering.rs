@@ -16,6 +16,11 @@ use uom::si::{
     volume::{cubic_inch, gallon},
     volume_rate::gallon_per_second,
 };
+
+pub trait Pushback {
+    fn is_nose_wheel_steering_pin_inserted(&self) -> bool;
+    fn steering_angle(&self) -> Angle;
+}
 pub trait SteeringController {
     fn requested_position(&self) -> Angle;
 }
@@ -102,35 +107,41 @@ impl SteeringActuator {
         context: &UpdateContext,
         current_pressure: Pressure,
         steering_controller: &impl SteeringController,
+        pushback_tug: &impl Pushback,
     ) {
-        self.update_max_speed(current_pressure);
+        if !pushback_tug.is_nose_wheel_steering_pin_inserted() {
+            self.update_max_speed(current_pressure);
 
-        let limited_requested_angle = steering_controller
-            .requested_position()
-            .min(self.max_half_angle)
-            .max(-self.max_half_angle);
+            let limited_requested_angle = steering_controller
+                .requested_position()
+                .min(self.max_half_angle)
+                .max(-self.max_half_angle);
 
-        if limited_requested_angle > self.position_feedback() {
-            self.current_speed = 0.8 * self.current_speed + 0.2 * self.max_speed;
-        } else if limited_requested_angle < self.position_feedback() {
-            self.current_speed = 0.8 * self.current_speed + 0.2 * -self.max_speed;
+            if limited_requested_angle > self.position_feedback() {
+                self.current_speed = 0.8 * self.current_speed + 0.2 * self.max_speed;
+            } else if limited_requested_angle < self.position_feedback() {
+                self.current_speed = 0.8 * self.current_speed + 0.2 * -self.max_speed;
+            } else {
+                self.current_speed = AngularVelocity::new::<radian_per_second>(0.);
+            }
+            self.current_position += Angle::new::<radian>(
+                self.current_speed.get::<radian_per_second>() * context.delta_as_secs_f64(),
+            );
+
+            if self.current_speed.get::<radian_per_second>() > 0.
+                && limited_requested_angle < self.position_feedback()
+                || self.current_speed.get::<radian_per_second>() < 0.
+                    && limited_requested_angle > self.position_feedback()
+            {
+                self.current_speed = AngularVelocity::new::<radian_per_second>(0.);
+                self.current_position = limited_requested_angle;
+            }
         } else {
             self.current_speed = AngularVelocity::new::<radian_per_second>(0.);
-        }
-        self.current_position += Angle::new::<radian>(
-            self.current_speed.get::<radian_per_second>() * context.delta_as_secs_f64(),
-        );
-
-        if self.current_speed.get::<radian_per_second>() > 0.
-            && limited_requested_angle < self.position_feedback()
-            || self.current_speed.get::<radian_per_second>() < 0.
-                && limited_requested_angle > self.position_feedback()
-        {
-            self.current_speed = AngularVelocity::new::<radian_per_second>(0.);
-            self.current_position = limited_requested_angle;
+            self.current_position = pushback_tug.steering_angle();
         }
 
-        self.update_flow(context, current_pressure);
+        self.update_flow(context, pushback_tug);
     }
 
     fn update_max_speed(&mut self, current_pressure: Pressure) {
@@ -145,27 +156,20 @@ impl SteeringActuator {
         self.max_speed = 0.5 * self.max_speed + 0.5 * new_max_speed;
     }
 
-    fn update_flow(&mut self, context: &UpdateContext, current_pressure: Pressure) {
-        let angular_position_delta_abs = Angle::new::<radian>(
-            self.current_speed.get::<radian_per_second>().abs() * context.delta_as_secs_f64(),
-        );
+    fn update_flow(&mut self, context: &UpdateContext, pushback_tug: &impl Pushback) {
+        if !pushback_tug.is_nose_wheel_steering_pin_inserted() {
+            let angular_position_delta_abs = Angle::new::<radian>(
+                self.current_speed.get::<radian_per_second>().abs() * context.delta_as_secs_f64(),
+            );
 
-        let linear_position_delta = Length::new::<meter>(
-            angular_position_delta_abs.get::<radian>()
-                * self.angular_to_linear_ratio.get::<ratio>(),
-        );
+            let linear_position_delta = Length::new::<meter>(
+                angular_position_delta_abs.get::<radian>()
+                    * self.angular_to_linear_ratio.get::<ratio>(),
+            );
 
-        // TODO different if unpressurised by pushback pin
-        self.total_volume_to_actuator = linear_position_delta * self.actuator_area;
-        self.total_volume_to_reservoir = linear_position_delta * self.actuator_area;
-
-        println!(
-            "HYD_ ang_speed= {:.2}, ang_delta {:.5}, linear_delta {:.5} , flow gpm {:.2}",
-            self.current_speed.get::<radian_per_second>(),
-            angular_position_delta_abs.get::<radian>(),
-            linear_position_delta.get::<meter>(),
-            self.total_volume_to_actuator.get::<gallon>() / context.delta_as_secs_f64() * 60.
-        );
+            self.total_volume_to_actuator = linear_position_delta * self.actuator_area;
+            self.total_volume_to_reservoir = linear_position_delta * self.actuator_area;
+        }
     }
 
     fn position_feedback(&self) -> Angle {
@@ -208,6 +212,36 @@ mod tests {
     use std::time::Duration;
     use uom::si::{angle::degree, pressure::psi};
 
+    struct TestPushBack {
+        steering: Angle,
+        is_connected: bool,
+    }
+    impl TestPushBack {
+        fn new() -> Self {
+            Self {
+                steering: Angle::new::<radian>(0.),
+                is_connected: false,
+            }
+        }
+
+        fn set_pin_inserted(&mut self) {
+            self.is_connected = true;
+        }
+
+        fn set_steer_angle(&mut self, angle: Angle) {
+            self.steering = angle;
+        }
+    }
+    impl Pushback for TestPushBack {
+        fn is_nose_wheel_steering_pin_inserted(&self) -> bool {
+            self.is_connected
+        }
+
+        fn steering_angle(&self) -> Angle {
+            self.steering
+        }
+    }
+
     struct TestSteeringController {
         requested_position: Angle,
     }
@@ -234,6 +268,8 @@ mod tests {
         controller: TestSteeringController,
 
         pressure: Pressure,
+
+        pushback: TestPushBack,
     }
     impl TestAircraft {
         fn new(steering_actuator: SteeringActuator) -> Self {
@@ -243,6 +279,8 @@ mod tests {
                 controller: TestSteeringController::new(),
 
                 pressure: Pressure::new::<psi>(0.),
+
+                pushback: TestPushBack::new(),
             }
         }
 
@@ -253,11 +291,19 @@ mod tests {
         fn command_steer_angle(&mut self, angle: Angle) {
             self.controller.set_requested_position(angle);
         }
+
+        fn command_pushback_angle(&mut self, angle: Angle) {
+            self.pushback.set_steer_angle(angle);
+        }
+
+        fn set_pushback(&mut self) {
+            self.pushback.set_pin_inserted();
+        }
     }
     impl Aircraft for TestAircraft {
         fn update_after_power_distribution(&mut self, context: &UpdateContext) {
             self.steering_actuator
-                .update(context, self.pressure, &self.controller);
+                .update(context, self.pressure, &self.controller, &self.pushback);
 
             println!(
                 "Steering feedback {:.3} deg, Norm pos {:.1}, Speed {:.3} rad/s, Target {:.1} deg , Pressure {:.0}",
@@ -329,6 +375,51 @@ mod tests {
         assert!(is_equal_angle(
             test_bed.query(|a| a.steering_actuator.position_feedback()),
             actuator_position_init
+        ));
+    }
+
+    #[test]
+    fn steering_not_moving_with_pushback_pin_inserted() {
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
+
+        let actuator_position_init = test_bed.query(|a| a.steering_actuator.position_feedback());
+        test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
+        test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(90.)));
+        test_bed.command(|a| a.set_pushback());
+
+        test_bed.run_multiple_frames(Duration::from_secs(1));
+
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            actuator_position_init
+        ));
+
+        test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(-90.)));
+
+        test_bed.run_multiple_frames(Duration::from_secs(1));
+
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            actuator_position_init
+        ));
+    }
+
+    #[test]
+    fn steering_driven_by_pushback_angle_when_pushing_back() {
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
+
+        test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
+        test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(90.)));
+        test_bed.command(|a| a.set_pushback());
+        test_bed.command(|a| a.command_pushback_angle(Angle::new::<degree>(12.)));
+
+        test_bed.run_multiple_frames(Duration::from_secs(1));
+
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            Angle::new::<degree>(12.)
         ));
     }
 

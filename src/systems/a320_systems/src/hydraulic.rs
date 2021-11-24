@@ -27,7 +27,7 @@ use systems::{
             HydraulicLinearActuatorAssembly, LinearActuatedRigidBodyOnHingeAxis, LinearActuator,
             LinearActuatorMode,
         },
-        nose_steering::{SteeringActuator, SteeringAngleLimiter, SteeringController},
+        nose_steering::{Pushback, SteeringActuator, SteeringAngleLimiter, SteeringController},
         update_iterator::{FixedStepLoop, MaxFixedStepLoop},
         ElectricPump, EngineDrivenPump, HydraulicCircuit, HydraulicCircuitController,
         PowerTransferUnit, PowerTransferUnitController, PressureSwitchState, PumpController,
@@ -262,7 +262,7 @@ impl A320Hydraulic {
             nose_steering: SteeringActuator::new(
                 context,
                 Angle::new::<degree>(75.),
-                AngularVelocity::new::<radian_per_second>(0.5),
+                AngularVelocity::new::<radian_per_second>(0.35),
                 Length::new::<meter>(0.02),
                 Ratio::new::<ratio>(0.15),
             ),
@@ -492,6 +492,7 @@ impl A320Hydraulic {
             context,
             self.yellow_circuit.system_pressure(),
             &self.brake_computer,
+            &self.pushback_tug,
         );
 
         // Process brake logic (which circuit brakes) and send brake demands (how much)
@@ -1564,13 +1565,13 @@ impl A320HydraulicBrakeComputerUnit {
                 Angle::new::<degree>(0.)
             };
 
-        println!(
-            "Ped {:.1} Till {:.1} Spd kts {:.1} Final Angle {:.1}",
-            self.rudder_pedal_position.get::<ratio>(),
-            self.tiller_handle_position.get::<ratio>(),
-            self.ground_speed.get::<knot>(),
-            self.final_steering_position_request.get::<degree>()
-        );
+        // println!(
+        //     "Ped {:.1} Till {:.1} Spd kts {:.1} Final Angle {:.1}",
+        //     self.rudder_pedal_position.get::<ratio>(),
+        //     self.tiller_handle_position.get::<ratio>(),
+        //     self.ground_speed.get::<knot>(),
+        //     self.final_steering_position_request.get::<degree>()
+        // );
     }
 
     fn send_brake_demands(&mut self, norm: &mut BrakeCircuit, altn: &mut BrakeCircuit) {
@@ -1930,6 +1931,9 @@ impl SimulationElement for CargoDoor {
 struct PushbackTug {
     nw_strg_disc_memo_id: VariableIdentifier,
     state_id: VariableIdentifier,
+    steer_angle_id: VariableIdentifier,
+
+    steering_angle: Angle,
 
     // Type of pushback:
     // 0 = Straight
@@ -1950,6 +1954,9 @@ impl PushbackTug {
         Self {
             nw_strg_disc_memo_id: context.get_identifier("HYD_NW_STRG_DISC_ECAM_MEMO".to_owned()),
             state_id: context.get_identifier("PUSHBACK STATE".to_owned()),
+            steer_angle_id: context.get_identifier("PUSHBACK ANGLE".to_owned()),
+
+            steering_angle: Angle::new::<degree>(0.),
 
             state: Self::STATE_NO_PUSHBACK,
             nose_wheel_steering_pin_inserted: DelayedFalseLogicGate::new(
@@ -1963,17 +1970,24 @@ impl PushbackTug {
             .update(context, self.is_pushing());
     }
 
+    fn is_pushing(&self) -> bool {
+        (self.state - PushbackTug::STATE_NO_PUSHBACK).abs() > f64::EPSILON
+    }
+}
+impl Pushback for PushbackTug {
     fn is_nose_wheel_steering_pin_inserted(&self) -> bool {
         self.nose_wheel_steering_pin_inserted.output()
     }
 
-    fn is_pushing(&self) -> bool {
-        (self.state - PushbackTug::STATE_NO_PUSHBACK).abs() > f64::EPSILON
+    fn steering_angle(&self) -> Angle {
+        self.steering_angle
     }
 }
 impl SimulationElement for PushbackTug {
     fn read(&mut self, reader: &mut SimulatorReader) {
         self.state = reader.read(&self.state_id);
+
+        self.steering_angle = reader.read(&self.steer_angle_id);
     }
 
     fn write(&self, writer: &mut SimulatorWriter) {
