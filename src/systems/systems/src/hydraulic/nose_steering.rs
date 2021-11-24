@@ -158,6 +158,14 @@ impl SteeringActuator {
         // TODO different if unpressurised by pushback pin
         self.total_volume_to_actuator = linear_position_delta * self.actuator_area;
         self.total_volume_to_reservoir = linear_position_delta * self.actuator_area;
+
+        println!(
+            "HYD_ ang_speed= {:.2}, ang_delta {:.5}, linear_delta {:.5} , flow gpm {:.2}",
+            self.current_speed.get::<radian_per_second>(),
+            angular_position_delta_abs.get::<radian>(),
+            linear_position_delta.get::<meter>(),
+            self.total_volume_to_actuator.get::<gallon>() / context.delta_as_secs_f64() * 60.
+        );
     }
 
     fn position_feedback(&self) -> Angle {
