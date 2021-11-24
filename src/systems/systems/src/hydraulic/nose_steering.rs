@@ -1,4 +1,4 @@
-use crate::shared::interpolation;
+use crate::shared::{interpolation, low_pass_filter::LowPassFilter};
 use crate::simulation::{
     InitContext, Read, SimulationElement, SimulationElementVisitor, SimulatorWriter, UpdateContext,
     VariableIdentifier, Write,
@@ -56,12 +56,12 @@ impl SteeringAngleLimiter {
 pub struct SteeringActuator {
     position_id: VariableIdentifier,
 
-    current_speed: AngularVelocity,
+    current_speed: LowPassFilter<AngularVelocity>,
     current_position: Angle,
 
     max_half_angle: Angle,
 
-    max_speed: AngularVelocity,
+    max_speed: LowPassFilter<AngularVelocity>,
     nominal_speed: AngularVelocity,
 
     angular_to_linear_ratio: Ratio,
@@ -76,6 +76,9 @@ impl SteeringActuator {
 
     const REFERENCE_PRESS_FOR_NOMINAL_SPEED_PSI: f64 = 2000.;
 
+    const MAX_SPEED_FILTER_TIMECONST: Duration = Duration::from_millis(100);
+    const CURRENT_SPEED_FILTER_TIMECONST: Duration = Duration::from_millis(300);
+
     pub fn new(
         context: &mut InitContext,
         max_half_angle: Angle,
@@ -86,12 +89,14 @@ impl SteeringActuator {
         Self {
             position_id: context.get_identifier("NOSE_WHEEL_POSITION".to_owned()),
 
-            current_speed: AngularVelocity::new::<radian_per_second>(0.),
+            current_speed: LowPassFilter::<AngularVelocity>::new(
+                Self::CURRENT_SPEED_FILTER_TIMECONST,
+            ),
             current_position: Angle::new::<radian>(0.),
 
             max_half_angle,
 
-            max_speed: AngularVelocity::new::<radian_per_second>(0.),
+            max_speed: LowPassFilter::<AngularVelocity>::new(Self::MAX_SPEED_FILTER_TIMECONST),
             nominal_speed,
             angular_to_linear_ratio,
 
@@ -110,14 +115,14 @@ impl SteeringActuator {
         pushback_tug: &impl Pushback,
     ) {
         if !pushback_tug.is_nose_wheel_steering_pin_inserted() {
-            self.update_max_speed(current_pressure);
+            self.update_max_speed(context, current_pressure);
 
             let limited_requested_angle = steering_controller
                 .requested_position()
                 .min(self.max_half_angle)
                 .max(-self.max_half_angle);
 
-            self.update_current_speed(limited_requested_angle);
+            self.update_current_speed(context, limited_requested_angle);
 
             self.update_final_speed_position(context, limited_requested_angle);
         } else {
@@ -128,39 +133,41 @@ impl SteeringActuator {
     }
 
     fn update_final_speed_position(&mut self, context: &UpdateContext, requested_angle: Angle) {
-        if self.current_speed.get::<radian_per_second>() > 0.
+        self.current_position += Angle::new::<radian>(
+            self.current_speed.output().get::<radian_per_second>() * context.delta_as_secs_f64(),
+        );
+
+        if self.current_speed.output().get::<radian_per_second>() > 0.
             && requested_angle < self.position_feedback()
-            || self.current_speed.get::<radian_per_second>() < 0.
+            || self.current_speed.output().get::<radian_per_second>() < 0.
                 && requested_angle > self.position_feedback()
         {
-            self.current_speed = AngularVelocity::new::<radian_per_second>(0.);
+            self.current_speed
+                .reset(AngularVelocity::new::<radian_per_second>(0.));
             self.current_position = requested_angle;
-        } else {
-            self.current_position += Angle::new::<radian>(
-                self.current_speed.get::<radian_per_second>() * context.delta_as_secs_f64(),
-            );
         }
     }
 
     fn update_speed_position_during_pushback(&mut self, pushback_tug: &impl Pushback) {
-        self.current_speed = AngularVelocity::new::<radian_per_second>(0.);
+        self.current_speed
+            .reset(AngularVelocity::new::<radian_per_second>(0.));
         self.current_position = pushback_tug.steering_angle();
     }
 
-    fn update_current_speed(&mut self, requested_angle: Angle) {
+    fn update_current_speed(&mut self, context: &UpdateContext, requested_angle: Angle) {
         let signed_max_speed = if requested_angle > self.position_feedback() {
-            self.max_speed
+            self.max_speed.output()
         } else if requested_angle < self.position_feedback() {
-            -self.max_speed
+            -self.max_speed.output()
         } else {
             AngularVelocity::new::<radian_per_second>(0.)
         };
 
-        self.current_speed = 0.8 * self.current_speed + 0.2 * signed_max_speed;
+        self.current_speed.update(context.delta(), signed_max_speed);
     }
 
-    fn update_max_speed(&mut self, current_pressure: Pressure) {
-        let new_max_speed =
+    fn update_max_speed(&mut self, context: &UpdateContext, current_pressure: Pressure) {
+        let mut new_max_speed =
             if current_pressure.get::<psi>() > Self::MIN_PRESSURE_ALLOWING_STEERING_PSI {
                 self.nominal_speed * current_pressure.get::<psi>().sqrt() * 1.
                     / Self::REFERENCE_PRESS_FOR_NOMINAL_SPEED_PSI.sqrt()
@@ -168,13 +175,16 @@ impl SteeringActuator {
                 AngularVelocity::new::<radian_per_second>(0.)
             };
 
-        self.max_speed = 0.5 * self.max_speed + 0.5 * new_max_speed;
+        new_max_speed = new_max_speed.min(self.nominal_speed);
+
+        self.max_speed.update(context.delta(), new_max_speed);
     }
 
     fn update_flow(&mut self, context: &UpdateContext, pushback_tug: &impl Pushback) {
         if !pushback_tug.is_nose_wheel_steering_pin_inserted() {
             let angular_position_delta_abs = Angle::new::<radian>(
-                self.current_speed.get::<radian_per_second>().abs() * context.delta_as_secs_f64(),
+                self.current_speed.output().get::<radian_per_second>().abs()
+                    * context.delta_as_secs_f64(),
             );
 
             let linear_position_delta = Length::new::<meter>(
@@ -326,7 +336,7 @@ mod tests {
                 self.steering_actuator.position_normalized().get::<ratio>(),
                 self.steering_actuator
                     .current_speed
-                    .get::<radian_per_second>(),
+                    .output().get::<radian_per_second>(),
                 self.controller.requested_position().get::<degree>(),
                 self.pressure.get::<psi>()
             );
