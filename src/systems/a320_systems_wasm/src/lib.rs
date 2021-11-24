@@ -574,9 +574,14 @@ impl SimulatorAspect for Brakes {
 }
 
 struct NoweWheelSteering {
+    realistic_tiller_axis_variable: NamedVariable,
+    is_realistic_tiller_mode: bool,
+
     tiller_handle_id: VariableIdentifier,
     rudder_pedal_input_id: VariableIdentifier,
     rudder_position_input_variable: AircraftVariable,
+
+    gps_speed_variable: AircraftVariable,
 
     steering_position_output_id: VariableIdentifier,
 
@@ -598,6 +603,9 @@ impl MsfsAspectCtor for NoweWheelSteering {
         sim_connect: &mut SimConnect,
     ) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
+            realistic_tiller_axis_variable: NamedVariable::from("A32NX_REALISTIC_TILLER_ENABLED"),
+            is_realistic_tiller_mode: true,
+
             tiller_handle_id: registry.get("TILLER_HANDLE_POSITION".to_owned()),
             rudder_pedal_input_id: registry.get("RUDDER_PEDAL_POSITION".to_owned()),
 
@@ -607,6 +615,7 @@ impl MsfsAspectCtor for NoweWheelSteering {
                 0,
             )?,
 
+            gps_speed_variable: AircraftVariable::from("GPS GROUND SPEED", "Knots", 0)?,
             steering_position_output_id: registry.get("NOSE_WHEEL_POSITION".to_owned()),
 
             rudder_pedal_input: NamedVariable::from("A32NX_RUDDER_PEDAL_POSITION"),
@@ -641,6 +650,10 @@ impl NoweWheelSteering {
         self.rudder_pedal_value * 2. - 1.
     }
 
+    fn set_realistic_tiller_mode(&mut self, is_active: bool) {
+        self.is_realistic_tiller_mode = is_active;
+    }
+
     fn synchronise_with_sim(&mut self) {
         let rudder_percent: f64 = self.rudder_pedal_input.get_value();
         self.rudder_pedal_value = (rudder_percent + 100.) / 200.;
@@ -648,9 +661,15 @@ impl NoweWheelSteering {
         let rudder_position: f64 = self.rudder_position_input_variable.get();
         self.rudder_position = (rudder_position + 1.) / 2.;
 
+        let realistic_mode: f64 = self.realistic_tiller_axis_variable.get_value();
+        self.set_realistic_tiller_mode(realistic_mode > 0.);
+
         println!(
-            "RUDDER position input: {:.3} Raw pos read {:.3} Position actual {:.3}",
-            self.rudder_pedal_value, rudder_position, self.rudder_position
+            "RUDDER position input: {:.3} Raw pos read {:.3} Position actual {:.3} real_mode {}",
+            self.rudder_pedal_value,
+            rudder_position,
+            self.rudder_position,
+            self.is_realistic_tiller_mode
         );
     }
 
@@ -658,19 +677,31 @@ impl NoweWheelSteering {
         &mut self,
         sim_connect: &mut SimConnect,
     ) -> Result<(), Box<dyn Error>> {
-        println!(
-            "transmit_client_events : desired out {:.3} rudder_position {:.3} rudder_corrected {:.3}",
-            self.steering_angle_output_output,
-            self.rudder_position,
+        let ground_speed_knot: f64 = self.gps_speed_variable.get();
+        let rudder_percent: f64 = self.rudder_pedal_input.get_value();
+
+        let speed_correction_factor = 20. / (2. * ground_speed_knot + 20.);
+
+        let actual_angle_sent_to_sim = if self.is_realistic_tiller_mode {
             self.steering_angle_output_output - (0.5 - self.rudder_position)
-        );
+        } else {
+            self.rudder_position * speed_correction_factor - (0.5 - self.rudder_position)
+        };
+
         sim_connect.transmit_client_event(
             SIMCONNECT_OBJECT_ID_USER,
             self.id_nose_wheel_angle,
-            f64_to_sim_connect_32k_pos(
-                self.steering_angle_output_output - (0.5 - self.rudder_position),
-            ),
+            f64_to_sim_connect_32k_pos(actual_angle_sent_to_sim),
         )?;
+
+        println!(
+            "transmit_client_events : spd {:.3} spd_correct {:.2} desired out {:.3} rudder_position {:.3} rudder_corrected {:.3}",
+            ground_speed_knot,
+            speed_correction_factor,
+            self.steering_angle_output_output,
+            self.rudder_position,
+            actual_angle_sent_to_sim
+        );
 
         Ok(())
     }
@@ -678,7 +709,11 @@ impl NoweWheelSteering {
 impl SimulatorAspect for NoweWheelSteering {
     fn read(&mut self, identifier: &VariableIdentifier) -> Option<f64> {
         if identifier == &self.tiller_handle_id {
-            Some(self.tiller_handle_position())
+            if self.is_realistic_tiller_mode {
+                Some(self.tiller_handle_position())
+            } else {
+                Some(self.rudder_pedal_position())
+            }
         } else if identifier == &self.rudder_pedal_input_id {
             Some(self.rudder_pedal_position())
         } else {
