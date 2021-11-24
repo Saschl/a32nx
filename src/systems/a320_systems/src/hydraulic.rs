@@ -263,7 +263,7 @@ impl A320Hydraulic {
                 context,
                 Angle::new::<degree>(75.),
                 AngularVelocity::new::<radian_per_second>(0.35),
-                Length::new::<meter>(0.02),
+                Length::new::<meter>(0.05),
                 Ratio::new::<ratio>(0.15),
             ),
 

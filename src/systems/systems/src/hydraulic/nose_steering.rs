@@ -424,14 +424,14 @@ mod tests {
     }
 
     #[test]
-    fn steering_moving_with_pressure_to_max_pos_less_than_3s() {
+    fn steering_moving_with_pressure_to_max_pos_less_than_5s() {
         let mut test_bed =
             SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
 
         test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
         test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(90.)));
 
-        test_bed.run_multiple_frames(Duration::from_secs(3));
+        test_bed.run_multiple_frames(Duration::from_secs(5));
 
         assert!(is_equal_angle(
             test_bed.query(|a| a.steering_actuator.position_feedback()),
@@ -444,7 +444,7 @@ mod tests {
         );
 
         test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(-90.)));
-        test_bed.run_multiple_frames(Duration::from_secs(6));
+        test_bed.run_multiple_frames(Duration::from_secs(10));
 
         assert!(is_equal_angle(
             test_bed.query(|a| a.steering_actuator.position_feedback()),
@@ -497,8 +497,8 @@ mod tests {
         SteeringActuator::new(
             context,
             Angle::new::<degree>(75.),
-            AngularVelocity::new::<radian_per_second>(0.5),
-            Length::new::<meter>(0.15),
+            AngularVelocity::new::<radian_per_second>(0.35),
+            Length::new::<meter>(0.05),
             Ratio::new::<ratio>(0.15),
         )
     }
