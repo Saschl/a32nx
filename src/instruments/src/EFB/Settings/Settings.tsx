@@ -249,7 +249,7 @@ const SimOptionsPage = () => {
     const [dynamicRegistration, setDynamicRegistration] = usePersistentProperty('DYNAMIC_REGISTRATION_DECAL', '0');
 
     const [realisticTiller, setRealisticTiller] = usePersistentProperty('REALISTIC_TILLER_ENABLED', '0');
-    const [, setRealisticTillerSimVar] = useSimVar('L:A32NX_REALISTIC_TILLER_ENABLED', 'Number', 0);
+    const [, setRealisticTillerSimVar] = useSimVar('L:A32NX_REALISTIC_TILLER_ENABLED', 'number', 0);
 
     const adirsAlignTimeButtons: (ButtonType & SimVarButton)[] = [
         { name: 'Instant', setting: 'INSTANT', simVarValue: 1 },
