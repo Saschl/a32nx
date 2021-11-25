@@ -154,7 +154,6 @@
                 <NODE_ID_STILL>WHEEL_RIGHT</NODE_ID_STILL>
                 <NODE_ID_BLURRED>WHEEL_RIGHT_BLURRED</NODE_ID_BLURRED>
             </UseTemplate>
-
             <UseTemplate Name="ASOBO_GT_Anim_Code">
                      <NODE_ID>c_wheel</NODE_ID>
                     <ANIM_NAME>c_wheel</ANIM_NAME>
