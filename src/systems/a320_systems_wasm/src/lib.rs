@@ -862,10 +862,13 @@ struct NoweWheelSteering {
     is_realistic_tiller_mode: bool,
 
     tiller_handle_id: VariableIdentifier,
+    tiller_handle_position: NamedVariable,
+
     rudder_pedal_input_id: VariableIdentifier,
     rudder_position_input_variable: AircraftVariable,
 
     steering_position_output_id: VariableIdentifier,
+    nose_wheel_position: NamedVariable,
 
     rudder_pedal_input: NamedVariable,
     rudder_pedal_value: f64,
@@ -889,6 +892,8 @@ impl MsfsAspectCtor for NoweWheelSteering {
             is_realistic_tiller_mode: false,
 
             tiller_handle_id: registry.get("TILLER_HANDLE_POSITION".to_owned()),
+            tiller_handle_position: NamedVariable::from("A32NX_TILLER_HANDLE_POSITION"),
+
             rudder_pedal_input_id: registry.get("RUDDER_PEDAL_POSITION".to_owned()),
 
             rudder_position_input_variable: AircraftVariable::from(
@@ -898,6 +903,7 @@ impl MsfsAspectCtor for NoweWheelSteering {
             )?,
 
             steering_position_output_id: registry.get("NOSE_WHEEL_POSITION".to_owned()),
+            nose_wheel_position: NamedVariable::from("A32NX_NOSE_WHEEL_POSITION"),
 
             rudder_pedal_input: NamedVariable::from("A32NX_RUDDER_PEDAL_POSITION"),
             rudder_pedal_value: 0.5,
@@ -954,6 +960,30 @@ impl NoweWheelSteering {
         // );
     }
 
+    fn final_tiller_position_sent_to_systems(&self) -> f64 {
+        if self.is_realistic_tiller_mode {
+            self.tiller_handle_position()
+        } else {
+            -self.rudder_pedal_position()
+        }
+    }
+
+    fn final_rudder_pedal_position_sent_to_systems(&self) -> f64 {
+        if self.is_realistic_tiller_mode {
+            self.rudder_pedal_position()
+        } else {
+            0.
+        }
+    }
+
+    fn write_animation_position_to_sim(&self) {
+        self.tiller_handle_position
+            .set_value(1. - (self.final_tiller_position_sent_to_systems() + 1.) / 2.);
+
+        self.nose_wheel_position
+            .set_value(self.steering_angle_output_output);
+    }
+
     fn transmit_client_events(
         &mut self,
         sim_connect: &mut SimConnect,
@@ -982,17 +1012,9 @@ impl NoweWheelSteering {
 impl SimulatorAspect for NoweWheelSteering {
     fn read(&mut self, identifier: &VariableIdentifier) -> Option<f64> {
         if identifier == &self.tiller_handle_id {
-            if self.is_realistic_tiller_mode {
-                Some(self.tiller_handle_position())
-            } else {
-                Some(-self.rudder_pedal_position())
-            }
+            Some(self.final_tiller_position_sent_to_systems())
         } else if identifier == &self.rudder_pedal_input_id {
-            if self.is_realistic_tiller_mode {
-                Some(self.rudder_pedal_position())
-            } else {
-                Some(0.)
-            }
+            Some(self.final_rudder_pedal_position_sent_to_systems())
         } else {
             None
         }
@@ -1027,6 +1049,7 @@ impl SimulatorAspect for NoweWheelSteering {
 
     fn post_tick(&mut self, sim_connect: &mut SimConnect) -> Result<(), Box<dyn Error>> {
         self.transmit_client_events(sim_connect)?;
+        self.write_animation_position_to_sim();
 
         Ok(())
     }

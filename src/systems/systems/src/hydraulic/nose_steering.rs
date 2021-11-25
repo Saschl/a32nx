@@ -29,27 +29,56 @@ use crate::hydraulic::linear_actuator::Actuator;
 
 /// Computes steering angle based on steering target and input speed
 pub struct SteeringAngleLimiter {
+    input_gain: Ratio,
+    controller_angle_map: [f64; 6],
+    controller_angle_input: [f64; 6],
+
     speed_map: [f64; 5],
-    angle_output: [f64; 5],
+    speed_coeff_map: [f64; 5],
 }
 impl SteeringAngleLimiter {
-    pub fn new(speed_map: [f64; 5], angle_output: [f64; 5]) -> SteeringAngleLimiter {
+    pub fn new(
+        input_gain: Ratio,
+        controller_angle_input: [f64; 6],
+        controller_angle_map: [f64; 6],
+
+        speed_map: [f64; 5],
+        speed_coeff_map: [f64; 5],
+    ) -> SteeringAngleLimiter {
         SteeringAngleLimiter {
+            input_gain,
+            controller_angle_input,
+            controller_angle_map,
+
             speed_map,
-            angle_output,
+            speed_coeff_map,
         }
     }
 
-    /// Gets final steering angle based on current speed, and required turning ratio
-    /// Ratio is from -1.0 (full left) to 1 (full right)
+    /// Gets final steering angle coefficient based on current speed
     pub fn angle_from_speed(&self, speed: Velocity, steering_ratio_requested: Ratio) -> Angle {
-        let max_angle = Angle::new::<degree>(interpolation(
-            &self.speed_map,
-            &self.angle_output,
-            speed.get::<knot>(),
+        let speed_coeff =
+            interpolation(&self.speed_map, &self.speed_coeff_map, speed.get::<knot>());
+
+        speed_coeff * self.angle_demand_from_input_demand(steering_ratio_requested)
+    }
+
+    fn angle_demand_from_input_demand(&self, steering_ratio_requested: Ratio) -> Angle {
+        let raw_input = Angle::new::<degree>(
+            steering_ratio_requested.get::<ratio>() * self.input_gain.get::<ratio>(),
+        );
+
+        let raw_demanded_angle = Angle::new::<degree>(interpolation(
+            &self.controller_angle_input,
+            &self.controller_angle_map,
+            raw_input.get::<degree>().abs(),
         ));
 
-        Angle::new::<degree>(max_angle.get::<degree>() * steering_ratio_requested.get::<ratio>())
+        if steering_ratio_requested.get::<ratio>() > 0. {
+            raw_demanded_angle
+        } else {
+            -raw_demanded_angle
+        }
     }
 }
 
@@ -483,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn steering_moving_only_by_6_deg_at_20_knot() {
+    fn steering_from_rudder_moving_only_by_6_deg_at_20_knot() {
         let mut test_bed =
             SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
 
@@ -500,7 +529,7 @@ mod tests {
 
         assert!(is_equal_angle(
             test_bed.query(|a| a.steering_actuator.position_feedback()),
-            Angle::new::<degree>(6.)
+            Angle::new::<degree>(6.4)
         ));
 
         test_bed.command(|a| {
@@ -514,7 +543,30 @@ mod tests {
 
         assert!(is_equal_angle(
             test_bed.query(|a| a.steering_actuator.position_feedback()),
-            Angle::new::<degree>(-6.)
+            Angle::new::<degree>(-6.4)
+        ));
+    }
+
+    #[test]
+    fn steering_tiller_handle_20_degrees_requests_only_4_degrees() {
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
+
+        let angle_limiter = tiller_steer_command();
+
+        test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
+        test_bed.command(|a| {
+            a.command_steer_angle(
+                angle_limiter
+                    .angle_from_speed(Velocity::new::<knot>(0.), Ratio::new::<ratio>(20. / 75.)),
+            )
+        });
+
+        test_bed.run_multiple_frames(Duration::from_secs(3));
+
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            Angle::new::<degree>(4.)
         ));
     }
 
@@ -529,10 +581,37 @@ mod tests {
     }
 
     fn pedal_steer_command() -> SteeringAngleLimiter {
-        const SPEED_MAP: [f64; 5] = [0., 40., 130., 1500.0, 2800.0];
-        const STEERING_ANGLE: [f64; 5] = [6., 6., 0., 0., 0.];
+        const PEDAL_GAIN: f64 = 32.;
+        const PEDAL_INPUT: [f64; 6] = [0., 1., 2., 32., 32., 32.];
+        const PEDAL_INPUT_MAP: [f64; 6] = [0., 0., 2., 6.4, 6.4, 6.4];
 
-        SteeringAngleLimiter::new(SPEED_MAP, STEERING_ANGLE)
+        const SPEED_MAP: [f64; 5] = [0., 40., 130., 1500.0, 2800.0];
+        const SPEED_COEFF: [f64; 5] = [1., 1., 0., 0., 0.];
+
+        SteeringAngleLimiter::new(
+            Ratio::new::<ratio>(PEDAL_GAIN),
+            PEDAL_INPUT,
+            PEDAL_INPUT_MAP,
+            SPEED_MAP,
+            SPEED_COEFF,
+        )
+    }
+
+    fn tiller_steer_command() -> SteeringAngleLimiter {
+        const GAIN: f64 = 75.;
+        const INPUT: [f64; 6] = [0., 1., 20., 40., 66., 75.];
+        const INPUT_MAP: [f64; 6] = [0., 0., 4., 15., 45., 74.];
+
+        const SPEED_MAP: [f64; 5] = [0., 20., 70., 1500.0, 2800.0];
+        const SPEED_COEFF: [f64; 5] = [1., 1., 0., 0., 0.];
+
+        SteeringAngleLimiter::new(
+            Ratio::new::<ratio>(GAIN),
+            INPUT,
+            INPUT_MAP,
+            SPEED_MAP,
+            SPEED_COEFF,
+        )
     }
 
     fn is_equal_angle(a1: Angle, a2: Angle) -> bool {

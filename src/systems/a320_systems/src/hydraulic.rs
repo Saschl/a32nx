@@ -4,7 +4,7 @@ use std::time::Duration;
 use uom::si::{
     acceleration::meter_per_second_squared,
     angle::degree,
-    angular_velocity::{radian_per_second, revolution_per_minute},
+    angular_velocity::radian_per_second,
     electric_current::ampere,
     f64::*,
     length::meter,
@@ -1329,11 +1329,19 @@ struct A320HydraulicBrakeComputerUnit {
 }
 /// Implements brakes computers logic
 impl A320HydraulicBrakeComputerUnit {
+    const RUDDER_PEDAL_INPUT_GAIN: f64 = 32.;
+    const RUDDER_PEDAL_INPUT_MAP: [f64; 6] = [0., 1., 2., 32., 32., 32.];
+    const RUDDER_PEDAL_INPUT_CURVE_MAP: [f64; 6] = [0., 0., 2., 6.4, 6.4, 6.4];
+
     const SPEED_MAP_FOR_PEDAL_ACTION_KNOT: [f64; 5] = [0., 40., 130., 1500.0, 2800.0];
-    const STEERING_ANGLE_FOR_PEDAL_ACTION_DEGREE: [f64; 5] = [6., 6., 0., 0., 0.];
+    const STEERING_ANGLE_FOR_PEDAL_ACTION_DEGREE: [f64; 5] = [1., 1., 0., 0., 0.];
+
+    const TILLER_INPUT_GAIN: f64 = 75.;
+    const TILLER_INPUT_MAP: [f64; 6] = [0., 1., 20., 40., 66., 75.];
+    const TILLER_INPUT_CURVE_MAP: [f64; 6] = [0., 0., 4., 15., 45., 74.];
 
     const SPEED_MAP_FOR_TILLER_ACTION_KNOT: [f64; 5] = [0., 20., 70., 1500.0, 2800.0];
-    const STEERING_ANGLE_FOR_TILLER_ACTION_DEGREE: [f64; 5] = [75., 75., 0., 0., 0.];
+    const STEERING_ANGLE_FOR_TILLER_ACTION_DEGREE: [f64; 5] = [1., 1., 0., 0., 0.];
 
     // Minimum pressure hysteresis on green until main switched on ALTN brakes
     // Feedback by Cpt. Chaos — 25/04/2021 #pilot-feedback
@@ -1387,10 +1395,16 @@ impl A320HydraulicBrakeComputerUnit {
             tiller_handle_position: Ratio::new::<ratio>(0.),
             rudder_pedal_position: Ratio::new::<ratio>(0.),
             pedal_steering_limiter: SteeringAngleLimiter::new(
+                Ratio::new::<ratio>(Self::RUDDER_PEDAL_INPUT_GAIN),
+                Self::RUDDER_PEDAL_INPUT_MAP,
+                Self::RUDDER_PEDAL_INPUT_CURVE_MAP,
                 Self::SPEED_MAP_FOR_PEDAL_ACTION_KNOT,
                 Self::STEERING_ANGLE_FOR_PEDAL_ACTION_DEGREE,
             ),
             tiller_steering_limiter: SteeringAngleLimiter::new(
+                Ratio::new::<ratio>(Self::TILLER_INPUT_GAIN),
+                Self::TILLER_INPUT_MAP,
+                Self::TILLER_INPUT_CURVE_MAP,
                 Self::SPEED_MAP_FOR_TILLER_ACTION_KNOT,
                 Self::STEERING_ANGLE_FOR_TILLER_ACTION_DEGREE,
             ),
@@ -1552,6 +1566,8 @@ impl A320HydraulicBrakeComputerUnit {
         let steer_angle_from_rudder = self
             .pedal_steering_limiter
             .angle_from_speed(self.ground_speed(), self.rudder_pedal_position);
+
+        let tiller_handle_angle = self.tiller_handle_position * 75.;
         let steer_angle_from_tiller = self
             .tiller_steering_limiter
             .angle_from_speed(self.ground_speed(), self.tiller_handle_position);
