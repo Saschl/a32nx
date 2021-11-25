@@ -81,6 +81,8 @@
 1. [FLIGHT MODEL] Updated OEW/dry operating weight, max payload, station weights - @sidnov (Sid)
 1. [EFB/UI] Override in-game fuel UI and fuel initialization - @Taz5150 (TazX [Z+2]#0405)
 1. [FCU] FCU backlight is fed from proper bus - @tracernz (Mike)
+1. [AP] Added TCAS modes for Autopilot and Flight Director guidance - @aguther (Andreas Guther)
+1. [PFD] Added new messages and modes for TCAS - @lukecologne (lukecologne#1156)
 
 ## 0.7.0
 
