@@ -106,7 +106,7 @@ impl SteeringActuator {
     const REFERENCE_PRESS_FOR_NOMINAL_SPEED_PSI: f64 = 2000.;
 
     const MAX_SPEED_FILTER_TIMECONST: Duration = Duration::from_millis(100);
-    const CURRENT_SPEED_FILTER_TIMECONST: Duration = Duration::from_millis(300);
+    const CURRENT_SPEED_FILTER_TIMECONST: Duration = Duration::from_millis(150);
 
     pub fn new(
         context: &mut InitContext,
@@ -166,10 +166,16 @@ impl SteeringActuator {
             self.current_speed.output().get::<radian_per_second>() * context.delta_as_secs_f64(),
         );
 
-        if self.current_speed.output().get::<radian_per_second>() > 0.
-            && requested_angle < self.position_feedback()
-            || self.current_speed.output().get::<radian_per_second>() < 0.
-                && requested_angle > self.position_feedback()
+        let position_error_abs = (requested_angle - self.position_feedback()).abs();
+
+        // If we crossed desired position between frames we assume we stopped at correct position
+        // Checking a position error because if requested angle changed since last frame by a huge
+        // amount, we want to track new position not to directly set new position
+        if position_error_abs.get::<degree>() < 1.
+            && (self.current_speed.output().get::<radian_per_second>() > 0.
+                && requested_angle < self.position_feedback()
+                || self.current_speed.output().get::<radian_per_second>() < 0.
+                    && requested_angle > self.position_feedback())
         {
             self.current_speed
                 .reset(AngularVelocity::new::<radian_per_second>(0.));
@@ -509,6 +515,43 @@ mod tests {
             test_bed.query(|a| a.steering_actuator.position_normalized())
                 == Ratio::new::<ratio>(-1.)
         );
+    }
+
+    #[test]
+    fn steering_stops_at_target_position() {
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
+
+        test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
+        test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(20.)));
+
+        test_bed.run_multiple_frames(Duration::from_secs(2));
+
+        assert!(is_equal_angle(
+            test_bed.query(|a| a.steering_actuator.position_feedback()),
+            Angle::new::<degree>(20.)
+        ));
+    }
+
+    #[test]
+    fn steering_direction_change_is_smooth() {
+        let mut test_bed =
+            SimulationTestBed::new(|context| TestAircraft::new(steering_actuator(context)));
+
+        test_bed.command(|a| a.set_pressure(Pressure::new::<psi>(3000.)));
+        test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(90.)));
+
+        test_bed.run_multiple_frames(Duration::from_millis(3500));
+
+        let position_captured = test_bed.query(|a| a.steering_actuator.position_feedback());
+
+        println!("REVERT SPEED");
+
+        test_bed.command(|a| a.command_steer_angle(Angle::new::<degree>(-90.)));
+        test_bed.run_multiple_frames(Duration::from_millis(400));
+
+        let new_position = test_bed.query(|a| a.steering_actuator.position_feedback());
+        assert!((position_captured - new_position).abs() < Angle::new::<degree>(10.));
     }
 
     #[test]

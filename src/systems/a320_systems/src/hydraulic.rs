@@ -1567,7 +1567,6 @@ impl A320HydraulicBrakeComputerUnit {
             .pedal_steering_limiter
             .angle_from_speed(self.ground_speed(), self.rudder_pedal_position);
 
-        let tiller_handle_angle = self.tiller_handle_position * 75.;
         let steer_angle_from_tiller = self
             .tiller_steering_limiter
             .angle_from_speed(self.ground_speed(), self.tiller_handle_position);
