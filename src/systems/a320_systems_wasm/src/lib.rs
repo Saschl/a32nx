@@ -869,6 +869,7 @@ struct NoweWheelSteering {
 
     steering_position_output_id: VariableIdentifier,
     nose_wheel_position: NamedVariable,
+    steering_angle_animation_output: f64,
 
     rudder_pedal_input: NamedVariable,
     rudder_pedal_value: f64,
@@ -904,6 +905,7 @@ impl MsfsAspectCtor for NoweWheelSteering {
 
             steering_position_output_id: registry.get("NOSE_WHEEL_POSITION".to_owned()),
             nose_wheel_position: NamedVariable::from("A32NX_NOSE_WHEEL_POSITION"),
+            steering_angle_animation_output: 0.,
 
             rudder_pedal_input: NamedVariable::from("A32NX_RUDDER_PEDAL_POSITION"),
             rudder_pedal_value: 0.5,
@@ -927,6 +929,15 @@ impl NoweWheelSteering {
 
     fn set_steering_output(&mut self, steering_position: f64) {
         self.steering_angle_output_output = steering_position * 75. / 90. / 2. + 0.5;
+
+        let steering_converted = (steering_position + 1.) / 2.;
+
+        if steering_position > 0. {
+            self.steering_angle_animation_output =
+                1. - (steering_converted - 0.5) * 2. * 75. / 360.;
+        } else {
+            self.steering_angle_animation_output = (0.5 - steering_converted) * 2. * 75. / 360.;
+        }
     }
 
     fn tiller_handle_position(&self) -> f64 {
@@ -981,7 +992,7 @@ impl NoweWheelSteering {
             .set_value(1. - (self.final_tiller_position_sent_to_systems() + 1.) / 2.);
 
         self.nose_wheel_position
-            .set_value(self.steering_angle_output_output);
+            .set_value(self.steering_angle_animation_output);
     }
 
     fn transmit_client_events(
