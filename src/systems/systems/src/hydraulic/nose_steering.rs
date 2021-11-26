@@ -1,19 +1,17 @@
 use crate::shared::{interpolation, low_pass_filter::LowPassFilter};
 use crate::simulation::{
-    InitContext,  SimulationElement,  SimulatorWriter, UpdateContext,
-    VariableIdentifier, Write,
+    InitContext, SimulationElement, SimulatorWriter, UpdateContext, VariableIdentifier, Write,
 };
 use std::time::Duration;
 use uom::si::{
     angle::{degree, radian},
     angular_velocity::radian_per_second,
-
     f64::*,
     length::meter,
     pressure::psi,
     ratio::ratio,
     velocity::knot,
-    volume:: gallon,
+    volume::gallon,
 };
 
 pub trait Pushback {
@@ -170,7 +168,7 @@ impl SteeringActuator {
         // If we crossed desired position between frames we assume we stopped at correct position
         // Checking a position error because if requested angle changed since last frame by a huge
         // amount, we want to track new position not to directly set new position
-        if position_error_abs.get::<degree>() < 1.
+        if position_error_abs.get::<degree>() < 5.
             && (self.current_speed.output().get::<radian_per_second>() > 0.
                 && requested_angle < self.position_feedback()
                 || self.current_speed.output().get::<radian_per_second>() < 0.
@@ -231,7 +229,8 @@ impl SteeringActuator {
         }
     }
 
-    fn position_feedback(&self) -> Angle {
+    pub fn position_feedback(&self) -> Angle {
+        println!("Position {:.2}", self.current_position.get::<degree>());
         self.current_position
     }
 
@@ -267,7 +266,7 @@ mod tests {
     use super::*;
 
     use crate::simulation::test::{ReadByName, SimulationTestBed, TestBed};
-    use crate::simulation::{Aircraft, SimulationElement,SimulationElementVisitor};
+    use crate::simulation::{Aircraft, SimulationElement, SimulationElementVisitor};
     use std::time::Duration;
     use uom::si::{angle::degree, pressure::psi};
 
