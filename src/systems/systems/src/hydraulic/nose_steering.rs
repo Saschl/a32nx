@@ -1,20 +1,19 @@
 use crate::shared::{interpolation, low_pass_filter::LowPassFilter};
 use crate::simulation::{
-    InitContext, Read, SimulationElement, SimulationElementVisitor, SimulatorWriter, UpdateContext,
+    InitContext,  SimulationElement,  SimulatorWriter, UpdateContext,
     VariableIdentifier, Write,
 };
 use std::time::Duration;
 use uom::si::{
     angle::{degree, radian},
     angular_velocity::radian_per_second,
-    area::square_meter,
+
     f64::*,
     length::meter,
     pressure::psi,
     ratio::ratio,
     velocity::knot,
-    volume::{cubic_inch, gallon},
-    volume_rate::gallon_per_second,
+    volume:: gallon,
 };
 
 pub trait Pushback {
@@ -268,7 +267,7 @@ mod tests {
     use super::*;
 
     use crate::simulation::test::{ReadByName, SimulationTestBed, TestBed};
-    use crate::simulation::{Aircraft, SimulationElement};
+    use crate::simulation::{Aircraft, SimulationElement,SimulationElementVisitor};
     use std::time::Duration;
     use uom::si::{angle::degree, pressure::psi};
 

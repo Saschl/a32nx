@@ -934,9 +934,9 @@ impl NoweWheelSteering {
 
         if steering_position > 0. {
             self.steering_angle_animation_output =
-                1. - (steering_converted - 0.5) * 2. * 75. / 360.;
+                 (steering_converted - 0.5) * 2. * 75. / 360.;
         } else {
-            self.steering_angle_animation_output = (0.5 - steering_converted) * 2. * 75. / 360.;
+            self.steering_angle_animation_output = 1. - (0.5 - steering_converted) * 2. * 75. / 360.;
         }
     }
 
@@ -961,21 +961,13 @@ impl NoweWheelSteering {
 
         let realistic_mode: f64 = self.realistic_tiller_axis_variable.get_value();
         self.set_realistic_tiller_mode(realistic_mode > 0.);
-
-        // println!(
-        //     "synchronise_with_sim RUDDER position input: {:.3} Raw pos read {:.3} Position actual {:.3} real_mode {}",
-        //     self.rudder_pedal_value,
-        //     rudder_position,
-        //     self.rudder_position,
-        //     self.is_realistic_tiller_mode
-        // );
     }
 
     fn final_tiller_position_sent_to_systems(&self) -> f64 {
         if self.is_realistic_tiller_mode {
             self.tiller_handle_position()
         } else {
-            -self.rudder_pedal_position()
+            self.rudder_pedal_position()
         }
     }
 
@@ -989,7 +981,7 @@ impl NoweWheelSteering {
 
     fn write_animation_position_to_sim(&self) {
         self.tiller_handle_position
-            .set_value(1. - (self.final_tiller_position_sent_to_systems() + 1.) / 2.);
+            .set_value((self.final_tiller_position_sent_to_systems() + 1.) / 2.);
 
         self.nose_wheel_position
             .set_value(self.steering_angle_animation_output);
@@ -1009,13 +1001,6 @@ impl NoweWheelSteering {
             self.id_nose_wheel_angle,
             f64_to_sim_connect_32k_pos(actual_angle_sent_to_sim),
         )?;
-
-        // println!(
-        //     "transmit_client_events : desired out {:.3} rudder_position {:.3} rudder_corrected {:.3}",
-        //     self.steering_angle_output_output,
-        //     self.rudder_position,
-        //     actual_angle_sent_to_sim
-        // );
 
         Ok(())
     }
