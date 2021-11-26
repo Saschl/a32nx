@@ -2365,6 +2365,7 @@ mod tests {
         use systems::simulation::test::{ReadByName, TestBed, WriteByName};
         use systems::simulation::{test::SimulationTestBed, Aircraft, InitContext};
         use uom::si::{
+            angle::degree,
             electric_potential::volt,
             length::foot,
             ratio::{percent, ratio},
@@ -2599,6 +2600,10 @@ mod tests {
                 self.hydraulics.is_yellow_pressurised()
             }
 
+            fn nose_steering_position(&self) -> Angle {
+                self.hydraulics.nose_steering.position_feedback()
+            }
+
             fn is_cargo_fwd_door_locked_up(&self) -> bool {
                 self.hydraulics.forward_cargo_door_controller.control_state
                     == DoorControlState::UpLocked
@@ -2764,6 +2769,10 @@ mod tests {
 
             fn is_yellow_pressurised(&self) -> bool {
                 self.query(|a| a.is_yellow_pressurised())
+            }
+
+            fn nose_steering_position(&self) -> Angle {
+                self.query(|a| a.nose_steering_position())
             }
 
             fn is_cargo_fwd_door_locked_down(&mut self) -> bool {
@@ -2949,6 +2958,11 @@ mod tests {
                     .set_gear_up()
                     .set_park_brake(false)
                     .external_power(false)
+            }
+
+            fn set_tiller_demand(mut self, steering_ratio: Ratio) -> Self {
+                self.write_by_name("TILLER_HANDLE_POSITION", steering_ratio.get::<ratio>());
+                self
             }
 
             fn set_eng1_fire_button(mut self, is_active: bool) -> Self {
@@ -5921,6 +5935,30 @@ mod tests {
 
             assert!(test_bed.is_cargo_fwd_door_locked_down());
             assert!(test_bed.cargo_fwd_door_position() <= 0.);
+        }
+
+        #[test]
+        fn nose_steering_responds_to_tiller_demand_if_yellow_pressure() {
+            let mut test_bed = test_bed_with()
+                .engines_off()
+                .on_the_ground()
+                .set_cold_dark_inputs()
+                .set_yellow_e_pump(false)
+                .run_one_tick();
+
+            test_bed = test_bed
+                .set_tiller_demand(Ratio::new::<ratio>(1.))
+                .run_waiting_for(Duration::from_secs_f64(5.));
+
+            assert!(test_bed.nose_steering_position().get::<degree>() >= 73.9);
+            assert!(test_bed.nose_steering_position().get::<degree>() <= 74.1);
+
+            test_bed = test_bed
+                .set_tiller_demand(Ratio::new::<ratio>(-1.))
+                .run_waiting_for(Duration::from_secs_f64(10.));
+
+            assert!(test_bed.nose_steering_position().get::<degree>() <= -73.9);
+            assert!(test_bed.nose_steering_position().get::<degree>() >= -74.1);
         }
     }
 }
