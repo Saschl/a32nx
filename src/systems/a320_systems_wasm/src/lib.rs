@@ -47,7 +47,7 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
             ])
             .with_auxiliary_power_unit("OVHD_APU_START_PB_IS_AVAILABLE".to_owned(), 8)?
             .with::<Brakes>()?
-            .with::<NoweWheelSteering>()?
+            .with::<NoseWheelSteering>()?
             .with::<Autobrakes>()?
             .with::<Flaps>()?
             .with::<CargoDoors>()?
@@ -857,7 +857,7 @@ impl SimulatorAspect for Brakes {
     }
 }
 
-struct NoweWheelSteering {
+struct NoseWheelSteering {
     realistic_tiller_axis_variable: NamedVariable,
     is_realistic_tiller_mode: bool,
 
@@ -883,7 +883,7 @@ struct NoweWheelSteering {
     id_nose_wheel_angle: sys::DWORD,
 }
 
-impl MsfsAspectCtor for NoweWheelSteering {
+impl MsfsAspectCtor for NoseWheelSteering {
     fn new(
         registry: &mut MsfsVariableRegistry,
         sim_connect: &mut SimConnect,
@@ -921,23 +921,14 @@ impl MsfsAspectCtor for NoweWheelSteering {
         })
     }
 }
-
-impl NoweWheelSteering {
+impl NoseWheelSteering {
     fn set_tiller_handle(&mut self, simconnect_value: u32) {
         self.tiller_handle_angle = sim_connect_32k_pos_to_f64(simconnect_value);
     }
 
     fn set_steering_output(&mut self, steering_position: f64) {
         self.steering_angle_output_output = steering_position * 75. / 90. / 2. + 0.5;
-
-        let steering_converted = (steering_position + 1.) / 2.;
-
-        if steering_position > 0. {
-            self.steering_angle_animation_output =
-                 (steering_converted - 0.5) * 2. * 75. / 360.;
-        } else {
-            self.steering_angle_animation_output = 1. - (0.5 - steering_converted) * 2. * 75. / 360.;
-        }
+        self.steering_angle_animation_output = (steering_position + 1.) / 2.;
     }
 
     fn tiller_handle_position(&self) -> f64 {
@@ -984,7 +975,7 @@ impl NoweWheelSteering {
             .set_value((self.final_tiller_position_sent_to_systems() + 1.) / 2.);
 
         self.nose_wheel_position
-            .set_value(self.steering_angle_animation_output);
+            .set_value(self.steering_angle_animation_output * 75. / 360.);
     }
 
     fn transmit_client_events(
@@ -1005,7 +996,7 @@ impl NoweWheelSteering {
         Ok(())
     }
 }
-impl SimulatorAspect for NoweWheelSteering {
+impl SimulatorAspect for NoseWheelSteering {
     fn read(&mut self, identifier: &VariableIdentifier) -> Option<f64> {
         if identifier == &self.tiller_handle_id {
             Some(self.final_tiller_position_sent_to_systems())
