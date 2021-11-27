@@ -21,8 +21,9 @@ import {
 } from '../Store/features/buttons';
 
 import './Ground.scss';
+import useInterval from '@instruments/common/useInterval';
 
-type StatefulButton = {
+interface StatefulButton {
     id: string,
     state: string
 }
@@ -51,6 +52,8 @@ export const Ground = () => {
     const [tugDirection, setTugDirection] = useState(0);
     const [tugActive, setTugActive] = useState(false);
 
+
+
     const buttonBlue = ' border-blue-500 bg-blue-500 hover:bg-blue-600 hover:border-blue-600 text-blue-darkest disabled:bg-grey-600';
     const buttonActive = ' text-white bg-green-600 border-green-600';
 
@@ -61,13 +64,24 @@ export const Ground = () => {
      * allows a direction to be selected directly
      * rather than first backwards and after that the direction
      */
+
+    useInterval(() => {
+        if (activeButtons.find((button) => button.id === 'tug-request') && tugRequestOnly) {
+            /* Timer needed, as we cannot check when the variable "Pushback Wait" is being set to false after calling the tug */
+
+                    setPushbackWait(1);
+
+
+
+        }
+    },100)
+
     useEffect(() => {
         if (pushBack === 0 && tugDirection !== 0) {
             computeAndSetTugHeading(tugDirection);
             setTugDirection(0);
         }
-        if (activeButtons.find((button) => button.id === 'tug-request') && tugRequestOnly) {
-            /* Timer needed, as we cannot check when the variable "Pushback Wait" is being set to false after calling the tug */
+     /*    if (activeButtons.find((button) => button.id === 'tug-request') && tugRequestOnly) {
             if (pushBackWaitTimerHandle === -1) {
                 // FIXME: should i really be using WINDOW . setInterval() ?
                 const timer = window.setInterval(() => {
@@ -78,8 +92,8 @@ export const Ground = () => {
         } else if (pushBackWaitTimerHandle !== -1) {
             clearInterval(pushBackWaitTimerHandle);
             dispatch(setPushbackWaitTimerHandle(-1));
-        }
-    }, [pushBack, tugDirection, activeButtons, pushBackWaitTimerHandle, tugRequestOnly, pushBack, tugDirection]);
+        } */
+    }, [pushBack, tugDirection, activeButtons, pushBack, tugDirection]);
 
     const getTugHeading = (value: number): number => (tugHeading + value) % 360;
 
@@ -103,6 +117,7 @@ export const Ground = () => {
     const handleClick = (callBack: () => void, event: React.MouseEvent, disabledButton?: string) => {
         if (!tugActive) {
             if (!activeButtons.map((b: StatefulButton) => b.id).includes(event.currentTarget.id)) {
+                console.log("bruh");
                 dispatch(addActiveButton({ id: event.currentTarget.id, state: STATE_WAITING }));
                 if (disabledButton) {
                     dispatch(addDisabledButton(disabledButton));
@@ -127,6 +142,7 @@ export const Ground = () => {
      * So all highlighting should be removed as well
      */
     const handlePushBackClick = (callBack: () => void, event: React.MouseEvent) => {
+        console.log("NRIHJ");
         const tugRequest = 'tug-request';
         if (activeButtons.map((b: StatefulButton) => b.id).includes(tugRequest)) {
             if (event.currentTarget.id === tugRequest) {
@@ -137,7 +153,7 @@ export const Ground = () => {
                 callBack();
             }
         } else if (event.currentTarget.id === tugRequest) {
-            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_ACTIVE }, { id: tugRequest, state: STATE_WAITING }]));
+            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING }]));
             disabledButtons.forEach((b, index) => {
                 dispatch(removeDisabledButton(index));
             });
@@ -164,8 +180,10 @@ export const Ground = () => {
         if (gameSync > 0.5 && (index !== -1 || disabledIndex !== -1)) {
             const button: StatefulButton = activeButtons[index];
             if (button && button.state === STATE_WAITING) {
-                button.state = STATE_ACTIVE;
-                dispatch(setActiveButtons(activeButtons));
+                const updatedButtons = [...activeButtons];
+
+               updatedButtons[index] = {id: button.id, state: STATE_ACTIVE};
+               //setActiveButtons(activeButtons);
             }
             return `${className} ${buttonActive}`;
         }
