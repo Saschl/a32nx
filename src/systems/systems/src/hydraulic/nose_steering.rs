@@ -230,7 +230,6 @@ impl SteeringActuator {
     }
 
     pub fn position_feedback(&self) -> Angle {
-        println!("Position {:.2}", self.current_position.get::<degree>());
         self.current_position
     }
 

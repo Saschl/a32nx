@@ -928,7 +928,8 @@ impl NoseWheelSteering {
 
     fn set_steering_output(&mut self, steering_position: f64) {
         self.steering_angle_output_output = steering_position * 75. / 90. / 2. + 0.5;
-        self.steering_angle_animation_output = (steering_position + 1.) / 2.;
+
+        self.steering_angle_animation_output = ((steering_position * 75. / 180.) / 2.) + 0.5;
     }
 
     fn tiller_handle_position(&self) -> f64 {
@@ -975,7 +976,7 @@ impl NoseWheelSteering {
             .set_value((self.final_tiller_position_sent_to_systems() + 1.) / 2.);
 
         self.nose_wheel_position
-            .set_value(self.steering_angle_animation_output * 75. / 360.);
+            .set_value(self.steering_angle_animation_output);
     }
 
     fn transmit_client_events(
