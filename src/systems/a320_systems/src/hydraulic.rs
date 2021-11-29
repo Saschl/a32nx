@@ -264,7 +264,7 @@ impl A320Hydraulic {
                 Angle::new::<degree>(75.),
                 AngularVelocity::new::<radian_per_second>(0.35),
                 Length::new::<meter>(0.075),
-                Ratio::new::<ratio>(0.239),
+                Ratio::new::<ratio>(0.18),
             ),
 
             core_hydraulic_updater: FixedStepLoop::new(Self::HYDRAULIC_SIM_TIME_STEP),
