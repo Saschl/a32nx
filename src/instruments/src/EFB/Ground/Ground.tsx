@@ -23,6 +23,7 @@ import {
 
 import './Ground.scss';
 import useInterval from '@instruments/common/useInterval';
+import { MathUtils } from '@shared/MathUtils';
 
 interface StatefulButton {
     id: string,
@@ -48,14 +49,13 @@ export const Ground = () => {
     const [tugHeading, setTugHeading] = useSplitSimVar('PLANE HEADING DEGREES TRUE', 'degrees', 'K:KEY_TUG_HEADING', 'UINT32', 1000);
     const [pushBack, setPushBack] = useSplitSimVar('PUSHBACK STATE', 'enum', 'K:TOGGLE_PUSHBACK', 'bool', 1000);
     const [powerActive, setPowerActive] = useSplitSimVar('A:INTERACTIVE POINT OPEN:8', 'Percent over 100', 'K:REQUEST_POWER_SUPPLY', 'bool', 1000);
+    const [rudderPosition] = useSimVar('A:RUDDER POSITION', 'number', 50);
 
-    const [, setPushbackWait] = useSimVar('Pushback Wait', 'bool', 100);
+    const [pushBackWait, setPushbackWait] = useSimVar('Pushback Wait', 'bool', 100);
     const [pushBackAttached] = useSimVar('Pushback Attached', 'bool', 1000);
 
     const [tugDirection, setTugDirection] = useState(0);
     const [tugActive, setTugActive] = useState(false);
-
-
 
     const buttonBlue = ' border-blue-500 bg-blue-500 hover:bg-blue-600 hover:border-blue-600 text-blue-darkest disabled:bg-grey-600';
     const buttonActive = ' text-white bg-green-600 border-green-600';
@@ -73,30 +73,35 @@ export const Ground = () => {
             /* Timer needed, as we cannot check when the variable "Pushback Wait" is being set to false after calling the tug */
             setPushbackWait(1);
         }
-    }, 100)
+    }, 100);
 
     useEffect(() => {
         if (pushBack === 0 && tugDirection !== 0) {
             computeAndSetTugHeading(tugDirection);
             setTugDirection(0);
         }
-    }, [pushBack, tugDirection]);
+        if (pushBackWait === 0 && !tugRequestOnly) {
+            if (rudderPosition >= -0.05 && rudderPosition <= 0.05) {
+                computeAndSetTugHeading(0);
+            } else {
+                computeAndSetTugHeading(rudderPosition <= 0 ? Math.abs(rudderPosition) / 0.0111 : 180 + rudderPosition / 0.0111);
+            }
+        }
+    }, [pushBack, tugDirection, rudderPosition, tugHeading]);
 
     useEffect(() => {
         const tugRequest = 'tug-request';
-        //console.log("BEHRHERE "+activeButtons);
-        //console.log(activeButtons);
+        // console.log("BEHRHERE "+activeButtons);
+        // console.log(activeButtons);
         console.log(activeButtons);
 
         for (const button of activeButtons) {
-
             if (button.id === tugRequest) {
-                dispatch(setActiveButtons([]));
-                //button.callBack();
-            } else if(button.value > 0.5) {
-                //dispatch(setActiveButtons([{ id: button.id, state: STATE_ACTIVE, callBack: button.callBack, value:button.value }, { id: tugRequest, state: STATE_WAITING, callBack:button.callBack, value:"" }]));
+                //  dispatch(setActiveButtons([]));
+                // button.callBack();
+            } else if (button.value > 0.5) {
                 dispatch(updateButton(button));
-                //button.callBack();
+                // button.callBack();
             }
         } /* else if (event.currentTarget.id === tugRequest) {
             dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING }]));
@@ -105,9 +110,7 @@ export const Ground = () => {
             });
             callBack();
         } */
-
-    },[jetWayActive,cargoActive,cateringActive,fuelingActive,powerActive])
-
+    }, [jetWayActive, cargoActive, cateringActive, fuelingActive, powerActive, pushBack]);
 
     const getTugHeading = (value: number): number => (tugHeading + value) % 360;
 
@@ -116,6 +119,7 @@ export const Ground = () => {
             dispatch(setTugRequestOnly(false));
         }
         const tugHeading = getTugHeading(direction);
+        console.log(tugHeading);
         // KEY_TUG_HEADING is an unsigned integer, so let's convert
         setPushbackWait(0);
         setTugHeading((tugHeading * 11930465) & 0xffffffff);
@@ -131,8 +135,7 @@ export const Ground = () => {
     const handleClick = (callBack: () => void, event: React.MouseEvent, gameSync?, disabledButton?: string) => {
         if (!tugActive) {
             if (!activeButtons.map((b: StatefulButton) => b.id).includes(event.currentTarget.id)) {
-                console.log("bruh");
-                dispatch(addActiveButton({ id: event.currentTarget.id, state: STATE_WAITING, callBack: callBack, value: gameSync }));
+                dispatch(addActiveButton({ id: event.currentTarget.id, state: STATE_WAITING, callBack, value: gameSync }));
                 if (disabledButton) {
                     dispatch(addDisabledButton(disabledButton));
                 }
@@ -141,7 +144,6 @@ export const Ground = () => {
                 const index = activeButtons.map((b: StatefulButton) => b.id).indexOf(event.currentTarget.id);
 
                 if (index > -1) {
-                    console.log("REMOVE");
                     dispatch(removeActiveButton(index));
                 }
                 if (disabledButton) {
@@ -159,21 +161,45 @@ export const Ground = () => {
      */
     const handlePushBackClick = (callBack: () => void, event: React.MouseEvent) => {
         const tugRequest = 'tug-request';
-        if (activeButtons.map((b: StatefulButton) => b.id).includes(tugRequest)) {
+        /*         if (activeButtons.map((b: StatefulButton) => b.id).includes(tugRequest)) {
             if (event.currentTarget.id === tugRequest) {
                 dispatch(setActiveButtons([]));
                 callBack();
             } else {
-                dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_ACTIVE, callBack: callBack, value:"" }, { id: tugRequest, state: STATE_WAITING, callBack: callBack, value:"" }]));
+                dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_ACTIVE, callBack, value: '' }, { id: tugRequest, state: STATE_WAITING, callBack, value: '' }]));
                 callBack();
             }
         } else if (event.currentTarget.id === tugRequest) {
-            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING,callBack: callBack, value:pushBackAttached }]));
+            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING, callBack, value: pushBackAttached }]));
             disabledButtons.forEach((b, index) => {
                 dispatch(removeDisabledButton(index));
             });
             callBack();
-        }
+        } */
+        if (event.currentTarget.id === tugRequest) {
+            if (!activeButtons.map((b: StatefulButton) => b.id).includes(tugRequest)) {
+                dispatch(setActiveButtons([{ id: tugRequest, state: STATE_WAITING, callBack, value: pushBackAttached }]));
+                disabledButtons.forEach((b, index) => {
+                    dispatch(removeDisabledButton(index));
+                });
+                callBack();
+            } else {
+                dispatch(setActiveButtons([]));
+                disabledButtons.forEach((b, index) => {
+                    dispatch(removeDisabledButton(index));
+                });
+                callBack();
+            }
+        } else if (!activeButtons.map((b: StatefulButton) => b.id).includes(event.currentTarget.id)) {
+            dispatch(setActiveButtons([{ id: tugRequest, state: STATE_ACTIVE, callBack, value: pushBackAttached }, { id: event.currentTarget.id, state: STATE_ACTIVE, callBack, value: 1 }]));
+            callBack();
+        } /* else {
+            dispatch(setActiveButtons([]));
+            disabledButtons.forEach((b, index) => {
+                dispatch(removeDisabledButton(index));
+            });
+            callBack();
+        } */
     };
 
     const applySelected = (className: string, id?: string) => {
@@ -195,7 +221,7 @@ export const Ground = () => {
         if (gameSync > 0.5 && (index !== -1 || disabledIndex !== -1)) {
             return `${className} ${buttonActive}`;
         }
-      /*   if (gameSync === 0 && index !== -1) {
+        /*   if (gameSync === 0 && index !== -1) {
             const button: StatefulButton = activeButtons[index];
             if (button.state === STATE_ACTIVE) {
                // dispatch(removeActiveButton(index));

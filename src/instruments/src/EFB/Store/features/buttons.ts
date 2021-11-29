@@ -30,11 +30,11 @@ export const buttonsSlice = createSlice({
             }
             console.log(state.activeButtons);
         },
-        updateButton: (state, action:  TypedAction<ActiveButton>) => {
-            const button = state.activeButtons.findIndex(b => action.payload.id === b.id);
-            const updatedButton: ActiveButton = {id: action.payload.id, value: action.payload.value, state: "ACTIVE", callBack: action.payload.callBack}
+        updateButton: (state, action: TypedAction<ActiveButton>) => {
+            const button = state.activeButtons.findIndex((b) => action.payload.id === b.id);
+            const updatedButton: ActiveButton = { id: action.payload.id, value: action.payload.value, state: 'ACTIVE', callBack: action.payload.callBack };
             if (button !== -1) {
-                console.log("UPDATEING");
+                console.log('UPDATEING');
                 state.activeButtons[button] = updatedButton;
             }
         },
@@ -46,7 +46,7 @@ export const buttonsSlice = createSlice({
         },
         removeDisabledButton: (state, action: TypedAction<number>) => {
             if (action.payload !== -1) {
-                state.disabledButtons = state.disabledButtons.splice(action.payload, 1);
+                state.disabledButtons.splice(action.payload, 1);
             }
         },
         setTugRequestOnly: (state, action: TypedAction<boolean>) => {
