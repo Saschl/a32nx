@@ -18,6 +18,7 @@ import {
     addDisabledButton,
     removeDisabledButton,
     setPushbackWaitTimerHandle,
+    updateButton,
 } from '../Store/features/buttons';
 
 import './Ground.scss';
@@ -25,7 +26,9 @@ import useInterval from '@instruments/common/useInterval';
 
 interface StatefulButton {
     id: string,
-    state: string
+    state: string,
+    callBack,
+    value: number,
 }
 
 export const Ground = () => {
@@ -68,32 +71,43 @@ export const Ground = () => {
     useInterval(() => {
         if (activeButtons.find((button) => button.id === 'tug-request') && tugRequestOnly) {
             /* Timer needed, as we cannot check when the variable "Pushback Wait" is being set to false after calling the tug */
-
-                    setPushbackWait(1);
-
-
-
+            setPushbackWait(1);
         }
-    },100)
+    }, 100)
 
     useEffect(() => {
         if (pushBack === 0 && tugDirection !== 0) {
             computeAndSetTugHeading(tugDirection);
             setTugDirection(0);
         }
-     /*    if (activeButtons.find((button) => button.id === 'tug-request') && tugRequestOnly) {
-            if (pushBackWaitTimerHandle === -1) {
-                // FIXME: should i really be using WINDOW . setInterval() ?
-                const timer = window.setInterval(() => {
-                    setPushbackWait(1);
-                }, 100);
-                dispatch(setPushbackWaitTimerHandle(timer));
+    }, [pushBack, tugDirection]);
+
+    useEffect(() => {
+        const tugRequest = 'tug-request';
+        //console.log("BEHRHERE "+activeButtons);
+        //console.log(activeButtons);
+        console.log(activeButtons);
+
+        for (const button of activeButtons) {
+
+            if (button.id === tugRequest) {
+                dispatch(setActiveButtons([]));
+                //button.callBack();
+            } else if(button.value > 0.5) {
+                //dispatch(setActiveButtons([{ id: button.id, state: STATE_ACTIVE, callBack: button.callBack, value:button.value }, { id: tugRequest, state: STATE_WAITING, callBack:button.callBack, value:"" }]));
+                dispatch(updateButton(button));
+                //button.callBack();
             }
-        } else if (pushBackWaitTimerHandle !== -1) {
-            clearInterval(pushBackWaitTimerHandle);
-            dispatch(setPushbackWaitTimerHandle(-1));
+        } /* else if (event.currentTarget.id === tugRequest) {
+            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING }]));
+            disabledButtons.forEach((b, index) => {
+                dispatch(removeDisabledButton(index));
+            });
+            callBack();
         } */
-    }, [pushBack, tugDirection, activeButtons, pushBack, tugDirection]);
+
+    },[jetWayActive,cargoActive,cateringActive,fuelingActive,powerActive])
+
 
     const getTugHeading = (value: number): number => (tugHeading + value) % 360;
 
@@ -114,18 +128,20 @@ export const Ground = () => {
         dispatch(setTugRequestOnly(callOnly));
     };
 
-    const handleClick = (callBack: () => void, event: React.MouseEvent, disabledButton?: string) => {
+    const handleClick = (callBack: () => void, event: React.MouseEvent, gameSync?, disabledButton?: string) => {
         if (!tugActive) {
             if (!activeButtons.map((b: StatefulButton) => b.id).includes(event.currentTarget.id)) {
                 console.log("bruh");
-                dispatch(addActiveButton({ id: event.currentTarget.id, state: STATE_WAITING }));
+                dispatch(addActiveButton({ id: event.currentTarget.id, state: STATE_WAITING, callBack: callBack, value: gameSync }));
                 if (disabledButton) {
                     dispatch(addDisabledButton(disabledButton));
                 }
                 callBack();
             } else {
                 const index = activeButtons.map((b: StatefulButton) => b.id).indexOf(event.currentTarget.id);
+
                 if (index > -1) {
+                    console.log("REMOVE");
                     dispatch(removeActiveButton(index));
                 }
                 if (disabledButton) {
@@ -142,18 +158,17 @@ export const Ground = () => {
      * So all highlighting should be removed as well
      */
     const handlePushBackClick = (callBack: () => void, event: React.MouseEvent) => {
-        console.log("NRIHJ");
         const tugRequest = 'tug-request';
         if (activeButtons.map((b: StatefulButton) => b.id).includes(tugRequest)) {
             if (event.currentTarget.id === tugRequest) {
                 dispatch(setActiveButtons([]));
                 callBack();
             } else {
-                dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_ACTIVE }, { id: tugRequest, state: STATE_WAITING }]));
+                dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_ACTIVE, callBack: callBack, value:"" }, { id: tugRequest, state: STATE_WAITING, callBack: callBack, value:"" }]));
                 callBack();
             }
         } else if (event.currentTarget.id === tugRequest) {
-            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING }]));
+            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING,callBack: callBack, value:pushBackAttached }]));
             disabledButtons.forEach((b, index) => {
                 dispatch(removeDisabledButton(index));
             });
@@ -178,22 +193,15 @@ export const Ground = () => {
         const disabledIndex = disabledButtons.indexOf(disabledId ?? '');
 
         if (gameSync > 0.5 && (index !== -1 || disabledIndex !== -1)) {
-            const button: StatefulButton = activeButtons[index];
-            if (button && button.state === STATE_WAITING) {
-                const updatedButtons = [...activeButtons];
-
-               updatedButtons[index] = {id: button.id, state: STATE_ACTIVE};
-               //setActiveButtons(activeButtons);
-            }
             return `${className} ${buttonActive}`;
         }
-        if (gameSync === 0 && index !== -1) {
+      /*   if (gameSync === 0 && index !== -1) {
             const button: StatefulButton = activeButtons[index];
             if (button.state === STATE_ACTIVE) {
-                dispatch(removeActiveButton(index));
-                dispatch(removeDisabledButton(disabledIndex));
+               // dispatch(removeActiveButton(index));
+                //dispatch(removeDisabledButton(disabledIndex));
             }
-        }
+        } */
         return className + (activeButtons.map((b: StatefulButton) => b.id).includes(id) ? ' text-white bg-gray-600'
             : buttonBlue);
     };
@@ -211,7 +219,7 @@ export const Ground = () => {
                         onClick={(e) => handleClick(() => {
                             setJetWayActive(1);
                             setRampActive(1);
-                        }, e, 'door-fwd-left')}
+                        }, e, jetWayActive, 'door-fwd-left')}
                         className={applySelectedWithSync('w-32 ', 'jetway', jetWayActive, 'door-fwd-left')}
                         type={BUTTON_TYPE.NONE}
                         id="jetway"
