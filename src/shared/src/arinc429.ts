@@ -1,4 +1,3 @@
-
 /// <reference path="../../../typings/fs-base-ui/html_ui/JS/simvar.d.ts" />
 /* eslint-disable max-classes-per-file */
 type SignStatusMatrixRange = (typeof Arinc429Word.SignStatusMatrix)[keyof typeof Arinc429Word.SignStatusMatrix];
