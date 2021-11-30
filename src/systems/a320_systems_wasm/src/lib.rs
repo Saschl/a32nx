@@ -927,6 +927,7 @@ impl MsfsAspectCtor for NoseWheelSteering {
 impl NoseWheelSteering {
     fn set_tiller_handle(&mut self, simconnect_value: u32) {
         self.tiller_handle_angle = sim_connect_32k_pos_to_f64(simconnect_value);
+        println!("LIB- tiller angle{:.3}", self.tiller_handle_angle);
     }
 
     fn set_pedal_disconnect(&mut self, is_disconnected: bool) {
@@ -966,6 +967,11 @@ impl NoseWheelSteering {
 
         let realistic_mode: f64 = self.realistic_tiller_axis_variable.get_value();
         self.set_realistic_tiller_mode(realistic_mode > 0.);
+
+        println!(
+            "LIB- rudder pedal input {:.3}  rudder position {:.3}",
+            rudder_percent, rudder_position
+        );
     }
 
     fn final_tiller_position_sent_to_systems(&self) -> f64 {
@@ -1003,13 +1009,18 @@ impl NoseWheelSteering {
         let rudder_percent: f64 = self.rudder_pedal_input.get_value();
 
         let actual_angle_sent_to_sim =
-            self.steering_angle_output_output - (0.5 - self.rudder_position);
+           (1. - self.steering_angle_output_output) + (self.rudder_position - 0.5 );
 
         sim_connect.transmit_client_event(
             SIMCONNECT_OBJECT_ID_USER,
             self.id_nose_wheel_angle,
             f64_to_sim_connect_32k_pos(actual_angle_sent_to_sim),
         )?;
+
+        println!(
+            "FINAL: rudder {:.3} hydSteer {:.3} final sent {:.3} rudder correct= {:.3}",
+            rudder_percent, self.steering_angle_output_output, actual_angle_sent_to_sim,-1. * (self.rudder_position - 0.5 )
+        );
 
         Ok(())
     }

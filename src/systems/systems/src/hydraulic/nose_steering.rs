@@ -155,6 +155,8 @@ impl SteeringActuator {
             self.update_speed_position_during_pushback(pushback_tug);
         }
 
+        println!("HYD- STEERING pos {:.3}",self.current_position.get::<degree>());
+
         self.update_flow(context, pushback_tug);
     }
 
