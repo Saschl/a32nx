@@ -1301,6 +1301,7 @@ struct A320HydraulicBrakeSteerComputerUnit {
 
     rudder_pedal_input_id: VariableIdentifier,
     tiller_handle_input_id: VariableIdentifier,
+    tiller_pedal_disconnect_id: VariableIdentifier,
 
     autobrake_controller: A320AutobrakeController,
     parking_brake_demand: bool,
@@ -1318,6 +1319,7 @@ struct A320HydraulicBrakeSteerComputerUnit {
     alternate_brake_pressure_limit: Pressure,
     normal_brake_pressure_limit: Pressure,
 
+    tiller_pedal_disconnect: bool,
     tiller_handle_position: Ratio,
     rudder_pedal_position: Ratio,
 
@@ -1370,6 +1372,8 @@ impl A320HydraulicBrakeSteerComputerUnit {
             ground_speed_id: context.get_identifier("GPS GROUND SPEED".to_owned()),
             rudder_pedal_input_id: context.get_identifier("RUDDER_PEDAL_POSITION".to_owned()),
             tiller_handle_input_id: context.get_identifier("TILLER_HANDLE_POSITION".to_owned()),
+            tiller_pedal_disconnect_id: context
+                .get_identifier("TILLER_PEDAL_DISCONNECT".to_owned()),
 
             autobrake_controller: A320AutobrakeController::new(context),
 
@@ -1394,6 +1398,7 @@ impl A320HydraulicBrakeSteerComputerUnit {
             alternate_brake_pressure_limit: Pressure::new::<psi>(3000.),
             normal_brake_pressure_limit: Pressure::new::<psi>(3000.),
 
+            tiller_pedal_disconnect: false,
             tiller_handle_position: Ratio::new::<ratio>(0.),
             rudder_pedal_position: Ratio::new::<ratio>(0.),
             pedal_steering_limiter: SteeringAngleLimiter::new(
@@ -1565,9 +1570,12 @@ impl A320HydraulicBrakeSteerComputerUnit {
     }
 
     fn update_steering_demands(&mut self, lgciu1: &impl LgciuInterface) {
-        let steer_angle_from_rudder = self
-            .pedal_steering_limiter
-            .angle_from_speed(self.ground_speed(), self.rudder_pedal_position);
+        let steer_angle_from_rudder = if self.tiller_pedal_disconnect {
+            Angle::new::<degree>(0.)
+        } else {
+            self.pedal_steering_limiter
+                .angle_from_speed(self.ground_speed(), self.rudder_pedal_position)
+        };
 
         let steer_angle_from_tiller = self
             .tiller_steering_limiter
@@ -1580,9 +1588,13 @@ impl A320HydraulicBrakeSteerComputerUnit {
                 Angle::new::<degree>(0.)
             };
 
-        self.final_steering_position_request = final_steering_position_request_unlimited.min(
-            Angle::new::<degree>(Self::MAX_STEERING_ANGLE_DEMAND_DEGREES),
-        );
+        self.final_steering_position_request = final_steering_position_request_unlimited
+            .min(Angle::new::<degree>(
+                Self::MAX_STEERING_ANGLE_DEMAND_DEGREES,
+            ))
+            .max(Angle::new::<degree>(
+                -Self::MAX_STEERING_ANGLE_DEMAND_DEGREES,
+            ));
     }
 
     fn send_brake_demands(&mut self, norm: &mut BrakeCircuit, altn: &mut BrakeCircuit) {
@@ -1617,7 +1629,7 @@ impl SimulationElement for A320HydraulicBrakeSteerComputerUnit {
         self.tiller_handle_position =
             Ratio::new::<ratio>(reader.read(&self.tiller_handle_input_id));
         self.rudder_pedal_position = Ratio::new::<ratio>(reader.read(&self.rudder_pedal_input_id));
-
+        self.tiller_pedal_disconnect = reader.read(&self.tiller_pedal_disconnect_id);
         self.ground_speed = reader.read(&self.ground_speed_id);
     }
 }
