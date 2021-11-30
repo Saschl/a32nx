@@ -861,15 +861,15 @@ struct NoseWheelSteering {
     realistic_tiller_axis_variable: NamedVariable,
     is_realistic_tiller_mode: bool,
 
-    tiller_handle_id: VariableIdentifier,
+    tiller_handle_position_id: VariableIdentifier,
     tiller_handle_position: NamedVariable,
 
-    rudder_pedal_input_id: VariableIdentifier,
-    rudder_position_input_variable: AircraftVariable,
+    rudder_pedal_position_id: VariableIdentifier,
+    rudder_pedal_position: AircraftVariable,
 
-    steering_position_output_id: VariableIdentifier,
-    nose_wheel_position: NamedVariable,
-    steering_angle_animation_output: f64,
+    nose_wheel_angle_id: VariableIdentifier,
+    nose_wheel_angle: NamedVariable,
+    nose_wheel_angle_output: f64,
 
     rudder_pedal_input: NamedVariable,
     rudder_pedal_value: f64,
@@ -881,6 +881,9 @@ struct NoseWheelSteering {
     tiller_handle_angle: f64,
 
     id_nose_wheel_angle: sys::DWORD,
+    id_pedal_disconnect: sys::DWORD,
+    pedal_disconnect_id: VariableIdentifier,
+    pedal_disconnect: bool,
 }
 
 impl MsfsAspectCtor for NoseWheelSteering {
@@ -892,20 +895,15 @@ impl MsfsAspectCtor for NoseWheelSteering {
             realistic_tiller_axis_variable: NamedVariable::from("A32NX_REALISTIC_TILLER_ENABLED"),
             is_realistic_tiller_mode: false,
 
-            tiller_handle_id: registry.get("TILLER_HANDLE_POSITION".to_owned()),
+            tiller_handle_position_id: registry.get("TILLER_HANDLE_POSITION".to_owned()),
             tiller_handle_position: NamedVariable::from("A32NX_TILLER_HANDLE_POSITION"),
 
-            rudder_pedal_input_id: registry.get("RUDDER_PEDAL_POSITION".to_owned()),
+            rudder_pedal_position_id: registry.get("RUDDER_PEDAL_POSITION".to_owned()),
+            rudder_pedal_position: AircraftVariable::from("RUDDER POSITION", "Position", 0)?,
 
-            rudder_position_input_variable: AircraftVariable::from(
-                "RUDDER POSITION",
-                "Position",
-                0,
-            )?,
-
-            steering_position_output_id: registry.get("NOSE_WHEEL_POSITION".to_owned()),
-            nose_wheel_position: NamedVariable::from("A32NX_NOSE_WHEEL_POSITION"),
-            steering_angle_animation_output: 0.,
+            nose_wheel_angle_id: registry.get("NOSE_WHEEL_POSITION".to_owned()),
+            nose_wheel_angle: NamedVariable::from("A32NX_NOSE_WHEEL_POSITION"),
+            nose_wheel_angle_output: 0.,
 
             rudder_pedal_input: NamedVariable::from("A32NX_RUDDER_PEDAL_POSITION"),
             rudder_pedal_value: 0.5,
@@ -918,6 +916,11 @@ impl MsfsAspectCtor for NoseWheelSteering {
             tiller_handle_angle: 0.5,
 
             id_nose_wheel_angle: sim_connect.map_client_event_to_sim_event("STEERING_SET", true)?,
+
+            id_pedal_disconnect: sim_connect
+                .map_client_event_to_sim_event("TOGGLE_WATER_RUDDER", true)?,
+            pedal_disconnect_id: registry.get("TILLER_PEDAL_DISCONNECT".to_owned()),
+            pedal_disconnect: false,
         })
     }
 }
@@ -926,10 +929,20 @@ impl NoseWheelSteering {
         self.tiller_handle_angle = sim_connect_32k_pos_to_f64(simconnect_value);
     }
 
+    fn set_pedal_disconnect(&mut self, is_disconnected: bool) {
+        self.pedal_disconnect = is_disconnected;
+        println!("Pedal disconnect = {}", self.pedal_disconnect);
+    }
+
     fn set_steering_output(&mut self, steering_position: f64) {
         self.steering_angle_output_output = steering_position * 75. / 90. / 2. + 0.5;
 
-        self.steering_angle_animation_output = ((steering_position * 75. / 180.) / 2.) + 0.5;
+        self.nose_wheel_angle_output = ((steering_position * 75. / 180.) / 2.) + 0.5;
+
+        println!(
+            "set_steering_output= {:.3}  for steering {:.3}  for anim {:.3}",
+            steering_position, self.steering_angle_output_output, self.nose_wheel_angle_output
+        );
     }
 
     fn tiller_handle_position(&self) -> f64 {
@@ -948,7 +961,7 @@ impl NoseWheelSteering {
         let rudder_percent: f64 = self.rudder_pedal_input.get_value();
         self.rudder_pedal_value = (rudder_percent + 100.) / 200.;
 
-        let rudder_position: f64 = self.rudder_position_input_variable.get();
+        let rudder_position: f64 = self.rudder_pedal_position.get();
         self.rudder_position = (rudder_position + 1.) / 2.;
 
         let realistic_mode: f64 = self.realistic_tiller_axis_variable.get_value();
@@ -959,7 +972,11 @@ impl NoseWheelSteering {
         if self.is_realistic_tiller_mode {
             self.tiller_handle_position()
         } else {
-            self.rudder_pedal_position()
+            if !self.pedal_disconnect {
+                self.rudder_pedal_position()
+            } else {
+                0.
+            }
         }
     }
 
@@ -975,8 +992,8 @@ impl NoseWheelSteering {
         self.tiller_handle_position
             .set_value((self.final_tiller_position_sent_to_systems() + 1.) / 2.);
 
-        self.nose_wheel_position
-            .set_value(self.steering_angle_animation_output);
+        self.nose_wheel_angle
+            .set_value(self.nose_wheel_angle_output);
     }
 
     fn transmit_client_events(
@@ -999,17 +1016,19 @@ impl NoseWheelSteering {
 }
 impl SimulatorAspect for NoseWheelSteering {
     fn read(&mut self, identifier: &VariableIdentifier) -> Option<f64> {
-        if identifier == &self.tiller_handle_id {
+        if identifier == &self.tiller_handle_position_id {
             Some(self.final_tiller_position_sent_to_systems())
-        } else if identifier == &self.rudder_pedal_input_id {
+        } else if identifier == &self.rudder_pedal_position_id {
             Some(self.final_rudder_pedal_position_sent_to_systems())
+        } else if identifier == &self.pedal_disconnect_id {
+            Some(self.pedal_disconnect as u8 as f64)
         } else {
             None
         }
     }
 
     fn write(&mut self, identifier: &VariableIdentifier, value: f64) -> bool {
-        if identifier == &self.steering_position_output_id {
+        if identifier == &self.nose_wheel_angle_id {
             self.set_steering_output(value);
             true
         } else {
@@ -1022,6 +1041,9 @@ impl SimulatorAspect for NoseWheelSteering {
             SimConnectRecv::Event(e) => {
                 if e.id() == self.id_tiller_handle_angle {
                     self.set_tiller_handle(e.data());
+                    true
+                } else if e.id() == self.id_pedal_disconnect {
+                    self.set_pedal_disconnect(true);
                     true
                 } else {
                     false
@@ -1038,6 +1060,7 @@ impl SimulatorAspect for NoseWheelSteering {
     fn post_tick(&mut self, sim_connect: &mut SimConnect) -> Result<(), Box<dyn Error>> {
         self.transmit_client_events(sim_connect)?;
         self.write_animation_position_to_sim();
+        self.set_pedal_disconnect(false);
 
         Ok(())
     }
