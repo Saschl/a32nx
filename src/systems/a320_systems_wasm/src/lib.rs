@@ -880,6 +880,9 @@ struct NoseWheelSteering {
     tiller_handle_angle: f64,
 
     id_nose_wheel_angle: sys::DWORD,
+    id_nose_wheel_angle_inc: sys::DWORD,
+    id_nose_wheel_angle_dec: sys::DWORD,
+
     id_pedal_disconnect: sys::DWORD,
     pedal_disconnect_id: VariableIdentifier,
     pedal_disconnect: bool,
@@ -914,6 +917,10 @@ impl MsfsAspectCtor for NoseWheelSteering {
             tiller_handle_angle: 0.5,
 
             id_nose_wheel_angle: sim_connect.map_client_event_to_sim_event("STEERING_SET", true)?,
+            id_nose_wheel_angle_inc: sim_connect
+                .map_client_event_to_sim_event("STEERING_INC", true)?,
+            id_nose_wheel_angle_dec: sim_connect
+                .map_client_event_to_sim_event("STEERING_DEC", true)?,
 
             id_pedal_disconnect: sim_connect
                 .map_client_event_to_sim_event("TOGGLE_WATER_RUDDER", true)?,
@@ -927,8 +934,32 @@ impl NoseWheelSteering {
     const MAX_MSFS_STEERING_ANGLE_DEGREES: f64 = 90.;
     const STEERING_ANIMATION_TOTAL_RANGE_DEGREES: f64 = 360.;
 
+    const TILLER_KEYBOARD_INCREMENTS: f64 = 0.05;
+
     fn set_tiller_handle(&mut self, simconnect_value: u32) {
         self.tiller_handle_angle = sim_connect_32k_pos_to_f64(simconnect_value);
+    }
+
+    fn decrement_tiller(&mut self) {
+        self.tiller_handle_angle -= Self::TILLER_KEYBOARD_INCREMENTS;
+        self.tiller_handle_angle = self.tiller_handle_angle.min(1.).max(0.);
+
+        self.tiller_key_event_centering();
+    }
+
+    fn increment_tiller(&mut self) {
+        self.tiller_handle_angle += Self::TILLER_KEYBOARD_INCREMENTS;
+        self.tiller_handle_angle = self.tiller_handle_angle.min(1.).max(0.);
+
+        self.tiller_key_event_centering();
+    }
+
+    fn tiller_key_event_centering(&mut self) {
+        if self.tiller_handle_angle < 0.5 + Self::TILLER_KEYBOARD_INCREMENTS
+            && self.tiller_handle_angle > 0.5 - Self::TILLER_KEYBOARD_INCREMENTS
+        {
+            self.tiller_handle_angle = 0.5;
+        }
     }
 
     fn set_pedal_disconnect(&mut self, is_disconnected: bool) {
@@ -1057,6 +1088,12 @@ impl SimulatorAspect for NoseWheelSteering {
                     true
                 } else if e.id() == self.id_pedal_disconnect {
                     self.set_pedal_disconnect(true);
+                    true
+                } else if e.id() == self.id_nose_wheel_angle_dec {
+                    self.decrement_tiller();
+                    true
+                } else if e.id() == self.id_nose_wheel_angle_inc {
+                    self.increment_tiller();
                     true
                 } else {
                     false
