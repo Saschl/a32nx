@@ -459,7 +459,7 @@
 
             <Component ID="HANDLING_Steering_Tiller_1" Node="HANDLING_Steering_Tiller_1">
                 <UseTemplate Name="ASOBO_GT_Anim_Code">
-                     <NODE_ID>HANDLE_LEFT_YOKE</NODE_ID>
+                    <NODE_ID>HANDLE_LEFT_YOKE</NODE_ID>
                     <ANIM_NAME>HANDLE_LEFT_YOKE</ANIM_NAME>
                     <ANIM_CODE>(L:A32NX_TILLER_HANDLE_POSITION)</ANIM_CODE>
                     <ANIM_LENGTH>1</ANIM_LENGTH>
