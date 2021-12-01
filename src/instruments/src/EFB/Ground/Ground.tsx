@@ -161,21 +161,6 @@ export const Ground = () => {
      */
     const handlePushBackClick = (callBack: () => void, event: React.MouseEvent) => {
         const tugRequest = 'tug-request';
-        /*         if (activeButtons.map((b: StatefulButton) => b.id).includes(tugRequest)) {
-            if (event.currentTarget.id === tugRequest) {
-                dispatch(setActiveButtons([]));
-                callBack();
-            } else {
-                dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_ACTIVE, callBack, value: '' }, { id: tugRequest, state: STATE_WAITING, callBack, value: '' }]));
-                callBack();
-            }
-        } else if (event.currentTarget.id === tugRequest) {
-            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING, callBack, value: pushBackAttached }]));
-            disabledButtons.forEach((b, index) => {
-                dispatch(removeDisabledButton(index));
-            });
-            callBack();
-        } */
         if (event.currentTarget.id === tugRequest) {
             if (!activeButtons.map((b: StatefulButton) => b.id).includes(tugRequest)) {
                 dispatch(setActiveButtons([{ id: tugRequest, state: STATE_WAITING, callBack, value: pushBackAttached }]));
@@ -193,13 +178,7 @@ export const Ground = () => {
         } else if (!activeButtons.map((b: StatefulButton) => b.id).includes(event.currentTarget.id)) {
             dispatch(setActiveButtons([{ id: tugRequest, state: STATE_ACTIVE, callBack, value: pushBackAttached }, { id: event.currentTarget.id, state: STATE_ACTIVE, callBack, value: 1 }]));
             callBack();
-        } /* else {
-            dispatch(setActiveButtons([]));
-            disabledButtons.forEach((b, index) => {
-                dispatch(removeDisabledButton(index));
-            });
-            callBack();
-        } */
+        }
     };
 
     const applySelected = (className: string, id?: string) => {
@@ -214,20 +193,13 @@ export const Ground = () => {
      * Applies highlighting of an activated service based on SimVars
      * This ensures the displayed state is in sync with the active services
      */
-    const applySelectedWithSync = (className: string, id: string, gameSync, disabledId?: string) => {
+    const applySelectedWithSync = (className: string, id: string, gameSync: number, disabledId?: string) => {
         const index = activeButtons.map((b: StatefulButton) => b.id).indexOf(id);
         const disabledIndex = disabledButtons.indexOf(disabledId ?? '');
 
         if (gameSync > 0.5 && (index !== -1 || disabledIndex !== -1)) {
             return `${className} ${buttonActive}`;
         }
-        /*   if (gameSync === 0 && index !== -1) {
-            const button: StatefulButton = activeButtons[index];
-            if (button.state === STATE_ACTIVE) {
-               // dispatch(removeActiveButton(index));
-                //dispatch(removeDisabledButton(disabledIndex));
-            }
-        } */
         return className + (activeButtons.map((b: StatefulButton) => b.id).includes(id) ? ' text-white bg-gray-600'
             : buttonBlue);
     };
