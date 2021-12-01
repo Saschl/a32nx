@@ -1345,6 +1345,7 @@ impl BrakeCircuitController for A320BrakeSystemOutputs {
         self.right_demand
     }
 }
+
 struct A320HydraulicBrakeSteerComputerUnit {
     park_brake_lever_pos_id: VariableIdentifier,
     gear_handle_position_id: VariableIdentifier,
@@ -1621,22 +1622,20 @@ impl A320HydraulicBrakeSteerComputerUnit {
         let is_both_engine_low_oil_pressure =
             engine1.is_oil_pressure_low() && engine2.is_oil_pressure_low();
 
-        let final_steering_position_request_unlimited = if !is_both_engine_low_oil_pressure
+        self.final_steering_position_request = if !is_both_engine_low_oil_pressure
             && self.anti_skid_activated
             && lgciu1.nose_gear_compressed(false)
         {
-            steer_angle_from_rudder + steer_angle_from_tiller
+            (steer_angle_from_rudder + steer_angle_from_tiller)
+                .min(Angle::new::<degree>(
+                    Self::MAX_STEERING_ANGLE_DEMAND_DEGREES,
+                ))
+                .max(Angle::new::<degree>(
+                    -Self::MAX_STEERING_ANGLE_DEMAND_DEGREES,
+                ))
         } else {
             Angle::new::<degree>(0.)
         };
-
-        self.final_steering_position_request = final_steering_position_request_unlimited
-            .min(Angle::new::<degree>(
-                Self::MAX_STEERING_ANGLE_DEMAND_DEGREES,
-            ))
-            .max(Angle::new::<degree>(
-                -Self::MAX_STEERING_ANGLE_DEMAND_DEGREES,
-            ));
     }
 
     fn norm_controller(&self) -> &impl BrakeCircuitController {
@@ -6034,6 +6033,53 @@ mod tests {
             test_bed = test_bed
                 .set_tiller_demand(Ratio::new::<ratio>(-1.))
                 .run_waiting_for(Duration::from_secs_f64(10.));
+
+            assert!(test_bed.nose_steering_position().get::<degree>() <= 0.1);
+            assert!(test_bed.nose_steering_position().get::<degree>() >= -0.1);
+        }
+
+        #[test]
+        fn nose_steering_does_not_move_when_a_skid_off() {
+            let mut test_bed = test_bed_with()
+                .engines_off()
+                .on_the_ground()
+                .set_cold_dark_inputs()
+                .set_yellow_e_pump(false)
+                .start_eng1(Ratio::new::<percent>(80.))
+                .start_eng2(Ratio::new::<percent>(80.))
+                .set_anti_skid(false)
+                .run_one_tick();
+
+            test_bed = test_bed
+                .set_tiller_demand(Ratio::new::<ratio>(1.))
+                .run_waiting_for(Duration::from_secs_f64(5.));
+
+            assert!(test_bed.nose_steering_position().get::<degree>() >= -0.1);
+            assert!(test_bed.nose_steering_position().get::<degree>() <= 0.1);
+        }
+
+        #[test]
+        fn nose_steering_centers_itself_when_a_skid_off() {
+            let mut test_bed = test_bed_with()
+                .engines_off()
+                .on_the_ground()
+                .set_cold_dark_inputs()
+                .set_yellow_e_pump(false)
+                .start_eng1(Ratio::new::<percent>(80.))
+                .start_eng2(Ratio::new::<percent>(80.))
+                .set_anti_skid(true)
+                .run_one_tick();
+
+            test_bed = test_bed
+                .set_tiller_demand(Ratio::new::<ratio>(1.))
+                .run_waiting_for(Duration::from_secs_f64(5.));
+
+            assert!(test_bed.nose_steering_position().get::<degree>() >= 70.);
+
+            test_bed = test_bed
+                .set_tiller_demand(Ratio::new::<ratio>(1.))
+                .set_anti_skid(false)
+                .run_waiting_for(Duration::from_secs_f64(5.));
 
             assert!(test_bed.nose_steering_position().get::<degree>() <= 0.1);
             assert!(test_bed.nose_steering_position().get::<degree>() >= -0.1);
