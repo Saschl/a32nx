@@ -21,6 +21,7 @@ use systems::{
     hydraulic::{
         brake_circuit::{
             AutobrakeDecelerationGovernor, AutobrakeMode, AutobrakePanel, BrakeCircuit,
+            BrakeCircuitController,
         },
         linear_actuator::{
             Actuator, BoundedLinearLength, HydraulicAssemblyController,
@@ -179,7 +180,7 @@ pub(super) struct A320Hydraulic {
     core_hydraulic_updater: FixedStepLoop,
     physics_updater: MaxFixedStepLoop,
 
-    brake_computer: A320HydraulicBrakeSteerComputerUnit,
+    brake_steer_computer: A320HydraulicBrakeSteerComputerUnit,
 
     blue_circuit: HydraulicCircuit,
     blue_circuit_controller: A320HydraulicCircuitController,
@@ -270,7 +271,7 @@ impl A320Hydraulic {
             core_hydraulic_updater: FixedStepLoop::new(Self::HYDRAULIC_SIM_TIME_STEP),
             physics_updater: MaxFixedStepLoop::new(Self::HYDRAULIC_SIM_MAX_TIME_STEP_MILLISECONDS),
 
-            brake_computer: A320HydraulicBrakeSteerComputerUnit::new(context),
+            brake_steer_computer: A320HydraulicBrakeSteerComputerUnit::new(context),
 
             blue_circuit: A320HydraulicCircuitFactory::new_blue_circuit(context),
             blue_circuit_controller: A320HydraulicCircuitController::new(None),
@@ -373,14 +374,14 @@ impl A320Hydraulic {
         }
     }
 
-    pub(super) fn update<T: Engine, U: EngineFirePushButtons>(
+    pub(super) fn update(
         &mut self,
         context: &UpdateContext,
-        engine1: &T,
-        engine2: &T,
+        engine1: &impl Engine,
+        engine2: &impl Engine,
         overhead_panel: &A320HydraulicOverheadPanel,
         autobrake_panel: &AutobrakePanel,
-        engine_fire_push_buttons: &U,
+        engine_fire_push_buttons: &impl EngineFirePushButtons,
         lgciu1: &impl LgciuInterface,
         lgciu2: &impl LgciuInterface,
         rat_and_emer_gen_man_on: &impl EmergencyElectricalRatPushButton,
@@ -401,6 +402,8 @@ impl A320Hydraulic {
             emergency_elec_state,
             lgciu1,
             lgciu2,
+            engine1,
+            engine2,
         );
 
         for cur_time_step in self.core_hydraulic_updater {
@@ -487,22 +490,26 @@ impl A320Hydraulic {
         emergency_elec_state: &impl EmergencyElectricalState,
         lgciu1: &impl LgciuInterface,
         lgciu2: &impl LgciuInterface,
+        engine1: &impl Engine,
+        engine2: &impl Engine,
     ) {
         self.nose_steering.update(
             context,
             self.yellow_circuit.system_pressure(),
-            &self.brake_computer,
+            &self.brake_steer_computer,
             &self.pushback_tug,
         );
 
         // Process brake logic (which circuit brakes) and send brake demands (how much)
-        self.brake_computer.update(
+        self.brake_steer_computer.update(
             context,
             &self.green_circuit,
             &self.braking_circuit_altn,
             lgciu1,
             lgciu2,
             autobrake_panel,
+            engine1,
+            engine2,
         );
 
         // Updating rat stowed pos on all frames in case it's used for graphics
@@ -572,24 +579,19 @@ impl A320Hydraulic {
     fn update_blue_actuators_volume(&mut self) {}
 
     // All the core hydraulics updates that needs to be done at the slowest fixed step rate
-    fn update_core_hydraulics<T: Engine, U: EngineFirePushButtons>(
+    fn update_core_hydraulics(
         &mut self,
         context: &UpdateContext,
-        engine1: &T,
-        engine2: &T,
+        engine1: &impl Engine,
+        engine2: &impl Engine,
         overhead_panel: &A320HydraulicOverheadPanel,
-        engine_fire_push_buttons: &U,
+        engine_fire_push_buttons: &impl EngineFirePushButtons,
         lgciu1: &impl LgciuInterface,
         lgciu2: &impl LgciuInterface,
     ) {
         // First update what is currently consumed and given back by each actuator
         // Todo: might have to split the actuator volumes by expected number of loops
         self.update_actuators_volume();
-
-        self.brake_computer.send_brake_demands(
-            &mut self.braking_circuit_norm,
-            &mut self.braking_circuit_altn,
-        );
 
         self.power_transfer_unit_controller.update(
             context,
@@ -709,10 +711,16 @@ impl A320Hydraulic {
             &self.blue_circuit_controller,
         );
 
-        self.braking_circuit_norm
-            .update(context, self.green_circuit.system_section());
-        self.braking_circuit_altn
-            .update(context, self.yellow_circuit.system_section());
+        self.braking_circuit_norm.update(
+            context,
+            self.green_circuit.system_section(),
+            self.brake_steer_computer.norm_controller(),
+        );
+        self.braking_circuit_altn.update(
+            context,
+            self.yellow_circuit.system_section(),
+            self.brake_steer_computer.alternate_controller(),
+        );
     }
 
     // Actual logic of HYD PTU memo computed here until done within FWS
@@ -805,7 +813,7 @@ impl SimulationElement for A320Hydraulic {
         self.green_circuit.accept(visitor);
         self.yellow_circuit.accept(visitor);
 
-        self.brake_computer.accept(visitor);
+        self.brake_steer_computer.accept(visitor);
 
         self.braking_circuit_norm.accept(visitor);
         self.braking_circuit_altn.accept(visitor);
@@ -1279,6 +1287,64 @@ impl SimulationElement for A320RamAirTurbineController {
     }
 }
 
+struct A320BrakeSystemOutputs {
+    left_demand: Ratio,
+    right_demand: Ratio,
+    pressure_limit: Pressure,
+}
+impl A320BrakeSystemOutputs {
+    fn new() -> Self {
+        Self {
+            left_demand: Ratio::new::<ratio>(0.),
+            right_demand: Ratio::new::<ratio>(0.),
+            pressure_limit: Pressure::new::<psi>(3000.),
+        }
+    }
+
+    fn set_pressure_limit(&mut self, pressure_limit: Pressure) {
+        self.pressure_limit = pressure_limit;
+    }
+
+    fn set_brake_demands(&mut self, left_demand: Ratio, right_demand: Ratio) {
+        self.left_demand = left_demand
+            .min(Ratio::new::<ratio>(1.))
+            .max(Ratio::new::<ratio>(0.));
+        self.right_demand = right_demand
+            .min(Ratio::new::<ratio>(1.))
+            .max(Ratio::new::<ratio>(0.));
+    }
+
+    fn set_no_demands(&mut self) {
+        self.left_demand = Ratio::new::<ratio>(0.);
+        self.right_demand = Ratio::new::<ratio>(0.);
+    }
+
+    fn set_max_demands(&mut self) {
+        self.left_demand = Ratio::new::<ratio>(1.);
+        self.right_demand = Ratio::new::<ratio>(1.);
+    }
+
+    fn left_demand(&self) -> Ratio {
+        self.left_demand
+    }
+
+    fn right_demand(&self) -> Ratio {
+        self.right_demand
+    }
+}
+impl BrakeCircuitController for A320BrakeSystemOutputs {
+    fn pressure_limit(&self) -> Pressure {
+        self.pressure_limit
+    }
+
+    fn left_brake_demand(&self) -> Ratio {
+        self.left_demand
+    }
+
+    fn right_brake_demand(&self) -> Ratio {
+        self.right_demand
+    }
+}
 struct A320HydraulicBrakeSteerComputerUnit {
     park_brake_lever_pos_id: VariableIdentifier,
     gear_handle_position_id: VariableIdentifier,
@@ -1297,16 +1363,13 @@ struct A320HydraulicBrakeSteerComputerUnit {
     is_gear_lever_down: bool,
     left_brake_pilot_input: Ratio,
     right_brake_pilot_input: Ratio,
-    left_brake_green_output: Ratio,
-    left_brake_yellow_output: Ratio,
-    right_brake_green_output: Ratio,
-    right_brake_yellow_output: Ratio,
+
+    norm_brake_outputs: A320BrakeSystemOutputs,
+    alternate_brake_outputs: A320BrakeSystemOutputs,
+
     normal_brakes_available: bool,
     should_disable_auto_brake_when_retracting: DelayedTrueLogicGate,
     anti_skid_activated: bool,
-
-    alternate_brake_pressure_limit: Pressure,
-    normal_brake_pressure_limit: Pressure,
 
     tiller_pedal_disconnect: bool,
     tiller_handle_position: Ratio,
@@ -1318,7 +1381,6 @@ struct A320HydraulicBrakeSteerComputerUnit {
 
     ground_speed: Velocity,
 }
-/// Implements brakes computers logic
 impl A320HydraulicBrakeSteerComputerUnit {
     const RUDDER_PEDAL_INPUT_GAIN: f64 = 32.;
     const RUDDER_PEDAL_INPUT_MAP: [f64; 6] = [0., 1., 2., 32., 32., 32.];
@@ -1371,21 +1433,13 @@ impl A320HydraulicBrakeSteerComputerUnit {
             is_gear_lever_down: true,
             left_brake_pilot_input: Ratio::new::<ratio>(0.0),
             right_brake_pilot_input: Ratio::new::<ratio>(0.0),
-            // Actual command sent to left green circuit
-            left_brake_green_output: Ratio::new::<ratio>(0.0),
-            // Actual command sent to left yellow circuit. Init 1 as considering park brake on on init
-            left_brake_yellow_output: Ratio::new::<ratio>(1.0),
-            // Actual command sent to right green circuit
-            right_brake_green_output: Ratio::new::<ratio>(0.0),
-            // Actual command sent to right yellow circuit. Init 1 as considering park brake on on init
-            right_brake_yellow_output: Ratio::new::<ratio>(1.0),
+            norm_brake_outputs: A320BrakeSystemOutputs::new(),
+            alternate_brake_outputs: A320BrakeSystemOutputs::new(),
             normal_brakes_available: false,
             should_disable_auto_brake_when_retracting: DelayedTrueLogicGate::new(
                 Duration::from_secs_f64(Self::AUTOBRAKE_GEAR_RETRACTION_DURATION_S),
             ),
             anti_skid_activated: true,
-            alternate_brake_pressure_limit: Pressure::new::<psi>(3000.),
-            normal_brake_pressure_limit: Pressure::new::<psi>(3000.),
 
             tiller_pedal_disconnect: false,
             tiller_handle_position: Ratio::new::<ratio>(0.),
@@ -1430,14 +1484,15 @@ impl A320HydraulicBrakeSteerComputerUnit {
 
     fn update_brake_pressure_limitation(&mut self) {
         let yellow_manual_braking_input = self.left_brake_pilot_input
-            > self.left_brake_yellow_output + Ratio::new::<ratio>(0.2)
+            > self.alternate_brake_outputs.left_demand() + Ratio::new::<ratio>(0.2)
             || self.right_brake_pilot_input
-                > self.right_brake_yellow_output + Ratio::new::<ratio>(0.2);
+                > self.alternate_brake_outputs.right_demand() + Ratio::new::<ratio>(0.2);
 
         // Nominal braking from pedals is limited to 2538psi
-        self.normal_brake_pressure_limit = Pressure::new::<psi>(2538.);
+        self.norm_brake_outputs
+            .set_pressure_limit(Pressure::new::<psi>(2538.));
 
-        self.alternate_brake_pressure_limit = Pressure::new::<psi>(if self.parking_brake_demand {
+        let alternate_brake_pressure_limit = Pressure::new::<psi>(if self.parking_brake_demand {
             // If no pilot action, standard park brake pressure limit
             if !yellow_manual_braking_input {
                 2103.
@@ -1451,6 +1506,9 @@ impl A320HydraulicBrakeSteerComputerUnit {
             // Else if any manual braking we use standard limit
             2538.
         });
+
+        self.alternate_brake_outputs
+            .set_pressure_limit(alternate_brake_pressure_limit);
     }
 
     /// Updates brakes and nose steering demands
@@ -1462,8 +1520,10 @@ impl A320HydraulicBrakeSteerComputerUnit {
         lgciu1: &impl LgciuInterface,
         lgciu2: &impl LgciuInterface,
         autobrake_panel: &AutobrakePanel,
+        engine1: &impl Engine,
+        engine2: &impl Engine,
     ) {
-        self.update_steering_demands(lgciu1);
+        self.update_steering_demands(lgciu1, engine1, engine2);
 
         self.update_normal_braking_availability(&green_circuit.system_pressure());
         self.update_brake_pressure_limitation();
@@ -1489,16 +1549,14 @@ impl A320HydraulicBrakeSteerComputerUnit {
 
         if is_in_flight_gear_lever_up {
             if self.should_disable_auto_brake_when_retracting.output() {
-                self.left_brake_green_output = Ratio::new::<ratio>(0.);
-                self.right_brake_green_output = Ratio::new::<ratio>(0.);
+                self.norm_brake_outputs.set_no_demands();
             } else {
                 // Slight brake pressure to stop the spinning wheels (have no pressure data available yet, 0.2 is random one)
-                self.left_brake_green_output = Ratio::new::<ratio>(0.2);
-                self.right_brake_green_output = Ratio::new::<ratio>(0.2);
+                self.norm_brake_outputs
+                    .set_brake_demands(Ratio::new::<ratio>(0.2), Ratio::new::<ratio>(0.2));
             }
 
-            self.left_brake_yellow_output = Ratio::new::<ratio>(0.);
-            self.right_brake_yellow_output = Ratio::new::<ratio>(0.);
+            self.alternate_brake_outputs.set_no_demands();
         } else {
             let green_used_for_brakes = self.normal_brakes_available
                 && self.anti_skid_activated
@@ -1506,25 +1564,26 @@ impl A320HydraulicBrakeSteerComputerUnit {
 
             if green_used_for_brakes {
                 // Final output on normal brakes is max(pilot demand , autobrake demand) to allow pilot override autobrake demand
-                self.left_brake_green_output = self
-                    .left_brake_pilot_input
-                    .max(self.autobrake_controller.brake_output());
-                self.right_brake_green_output = self
-                    .right_brake_pilot_input
-                    .max(self.autobrake_controller.brake_output());
-                self.left_brake_yellow_output = Ratio::new::<ratio>(0.);
-                self.right_brake_yellow_output = Ratio::new::<ratio>(0.);
+                self.norm_brake_outputs.set_brake_demands(
+                    self.left_brake_pilot_input
+                        .max(self.autobrake_controller.brake_output()),
+                    self.right_brake_pilot_input
+                        .max(self.autobrake_controller.brake_output()),
+                );
+
+                self.alternate_brake_outputs.set_no_demands();
             } else {
-                self.left_brake_green_output = Ratio::new::<ratio>(0.);
-                self.right_brake_green_output = Ratio::new::<ratio>(0.);
+                self.norm_brake_outputs.set_no_demands();
+
                 if !self.parking_brake_demand {
                     // Normal braking but using alternate circuit
-                    self.left_brake_yellow_output = self.left_brake_pilot_input;
-                    self.right_brake_yellow_output = self.right_brake_pilot_input;
+                    self.alternate_brake_outputs.set_brake_demands(
+                        self.left_brake_pilot_input,
+                        self.right_brake_pilot_input,
+                    );
                 } else {
                     // Else we just use parking brake
-                    self.left_brake_yellow_output = Ratio::new::<ratio>(1.);
-                    self.right_brake_yellow_output = Ratio::new::<ratio>(1.);
+                    self.alternate_brake_outputs.set_max_demands();
 
                     // Special case: parking brake on but yellow can't provide enough brakes: green are allowed to brake for emergency
                     if alternate_circuit.left_brake_pressure().get::<psi>()
@@ -1532,33 +1591,22 @@ impl A320HydraulicBrakeSteerComputerUnit {
                         || alternate_circuit.right_brake_pressure().get::<psi>()
                             < Self::MIN_PRESSURE_PARK_BRAKE_EMERGENCY
                     {
-                        self.left_brake_green_output = self.left_brake_pilot_input;
-                        self.right_brake_green_output = self.right_brake_pilot_input;
+                        self.norm_brake_outputs.set_brake_demands(
+                            self.left_brake_pilot_input,
+                            self.right_brake_pilot_input,
+                        );
                     }
                 }
             }
         }
-
-        // Limiting final values
-        self.left_brake_yellow_output = self
-            .left_brake_yellow_output
-            .min(Ratio::new::<ratio>(1.))
-            .max(Ratio::new::<ratio>(0.));
-        self.right_brake_yellow_output = self
-            .right_brake_yellow_output
-            .min(Ratio::new::<ratio>(1.))
-            .max(Ratio::new::<ratio>(0.));
-        self.left_brake_green_output = self
-            .left_brake_green_output
-            .min(Ratio::new::<ratio>(1.))
-            .max(Ratio::new::<ratio>(0.));
-        self.right_brake_green_output = self
-            .right_brake_green_output
-            .min(Ratio::new::<ratio>(1.))
-            .max(Ratio::new::<ratio>(0.));
     }
 
-    fn update_steering_demands(&mut self, lgciu1: &impl LgciuInterface) {
+    fn update_steering_demands(
+        &mut self,
+        lgciu1: &impl LgciuInterface,
+        engine1: &impl Engine,
+        engine2: &impl Engine,
+    ) {
         let steer_angle_from_rudder = if self.tiller_pedal_disconnect {
             Angle::new::<degree>(0.)
         } else {
@@ -1570,12 +1618,17 @@ impl A320HydraulicBrakeSteerComputerUnit {
             .tiller_steering_limiter
             .angle_from_speed(self.ground_speed(), self.tiller_handle_position);
 
-        let final_steering_position_request_unlimited =
-            if self.anti_skid_activated && lgciu1.nose_gear_compressed(false) {
-                steer_angle_from_rudder + steer_angle_from_tiller
-            } else {
-                Angle::new::<degree>(0.)
-            };
+        let is_both_engine_low_oil_pressure =
+            engine1.is_oil_pressure_low() && engine2.is_oil_pressure_low();
+
+        let final_steering_position_request_unlimited = if !is_both_engine_low_oil_pressure
+            && self.anti_skid_activated
+            && lgciu1.nose_gear_compressed(false)
+        {
+            steer_angle_from_rudder + steer_angle_from_tiller
+        } else {
+            Angle::new::<degree>(0.)
+        };
 
         self.final_steering_position_request = final_steering_position_request_unlimited
             .min(Angle::new::<degree>(
@@ -1586,14 +1639,12 @@ impl A320HydraulicBrakeSteerComputerUnit {
             ));
     }
 
-    fn send_brake_demands(&mut self, norm: &mut BrakeCircuit, altn: &mut BrakeCircuit) {
-        norm.set_brake_press_limit(self.normal_brake_pressure_limit);
-        norm.set_brake_demand_left(self.left_brake_green_output);
-        norm.set_brake_demand_right(self.right_brake_green_output);
+    fn norm_controller(&self) -> &impl BrakeCircuitController {
+        &self.norm_brake_outputs
+    }
 
-        altn.set_brake_press_limit(self.alternate_brake_pressure_limit);
-        altn.set_brake_demand_left(self.left_brake_yellow_output);
-        altn.set_brake_demand_right(self.right_brake_yellow_output);
+    fn alternate_controller(&self) -> &impl BrakeCircuitController {
+        &self.alternate_brake_outputs
     }
 
     fn ground_speed(&self) -> Velocity {
@@ -5939,12 +5990,14 @@ mod tests {
         }
 
         #[test]
-        fn nose_steering_responds_to_tiller_demand_if_yellow_pressure() {
+        fn nose_steering_responds_to_tiller_demand_if_yellow_pressure_and_engines() {
             let mut test_bed = test_bed_with()
                 .engines_off()
                 .on_the_ground()
                 .set_cold_dark_inputs()
                 .set_yellow_e_pump(false)
+                .start_eng1(Ratio::new::<percent>(80.))
+                .start_eng2(Ratio::new::<percent>(80.))
                 .run_one_tick();
 
             test_bed = test_bed
@@ -5960,6 +6013,30 @@ mod tests {
 
             assert!(test_bed.nose_steering_position().get::<degree>() <= -73.9);
             assert!(test_bed.nose_steering_position().get::<degree>() >= -74.1);
+        }
+
+        #[test]
+        fn nose_steering_does_not_move_if_yellow_pressure_but_no_engine() {
+            let mut test_bed = test_bed_with()
+                .engines_off()
+                .on_the_ground()
+                .set_cold_dark_inputs()
+                .set_yellow_e_pump(false)
+                .run_one_tick();
+
+            test_bed = test_bed
+                .set_tiller_demand(Ratio::new::<ratio>(1.))
+                .run_waiting_for(Duration::from_secs_f64(5.));
+
+            assert!(test_bed.nose_steering_position().get::<degree>() <= 0.1);
+            assert!(test_bed.nose_steering_position().get::<degree>() >= -0.1);
+
+            test_bed = test_bed
+                .set_tiller_demand(Ratio::new::<ratio>(-1.))
+                .run_waiting_for(Duration::from_secs_f64(10.));
+
+            assert!(test_bed.nose_steering_position().get::<degree>() <= 0.1);
+            assert!(test_bed.nose_steering_position().get::<degree>() >= -0.1);
         }
     }
 }

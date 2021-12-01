@@ -110,6 +110,11 @@ impl Actuator for BrakeActuator {
     }
 }
 
+pub trait BrakeCircuitController {
+    fn pressure_limit(&self) -> Pressure;
+    fn left_brake_demand(&self) -> Ratio;
+    fn right_brake_demand(&self) -> Ratio;
+}
 /// Brakes implementation. This tries to do a simple model with a possibility to have an accumulator (or not)
 /// Brake model is simplified as we just move brake actuator position from 0 to 1 and take corresponding fluid volume (vol = max_displacement * brake_position).
 /// So it's fairly simplified as we just end up with brake pressure = PRESSURE_FOR_MAX_BRAKE_DEFLECTION_PSI * current_position
@@ -190,7 +195,7 @@ impl BrakeCircuit {
         }
     }
 
-    pub fn set_brake_press_limit(&mut self, pressure_limit: Pressure) {
+    fn set_brake_press_limit(&mut self, pressure_limit: Pressure) {
         self.pressure_limitation = pressure_limit;
     }
 
@@ -208,7 +213,20 @@ impl BrakeCircuit {
             .update(context, actual_max_allowed_pressure);
     }
 
-    pub fn update(&mut self, context: &UpdateContext, section: &impl SectionPressure) {
+    fn update_demands(&mut self, brake_circuit_controller: &impl BrakeCircuitController) {
+        self.set_brake_press_limit(brake_circuit_controller.pressure_limit());
+        self.set_brake_demand_left(brake_circuit_controller.left_brake_demand());
+        self.set_brake_demand_right(brake_circuit_controller.right_brake_demand());
+    }
+
+    pub fn update(
+        &mut self,
+        context: &UpdateContext,
+        section: &impl SectionPressure,
+        brake_circuit_controller: &impl BrakeCircuitController,
+    ) {
+        self.update_demands(brake_circuit_controller);
+
         // The pressure available in brakes is the one of accumulator only if accumulator has fluid
         let actual_pressure_available: Pressure;
         if self.accumulator.fluid_volume() > Volume::new::<gallon>(0.) {
@@ -257,13 +275,13 @@ impl BrakeCircuit {
             .update(context.delta(), actual_pressure_available);
     }
 
-    pub fn set_brake_demand_left(&mut self, brake_ratio: Ratio) {
+    fn set_brake_demand_left(&mut self, brake_ratio: Ratio) {
         self.demanded_brake_position_left = brake_ratio
             .min(Ratio::new::<ratio>(1.0))
             .max(Ratio::new::<ratio>(0.0));
     }
 
-    pub fn set_brake_demand_right(&mut self, brake_ratio: Ratio) {
+    fn set_brake_demand_right(&mut self, brake_ratio: Ratio) {
         self.demanded_brake_position_right = brake_ratio
             .min(Ratio::new::<ratio>(1.0))
             .max(Ratio::new::<ratio>(0.0));
@@ -508,6 +526,46 @@ mod tests {
         }
     }
 
+    struct TestBrakeController {
+        left_demand: Ratio,
+        right_demand: Ratio,
+        pressure_limit: Pressure,
+    }
+    impl TestBrakeController {
+        fn new(left_demand: Ratio, right_demand: Ratio) -> Self {
+            Self {
+                left_demand,
+                right_demand,
+                pressure_limit: Pressure::new::<psi>(5000.),
+            }
+        }
+
+        fn new_with_limit(
+            left_demand: Ratio,
+            right_demand: Ratio,
+            pressure_limit: Pressure,
+        ) -> Self {
+            Self {
+                left_demand,
+                right_demand,
+                pressure_limit,
+            }
+        }
+    }
+    impl BrakeCircuitController for TestBrakeController {
+        fn pressure_limit(&self) -> Pressure {
+            self.pressure_limit
+        }
+
+        fn left_brake_demand(&self) -> Ratio {
+            self.left_demand
+        }
+
+        fn right_brake_demand(&self) -> Ratio {
+            self.right_demand
+        }
+    }
+
     #[test]
     fn brake_actuator_movement() {
         let mut electricity = Electricity::new();
@@ -689,6 +747,7 @@ mod tests {
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(0.1)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(0.), Ratio::new::<ratio>(0.)),
         );
 
         assert!(
@@ -696,21 +755,20 @@ mod tests {
                 < Pressure::new::<psi>(10.0)
         );
 
-        brake_circuit.set_brake_demand_left(Ratio::new::<ratio>(1.0));
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(1.)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(1.), Ratio::new::<ratio>(0.)),
         );
 
         assert!(brake_circuit.left_brake_pressure() >= Pressure::new::<psi>(1000.));
         assert!(brake_circuit.right_brake_pressure() <= Pressure::new::<psi>(50.));
         assert!(brake_circuit.accumulator.fluid_volume() >= Volume::new::<gallon>(0.1));
 
-        brake_circuit.set_brake_demand_left(Ratio::new::<ratio>(0.0));
-        brake_circuit.set_brake_demand_right(Ratio::new::<ratio>(1.0));
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(1.)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(0.), Ratio::new::<ratio>(1.)),
         );
         assert!(brake_circuit.right_brake_pressure() >= Pressure::new::<psi>(1000.));
         assert!(brake_circuit.left_brake_pressure() <= Pressure::new::<psi>(50.));
@@ -742,6 +800,7 @@ mod tests {
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(0.1)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(0.), Ratio::new::<ratio>(0.)),
         );
 
         assert!(
@@ -749,20 +808,19 @@ mod tests {
                 < Pressure::new::<psi>(10.0)
         );
 
-        brake_circuit.set_brake_demand_left(Ratio::new::<ratio>(1.0));
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(1.5)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(1.), Ratio::new::<ratio>(0.)),
         );
 
         assert!(brake_circuit.left_brake_pressure() >= Pressure::new::<psi>(2500.));
         assert!(brake_circuit.right_brake_pressure() <= Pressure::new::<psi>(50.));
 
-        brake_circuit.set_brake_demand_left(Ratio::new::<ratio>(0.0));
-        brake_circuit.set_brake_demand_right(Ratio::new::<ratio>(1.0));
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(1.5)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(0.), Ratio::new::<ratio>(1.)),
         );
         assert!(brake_circuit.right_brake_pressure() >= Pressure::new::<psi>(2500.));
         assert!(brake_circuit.left_brake_pressure() <= Pressure::new::<psi>(50.));
@@ -789,6 +847,7 @@ mod tests {
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(5.)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(0.), Ratio::new::<ratio>(0.)),
         );
 
         assert!(
@@ -796,11 +855,10 @@ mod tests {
                 < Pressure::new::<psi>(1.0)
         );
 
-        brake_circuit.set_brake_demand_left(Ratio::new::<ratio>(1.0));
-        brake_circuit.set_brake_demand_right(Ratio::new::<ratio>(1.0));
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(1.5)),
             &hyd_circuit,
+            &TestBrakeController::new(Ratio::new::<ratio>(1.), Ratio::new::<ratio>(1.)),
         );
 
         assert!(brake_circuit.left_brake_pressure() >= Pressure::new::<psi>(2900.));
@@ -811,6 +869,11 @@ mod tests {
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(0.1)),
             &hyd_circuit,
+            &TestBrakeController::new_with_limit(
+                Ratio::new::<ratio>(1.),
+                Ratio::new::<ratio>(1.),
+                pressure_limit,
+            ),
         );
 
         // Now we limit to 1200 but pressure shouldn't drop instantly
@@ -820,6 +883,11 @@ mod tests {
         brake_circuit.update(
             &context(&mut init_context, Duration::from_secs_f64(1.)),
             &hyd_circuit,
+            &TestBrakeController::new_with_limit(
+                Ratio::new::<ratio>(1.),
+                Ratio::new::<ratio>(1.),
+                pressure_limit,
+            ),
         );
 
         // After one second it should have reached the lower limit
