@@ -654,6 +654,28 @@ const FlyPadPage = () => {
     );
 };
 
+const MiscPage = () => {
+    const [wheelChocksVisible, setWheelChocksVisible] = usePersistentNumberProperty('MODEL_WHEELCHOCKS_VISIBLE', 1);
+    const [conesVisible, setWheelConsesVisible] = usePersistentNumberProperty('MODEL_CONES_VISIBLE', 1);
+
+    return (
+        <div className="bg-navy-lighter rounded-xl px-6 shadow-lg divide-y divide-gray-700 flex flex-col">
+            <div className="py-4 flex flex-row justify-between items-center">
+                <span className="text-lg text-gray-300">Show Wheelchocks</span>
+                <div className="flex flex-row items-center py-1.5">
+                    <Toggle value={wheelChocksVisible === 1} onToggle={(value) => setWheelChocksVisible(value ? 1 : 0)} />
+                </div>
+            </div>
+            <div className="py-4 flex flex-row justify-between items-center">
+                <span className="text-lg text-gray-300">Show Cones</span>
+                <div className="flex flex-row items-center py-1.5">
+                    <Toggle value={conesVisible === 1} onToggle={(value) => setWheelConsesVisible(value ? 1 : 0)} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface SettingsNavbarContextInterface {
     showNavbar: boolean,
     setShowNavbar: (newValue: boolean) => void
@@ -674,6 +696,7 @@ const Settings = () => {
         case 3: return [<ATSUAOCPage />];
         case 4: return [<AudioPage />];
         case 5: return [<FlyPadPage />];
+        case 6: return [<MiscPage />];
         default: return [<AircraftConfigurationPage />];
         }
     }
@@ -690,6 +713,7 @@ const Settings = () => {
                             'ATSU/AOC',
                             'Audio',
                             'flyPad',
+                            'Misc',
                         ]}
                         onSelected={(indexNumber) => {
                             setSelectedTabIndex(indexNumber);
