@@ -1,7 +1,9 @@
+use crate::hydraulic::linear_actuator::Actuator;
 use crate::shared::{interpolation, low_pass_filter::LowPassFilter};
 use crate::simulation::{
     InitContext, SimulationElement, SimulatorWriter, UpdateContext, VariableIdentifier, Write,
 };
+
 use std::time::Duration;
 use uom::si::{
     angle::{degree, radian},
@@ -18,13 +20,18 @@ pub trait Pushback {
     fn is_nose_wheel_steering_pin_inserted(&self) -> bool;
     fn steering_angle(&self) -> Angle;
 }
+
 pub trait SteeringController {
     fn requested_position(&self) -> Angle;
 }
 
-use crate::hydraulic::linear_actuator::Actuator;
-
 /// Computes steering angle based on steering target and input speed
+/// Input steering ratio is first multiplied by an input gain
+/// This Input x Gain value then goes through a table to get an angle demand
+/// Finally, angle demand goes through a speed map limiting final angle output
+///
+/// Angle_Demand = MAP(Input * Gain)
+/// Final_Angle = MAP(Angle_Demand,Speed)
 pub struct SteeringAngleLimiter {
     input_gain: Ratio,
     controller_angle_map: [f64; 6],
