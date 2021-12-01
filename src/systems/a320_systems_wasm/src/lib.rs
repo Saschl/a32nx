@@ -865,7 +865,9 @@ struct NoseWheelSteering {
     tiller_handle_position: NamedVariable,
 
     rudder_pedal_position_id: VariableIdentifier,
-    rudder_pedal_position: AircraftVariable,
+
+    plane_rudder_position_id: AircraftVariable,
+    rudder_position: f64,
 
     nose_wheel_angle_id: VariableIdentifier,
     nose_wheel_angle: NamedVariable,
@@ -873,9 +875,6 @@ struct NoseWheelSteering {
 
     rudder_pedal_input: NamedVariable,
     rudder_pedal_value: f64,
-    rudder_position: f64,
-
-    steering_angle_output_output: f64,
 
     id_tiller_handle_angle: sys::DWORD,
     tiller_handle_angle: f64,
@@ -899,7 +898,9 @@ impl MsfsAspectCtor for NoseWheelSteering {
             tiller_handle_position: NamedVariable::from("A32NX_TILLER_HANDLE_POSITION"),
 
             rudder_pedal_position_id: registry.get("RUDDER_PEDAL_POSITION".to_owned()),
-            rudder_pedal_position: AircraftVariable::from("RUDDER POSITION", "Position", 0)?,
+
+            plane_rudder_position_id: AircraftVariable::from("RUDDER POSITION", "Position", 0)?,
+            rudder_position: 0.5,
 
             nose_wheel_angle_id: registry.get("NOSE_WHEEL_POSITION".to_owned()),
             nose_wheel_angle: NamedVariable::from("A32NX_NOSE_WHEEL_POSITION"),
@@ -907,9 +908,6 @@ impl MsfsAspectCtor for NoseWheelSteering {
 
             rudder_pedal_input: NamedVariable::from("A32NX_RUDDER_PEDAL_POSITION"),
             rudder_pedal_value: 0.5,
-            rudder_position: 0.5,
-
-            steering_angle_output_output: 0.5,
 
             id_tiller_handle_angle: sim_connect
                 .map_client_event_to_sim_event("AXIS_MIXTURE4_SET", true)?,
@@ -925,6 +923,10 @@ impl MsfsAspectCtor for NoseWheelSteering {
     }
 }
 impl NoseWheelSteering {
+    const MAX_CONTROLLABLE_STEERING_ANGLE_DEGREES: f64 = 75.;
+    const MAX_MSFS_STEERING_ANGLE_DEGREES: f64 = 90.;
+    const STEERING_ANIMATION_TOTAL_RANGE_DEGREES: f64 = 360.;
+
     fn set_tiller_handle(&mut self, simconnect_value: u32) {
         self.tiller_handle_angle = sim_connect_32k_pos_to_f64(simconnect_value);
     }
@@ -933,16 +935,17 @@ impl NoseWheelSteering {
         self.pedal_disconnect = is_disconnected;
     }
 
+    /// Steering position is [-1;1]  -1 is left, 0 is straight
     fn set_steering_output(&mut self, steering_position: f64) {
-        self.steering_angle_output_output = steering_position * 75. / 90. / 2. + 0.5;
-
-        self.nose_wheel_angle_output = ((steering_position * 75. / 180.) / 2.) + 0.5;
+        self.nose_wheel_angle_output = steering_position;
     }
 
+    /// Tiller position in [-1;1] range, -1 is left
     fn tiller_handle_position(&self) -> f64 {
         self.tiller_handle_angle * 2. - 1.
     }
 
+    /// Rudder pedal position in [-1;1] range, -1 is left
     fn rudder_pedal_position(&self) -> f64 {
         self.rudder_pedal_value * 2. - 1.
     }
@@ -955,7 +958,7 @@ impl NoseWheelSteering {
         let rudder_percent: f64 = self.rudder_pedal_input.get_value();
         self.rudder_pedal_value = (rudder_percent + 100.) / 200.;
 
-        let rudder_position: f64 = self.rudder_pedal_position.get();
+        let rudder_position: f64 = self.plane_rudder_position_id.get();
         self.rudder_position = (rudder_position + 1.) / 2.;
 
         let realistic_mode: f64 = self.realistic_tiller_axis_variable.get_value();
@@ -982,27 +985,43 @@ impl NoseWheelSteering {
         }
     }
 
+    fn steering_demand_to_msfs_from_steering_angle(&self) -> f64 {
+        // Steering in msfs is the max we want rescaled to the max in msfs
+        let steering_ratio_converted = self.nose_wheel_angle_output
+            * Self::MAX_CONTROLLABLE_STEERING_ANGLE_DEGREES
+            / Self::MAX_MSFS_STEERING_ANGLE_DEGREES
+            / 2.
+            + 0.5;
+
+        // Steering demand is reverted in msfs so we do 1 - angle.
+        // Then we hack msfs by adding the rudder value that it will always substract internally
+        // This way we end up with actual angle we required
+        (1. - steering_ratio_converted) + (self.rudder_position - 0.5)
+    }
+
+    fn steering_animation_to_msfs_from_steering_angle(&self) -> f64 {
+        ((self.nose_wheel_angle_output * Self::MAX_CONTROLLABLE_STEERING_ANGLE_DEGREES
+            / (Self::STEERING_ANIMATION_TOTAL_RANGE_DEGREES / 2.))
+            / 2.)
+            + 0.5
+    }
+
     fn write_animation_position_to_sim(&self) {
         self.tiller_handle_position
             .set_value((self.final_tiller_position_sent_to_systems() + 1.) / 2.);
 
         self.nose_wheel_angle
-            .set_value(self.nose_wheel_angle_output);
+            .set_value(self.steering_animation_to_msfs_from_steering_angle());
     }
 
     fn transmit_client_events(
         &mut self,
         sim_connect: &mut SimConnect,
     ) -> Result<(), Box<dyn Error>> {
-        let rudder_percent: f64 = self.rudder_pedal_input.get_value();
-
-        let actual_angle_sent_to_sim =
-           (1. - self.steering_angle_output_output) + (self.rudder_position - 0.5 );
-
         sim_connect.transmit_client_event(
             SIMCONNECT_OBJECT_ID_USER,
             self.id_nose_wheel_angle,
-            f64_to_sim_connect_32k_pos(actual_angle_sent_to_sim),
+            f64_to_sim_connect_32k_pos(self.steering_demand_to_msfs_from_steering_angle()),
         )?;
 
         Ok(())
