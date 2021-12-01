@@ -867,8 +867,6 @@ struct A320EngineDrivenPumpController {
     is_pressure_low: bool,
 }
 impl A320EngineDrivenPumpController {
-    const MIN_ENGINE_OIL_PRESS_THRESHOLD_TO_INHIBIT_FAULT: f64 = 18.;
-
     fn new(
         context: &mut InitContext,
         engine_number: usize,
@@ -895,16 +893,12 @@ impl A320EngineDrivenPumpController {
         section: &impl SectionPressure,
         lgciu: &impl LgciuInterface,
     ) {
-        // Engine off state uses oil pressure threshold (treshold is 18psi)
-        let is_engine_low_oil_pressure = engine.oil_pressure().get::<psi>()
-            < Self::MIN_ENGINE_OIL_PRESS_THRESHOLD_TO_INHIBIT_FAULT;
-
         self.is_pressure_low =
             self.should_pressurise() && !section.is_pressure_switch_pressurised();
 
         // Fault inhibited if on ground AND engine oil pressure is low (11KS1 elec relay)
         self.has_pressure_low_fault = self.is_pressure_low
-            && (!is_engine_low_oil_pressure
+            && (!engine.is_oil_pressure_low()
                 || !(lgciu.right_gear_compressed(false) && lgciu.left_gear_compressed(false)));
     }
 
@@ -968,8 +962,6 @@ struct A320BlueElectricPumpController {
     is_pressure_low: bool,
 }
 impl A320BlueElectricPumpController {
-    const MIN_ENGINE_OIL_PRESS_THRESHOLD_TO_INHIBIT_FAULT: f64 = 18.;
-
     fn new(context: &mut InitContext, powered_by: ElectricalBusType) -> Self {
         Self {
             low_press_id: context.get_identifier("HYD_BLUE_EPUMP_LOW_PRESS".to_owned()),
@@ -1020,17 +1012,14 @@ impl A320BlueElectricPumpController {
         lgciu1: &impl LgciuInterface,
         lgciu2: &impl LgciuInterface,
     ) {
-        // Low engine oil pressure inhibits fault under 18psi level
-        let is_engine_low_oil_pressure = engine1.oil_pressure().get::<psi>()
-            < Self::MIN_ENGINE_OIL_PRESS_THRESHOLD_TO_INHIBIT_FAULT
-            && engine2.oil_pressure().get::<psi>()
-                < Self::MIN_ENGINE_OIL_PRESS_THRESHOLD_TO_INHIBIT_FAULT;
+        let is_both_engine_low_oil_pressure =
+            engine1.is_oil_pressure_low() && engine2.is_oil_pressure_low();
 
         self.is_pressure_low =
             self.should_pressurise() && !section.is_pressure_switch_pressurised();
 
         self.has_pressure_low_fault = self.is_pressure_low
-            && (!is_engine_low_oil_pressure
+            && (!is_both_engine_low_oil_pressure
                 || (!(lgciu1.left_gear_compressed(false) && lgciu1.right_gear_compressed(false))
                     || !(lgciu2.left_gear_compressed(false)
                         && lgciu2.right_gear_compressed(false)))
