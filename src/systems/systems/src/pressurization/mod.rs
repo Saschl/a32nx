@@ -5,7 +5,9 @@ use self::{
 };
 use crate::{
     overhead::{AutoManFaultPushButton, NormalOnPushButton, SpringLoadedSwitch, ValueKnob},
-    shared::{random_number, ControllerSignal, EngineCorrectedN1, LgciuWeightOnWheels},
+    shared::{
+        random_number, CabinAltitude, ControllerSignal, EngineCorrectedN1, LgciuWeightOnWheels,
+    },
     simulation::{
         InitContext, Read, SimulationElement, SimulationElementVisitor, SimulatorReader,
         SimulatorWriter, UpdateContext, VariableIdentifier, Write,
@@ -96,8 +98,8 @@ impl Pressurization {
             departure_elevation_id: context.get_identifier("DEPARTURE_ELEVATION".to_owned()),
             sea_level_pressure_id: context.get_identifier("SEA LEVEL PRESSURE".to_owned()),
             destination_qnh_id: context.get_identifier("DESTINATION_QNH".to_owned()),
-            packs_1_supply_id: context.get_identifier("PACKS_1_IS_SUPPLYING".to_owned()),
-            packs_2_supply_id: context.get_identifier("PACKS_2_IS_SUPPLYING".to_owned()),
+            packs_1_supply_id: context.get_identifier("COND_PACK_FLOW_VALVE_1_IS_OPEN".to_owned()),
+            packs_2_supply_id: context.get_identifier("COND_PACK_FLOW_VALVE_2_IS_OPEN".to_owned()),
 
             cabin_pressure_simulation: CabinPressureSimulation::new(),
             cpc: [
@@ -208,6 +210,16 @@ impl Pressurization {
             .for_each(|controller| {
                 controller.reset_cpc_switch();
             });
+    }
+}
+
+impl CabinAltitude for Pressurization {
+    fn cabin_altitude(&self) -> Length {
+        self.cpc[self.active_system - 1].cabin_altitude()
+    }
+
+    fn cabin_pressure(&self) -> Pressure {
+        self.cabin_pressure_simulation.cabin_pressure()
     }
 }
 
@@ -585,12 +597,12 @@ mod tests {
         }
 
         fn command_packs_on(mut self) -> Self {
-            self.write_by_name("PACKS_1_IS_SUPPLYING", true);
+            self.write_by_name("COND_PACK_FLOW_VALVE_1_IS_OPEN", true);
             self
         }
 
         fn command_packs_off(mut self) -> Self {
-            self.write_by_name("PACKS_1_IS_SUPPLYING", false);
+            self.write_by_name("COND_PACK_FLOW_VALVE_1_IS_OPEN", false);
             self
         }
 

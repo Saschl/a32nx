@@ -1,5 +1,6 @@
 extern crate systems;
 
+mod air_conditioning;
 mod electrical;
 mod fuel;
 mod hydraulic;
@@ -7,6 +8,7 @@ mod pneumatic;
 mod power_consumption;
 
 use self::{fuel::A320Fuel, pneumatic::A320PneumaticOverheadPanel};
+use air_conditioning::A320AirConditioning;
 use electrical::{
     A320Electrical, A320ElectricalOverheadPanel, A320EmergencyElectricalOverheadPanel,
     APU_START_MOTOR_BUS_TYPE,
@@ -35,6 +37,7 @@ use systems::{
 pub struct A320 {
     adirs: AirDataInertialReferenceSystem,
     adirs_overhead: AirDataInertialReferenceSystemOverheadPanel,
+    air_conditioning: A320AirConditioning,
     apu: AuxiliaryPowerUnit<Aps3200ApuGenerator, Aps3200StartMotor>,
     apu_fire_overhead: AuxiliaryPowerUnitFireOverheadPanel,
     apu_overhead: AuxiliaryPowerUnitOverheadPanel,
@@ -62,6 +65,7 @@ impl A320 {
         A320 {
             adirs: AirDataInertialReferenceSystem::new(context),
             adirs_overhead: AirDataInertialReferenceSystemOverheadPanel::new(context),
+            air_conditioning: A320AirConditioning::new(context),
             apu: AuxiliaryPowerUnitFactory::new_aps3200(
                 context,
                 1,
@@ -133,6 +137,12 @@ impl Aircraft for A320 {
     }
 
     fn update_after_power_distribution(&mut self, context: &UpdateContext) {
+        self.air_conditioning.update(
+            context,
+            [&self.engine_1, &self.engine_2],
+            &self.pressurization,
+            [&self.lgciu1, &self.lgciu2],
+        );
         self.apu.update_after_power_distribution();
         self.apu_overhead.update_after_apu(&self.apu);
 
@@ -176,6 +186,7 @@ impl SimulationElement for A320 {
     fn accept<T: SimulationElementVisitor>(&mut self, visitor: &mut T) {
         self.adirs.accept(visitor);
         self.adirs_overhead.accept(visitor);
+        self.air_conditioning.accept(visitor);
         self.apu.accept(visitor);
         self.apu_fire_overhead.accept(visitor);
         self.apu_overhead.accept(visitor);
