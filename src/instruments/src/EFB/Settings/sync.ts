@@ -22,6 +22,7 @@ const settingsToSync: Map<string, SimVar> = new Map([
     ['ISIS_BARO_UNIT_INHG', ['L:A32NX_ISIS_BARO_UNIT_INHG', 'number', '0']],
     ['MODEL_WHEELCHOCKS_HIDDEN', ['L:A32NX_MODEL_WHEELCHOCKS_HIDDEN', 'bool', '1']],
     ['MODEL_CONES_HIDDEN', ['L:A32NX_MODEL_CONES_HIDDEN', 'bool', '1']],
+    ['REALISTIC_TILLER_ENABLED', ['L:A32NX_REALISTIC_TILLER_ENABLED', 'number', '0']],
 ]);
 
 export function readSettingsFromPersistentStorage() {

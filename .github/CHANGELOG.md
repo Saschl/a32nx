@@ -82,12 +82,16 @@
 1. [EFB/UI] Override in-game fuel UI and fuel initialization - @Taz5150 (TazX [Z+2]#0405)
 <<<<<<< HEAD
 1. [FCU] FCU backlight is fed from proper bus - @tracernz (Mike)
+<<<<<<< HEAD
 1. [CLK/ND] Fixed/Improved chrono & ET behavior on time shift - @vkrizan (Viliam)
 1. [MODEL] Add Wheel Chocks and GSE Safety Cones - @bouveng (Johan Bouveng)
 =======
 1. [COND] Add cabin temperature simulation and control - @mjuhe (Miquel Juhe)
 1. [COND] Improve air conditioning pack flow model - @mjuhe (Miquel Juhe)
 >>>>>>> mjuhe/air-cond-system
+=======
+1. [HYD] Realistic hydraulic nose steering - @crocket6 (crocket)
+>>>>>>> hyd/feat_nose_steering
 
 ## 0.7.0
 
