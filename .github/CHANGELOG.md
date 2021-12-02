@@ -83,6 +83,7 @@
 <<<<<<< HEAD
 1. [FCU] FCU backlight is fed from proper bus - @tracernz (Mike)
 <<<<<<< HEAD
+<<<<<<< HEAD
 1. [CLK/ND] Fixed/Improved chrono & ET behavior on time shift - @vkrizan (Viliam)
 1. [MODEL] Add Wheel Chocks and GSE Safety Cones - @bouveng (Johan Bouveng)
 =======
@@ -92,6 +93,14 @@
 =======
 1. [HYD] Realistic hydraulic nose steering - @crocket6 (crocket)
 >>>>>>> hyd/feat_nose_steering
+=======
+1. [AP] Added TCAS modes for Autopilot and Flight Director guidance - @aguther (Andreas Guther)
+1. [PFD] Added new messages and modes for TCAS - @lukecologne (lukecologne#1156)
+1. [TCAS] Implemented traffic advisories, resolution advisories, and collision avoidance logic - @wpine215 (Iceman) @2hwk (2Cas#1022)
+1. [PFD] Implemented TCAS guidance on vertical speed tape - @wpine215 (Iceman)
+1. [SOUNDS] Connected TCAS TA/RA logic to TCAS Wwise events - @wpine215 (Iceman)  @2hwk (2Cas#1022)
+1. [FDR] Added additional data to the FDR - @aguther (Andreas Guther)
+>>>>>>> origin/react-ts-tcas
 
 ## 0.7.0
 
