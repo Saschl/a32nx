@@ -82,6 +82,7 @@
 1. [EFB/UI] Override in-game fuel UI and fuel initialization - @Taz5150 (TazX [Z+2]#0405)
 1. [FCU] FCU backlight is fed from proper bus - @tracernz (Mike)
 1. [CLK/ND] Fixed/Improved chrono & ET behavior on time shift - @vkrizan (Viliam)
+1. [MODEL] Add Wheel Chocks and GSE Safety Cones - @bouveng (Johan Bouveng)
 
 ## 0.7.0
 
