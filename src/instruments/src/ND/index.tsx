@@ -18,6 +18,7 @@ import { TcasWxrMessages } from './elements/messages/TcasWxrMessages';
 import { PlanMode } from './pages/PlanMode';
 import { RoseMode } from './pages/RoseMode';
 import './styles.scss';
+import { WeatherTerrainBackdrop } from './elements/WeatherTerrainBackdrop';
 
 const NavigationDisplay: React.FC = () => {
     const [displayIndex] = useState(() => {
@@ -100,8 +101,9 @@ const NavigationDisplay: React.FC = () => {
             potentiometerIndex={displayIndex === 1 ? 89 : 91}
         >
             <div className="BacklightBleed" />
+            <WeatherTerrainBackdrop mode={modeIndex} side={side} range={rangeSettings[rangeIndex]} ppos={ppos} />
             <FlightPlanProvider>
-                <svg className="nd-svg" version="1.1" viewBox="0 0 768 768">
+                <svg className="nd-svg" version="1.1" viewBox="0 0 768 768" style={{ position: 'absolute', zIndex: 100 }}>
                     <SpeedIndicator adrs={airDataReferenceSource} irs={inertialReferenceSource} />
                     <WindIndicator adrs={airDataReferenceSource} irs={inertialReferenceSource} />
 
