@@ -2,6 +2,7 @@ import { connect } from 'react-redux';
 import React, { useEffect, useState } from 'react';
 import { IconCornerDownLeft, IconCornerDownRight, IconArrowDown, IconHandStop, IconTruck, IconBriefcase, IconBuildingArch, IconArchive, IconPlug, IconTir, IconTrafficCone, IconTriangle, IconCircle } from '@tabler/icons';
 import './Ground.scss';
+import { usePersistentNumberProperty } from '@instruments/common/persistence';
 import fuselage from '../Assets/320neo-outline-upright.svg';
 import { useSimVar, useSplitSimVar } from '../../Common/simVars';
 import Button, { BUTTON_TYPE } from '../Components/Button/Button';
@@ -12,7 +13,6 @@ import {
     setActiveButtons, addDisabledButton, removeDisabledButton,
     setPushBackWaitTimerHandle,
 } from '../Store/action-creator/ground-state';
-import { usePersistentNumberProperty } from '@instruments/common/persistence';
 
 type StatefulButton = {
     id: string,
@@ -69,14 +69,6 @@ export const Ground = ({
             setPushBackWaitTimerHandle(-1);
         }
     }, [pushBack, tugDirection, activeButtons, pushBackWaitTimerHandle, tugRequestOnly, pushBack, tugDirection]);
-
-    const handleWheelChockClick = () => {
-        setWheelChocksEnabled(wheelChocksEnabled ? 0 : 1);
-    }
-
-    const handleConeClick = () => {
-        setWheelConesEnabled(conesEnabled ? 0 : 1);
-    }
 
     const getTugHeading = (value: number): number => (tugHeading + value) % 360;
 
@@ -279,14 +271,14 @@ export const Ground = ({
                 <div>
                     <h1 className="text-white font-medium text-lg text-center pb-1">Wheel Chocks</h1>
                     <Button
-                        onClick={handleWheelChockClick}
-                        className={applySelectedWithSync('w-32', 'wheel-chocks', wheelChocksEnabled, 'door-aft-right')}
+                        onClick={(e) => handleClick(() => setWheelChocksEnabled(wheelChocksEnabled ? 0 : 1), e)}
+                        className={applySelectedWithSync('w-32', 'wheel-chocks', wheelChocksEnabled)}
                         type={BUTTON_TYPE.NONE}
                         id="wheel-chocks"
                     >
                         <div className="flex justify-center items-end">
                             <IconTriangle size="1.125rem" stroke="4" />
-                            <IconCircle size="2.825rem" stroke="5" className="-mx-0.5"/>
+                            <IconCircle size="2.825rem" stroke="5" className="-mx-0.5" />
                             <IconTriangle size="1.125rem" stroke="4" />
                         </div>
                     </Button>
@@ -294,8 +286,8 @@ export const Ground = ({
                 <div>
                     <h1 className="text-white font-medium text-lg text-center pb-1">Safety Cones</h1>
                     <Button
-                        onClick={handleConeClick}
-                        className={applySelectedWithSync('w-32', 'safety-cones', conesEnabled, 'door-aft-right')}
+                        onClick={(e) => handleClick(() => setWheelConesEnabled(wheelChocksEnabled ? 0 : 1), e)}
+                        className={applySelectedWithSync('w-32', 'safety-cones', conesEnabled)}
                         type={BUTTON_TYPE.NONE}
                         id="safety-cones"
                     >
