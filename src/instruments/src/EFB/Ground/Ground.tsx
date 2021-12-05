@@ -40,7 +40,7 @@ export const Ground = ({
     const [tugActive, setTugActive] = useState(false);
 
     const [wheelChocksEnabled, setWheelChocksEnabled] = usePersistentNumberProperty('MODEL_WHEELCHOCKS_ENABLED', 0);
-    const [conesEnabled, setWheelConesEnabled] = usePersistentNumberProperty('MODEL_CONES_ENABLED', 0);
+    const [conesEnabled, setConesEnabled] = usePersistentNumberProperty('MODEL_CONES_ENABLED', 0);
 
     const buttonBlue = ' border-blue-500 bg-blue-500 hover:bg-blue-600 hover:border-blue-600 text-blue-darkest disabled:bg-grey-600';
     const buttonActive = ' text-white bg-green-600 border-green-600';
@@ -286,7 +286,7 @@ export const Ground = ({
                 <div>
                     <h1 className="text-white font-medium text-lg text-center pb-1">Safety Cones</h1>
                     <Button
-                        onClick={(e) => handleClick(() => setWheelConesEnabled(wheelChocksEnabled ? 0 : 1), e)}
+                        onClick={(e) => handleClick(() => setConesEnabled(conesEnabled ? 0 : 1), e)}
                         className={applySelectedWithSync('w-32', 'safety-cones', conesEnabled)}
                         type={BUTTON_TYPE.NONE}
                         id="safety-cones"
