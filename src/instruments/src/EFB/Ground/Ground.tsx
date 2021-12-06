@@ -170,6 +170,13 @@ export const Ground = ({
             : buttonBlue);
     };
 
+    const applyWithSync = (className: string, syncValue: number) => {
+        if (syncValue !== 0) {
+            return `${className} ${buttonActive}`;
+        }
+        return className;
+    };
+
     return (
         <div className="relative h-full flex-grow flex flex-col">
             <div className="flex">
@@ -272,7 +279,7 @@ export const Ground = ({
                     <h1 className="text-white font-medium text-lg text-center pb-1">Wheel Chocks</h1>
                     <Button
                         onClick={(e) => handleClick(() => setWheelChocksEnabled(wheelChocksEnabled ? 0 : 1), e)}
-                        className={applySelectedWithSync('w-32', 'wheel-chocks', wheelChocksEnabled)}
+                        className={applyWithSync('w-32', wheelChocksEnabled)}
                         type={BUTTON_TYPE.NONE}
                         id="wheel-chocks"
                     >
@@ -287,7 +294,7 @@ export const Ground = ({
                     <h1 className="text-white font-medium text-lg text-center pb-1">Safety Cones</h1>
                     <Button
                         onClick={(e) => handleClick(() => setConesEnabled(conesEnabled ? 0 : 1), e)}
-                        className={applySelectedWithSync('w-32', 'safety-cones', conesEnabled)}
+                        className={applyWithSync('w-32', conesEnabled)}
                         type={BUTTON_TYPE.NONE}
                         id="safety-cones"
                     >
