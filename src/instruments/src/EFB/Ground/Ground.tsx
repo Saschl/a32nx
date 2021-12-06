@@ -170,12 +170,7 @@ export const Ground = ({
             : buttonBlue);
     };
 
-    const applyWithSync = (className: string, syncValue: number) => {
-        if (syncValue !== 0) {
-            return `${className} ${buttonActive}`;
-        }
-        return className;
-    };
+    const applyWithSync = (className: string, syncValue: number) => `${className} ${syncValue !== 0 ? buttonActive : buttonBlue}`;
 
     return (
         <div className="relative h-full flex-grow flex flex-col">
