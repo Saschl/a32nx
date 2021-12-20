@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 
 import { IconCornerDownLeft, IconCornerDownRight, IconArrowDown, IconHandStop, IconTruck, IconBriefcase, IconBuildingArch, IconArchive, IconPlug, IconTir } from '@tabler/icons';
 
+import { MathUtils } from '@shared/MathUtils';
+import useInterval from '@instruments/common/useInterval';
 import fuselage from '../Assets/320neo-outline-upright.svg';
 
 import { useSimVar, useSplitSimVar } from '../../Common/simVars';
@@ -22,8 +24,6 @@ import {
 } from '../Store/features/buttons';
 
 import './Ground.scss';
-import useInterval from '@instruments/common/useInterval';
-import { MathUtils } from '@shared/MathUtils';
 
 interface StatefulButton {
     id: string,
@@ -63,11 +63,6 @@ export const Ground = () => {
     const STATE_WAITING = 'WAITING';
     const STATE_ACTIVE = 'ACTIVE';
 
-    /**
-     * allows a direction to be selected directly
-     * rather than first backwards and after that the direction
-     */
-
     useInterval(() => {
         if (activeButtons.find((button) => button.id === 'tug-request') && tugRequestOnly) {
             /* Timer needed, as we cannot check when the variable "Pushback Wait" is being set to false after calling the tug */
@@ -76,6 +71,10 @@ export const Ground = () => {
     }, 100);
 
     useEffect(() => {
+        /**
+        * allows a direction to be selected directly
+        * rather than first backwards and after that the direction
+        */
         if (pushBack === 0 && tugDirection !== 0) {
             computeAndSetTugHeading(tugDirection);
             setTugDirection(0);
@@ -90,26 +89,11 @@ export const Ground = () => {
     }, [pushBack, tugDirection, rudderPosition, tugHeading]);
 
     useEffect(() => {
-        const tugRequest = 'tug-request';
-        // console.log("BEHRHERE "+activeButtons);
-        // console.log(activeButtons);
-        console.log(activeButtons);
-
         for (const button of activeButtons) {
-            if (button.id === tugRequest) {
-                //  dispatch(setActiveButtons([]));
-                // button.callBack();
-            } else if (button.value > 0.5) {
+            if (button.value > 0.5) {
                 dispatch(updateButton(button));
-                // button.callBack();
             }
-        } /* else if (event.currentTarget.id === tugRequest) {
-            dispatch(setActiveButtons([{ id: event.currentTarget.id, state: STATE_WAITING }]));
-            disabledButtons.forEach((b, index) => {
-                dispatch(removeDisabledButton(index));
-            });
-            callBack();
-        } */
+        }
     }, [jetWayActive, cargoActive, cateringActive, fuelingActive, powerActive, pushBack]);
 
     const getTugHeading = (value: number): number => (tugHeading + value) % 360;

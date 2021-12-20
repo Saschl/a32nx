@@ -34,7 +34,6 @@ export const buttonsSlice = createSlice({
             const button = state.activeButtons.findIndex((b) => action.payload.id === b.id);
             const updatedButton: ActiveButton = { id: action.payload.id, value: action.payload.value, state: 'ACTIVE', callBack: action.payload.callBack };
             if (button !== -1) {
-                console.log('UPDATEING');
                 state.activeButtons[button] = updatedButton;
             }
         },
@@ -58,6 +57,9 @@ export const buttonsSlice = createSlice({
     },
 });
 
-export const { addActiveButton, addDisabledButton, removeActiveButton, removeDisabledButton, setActiveButtons, setPushbackWaitTimerHandle, setTugRequestOnly, updateButton } = buttonsSlice.actions;
+export const {
+    addActiveButton, addDisabledButton, removeActiveButton, removeDisabledButton,
+    setActiveButtons, setPushbackWaitTimerHandle, setTugRequestOnly, updateButton,
+} = buttonsSlice.actions;
 
 export default buttonsSlice.reducer;
