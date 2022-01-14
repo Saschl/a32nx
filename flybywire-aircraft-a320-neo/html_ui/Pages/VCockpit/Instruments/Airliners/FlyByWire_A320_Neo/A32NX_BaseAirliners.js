@@ -65,16 +65,7 @@ var Airliners;
         createLowerScreenPage(_name, _htmlElemId, _eicasPageSelector) {
             this.lowerScreenPages.push(new NavSystemPage(_name.toUpperCase(), _htmlElemId, new Airliners.EICASPage(_eicasPageSelector)));
         }
-        changePage(_pageName) {
-            const pageName = _pageName.toUpperCase();
-            this.SwitchToPageName(BaseEICAS.LOWER_SCREEN_GROUP_NAME, pageName);
-            for (let i = 0; i < this.lowerScreenPages.length; i++) {
-                if (this.lowerScreenPages[i].name == pageName) {
-                    SimVar.SetSimVarValue("L:A32NX_ECAM_SD_CURRENT_PAGE_INDEX", "number", i);
-                    break;
-                }
-            }
-        }
+
     }
     BaseEICAS.LOWER_SCREEN_GROUP_NAME = "LowerScreenGroup";
     BaseEICAS.LOWER_SCREEN_CHANGE_EVENT_NAME = "ChangeLowerScreenPage";
