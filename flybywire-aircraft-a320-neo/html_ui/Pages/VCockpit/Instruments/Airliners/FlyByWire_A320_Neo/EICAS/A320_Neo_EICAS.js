@@ -43,8 +43,10 @@ class A320_Neo_EICAS extends Airliners.BaseEICAS {
                 break;
             }
         }
-        this.SwitchToPageName(this.LOWER_SCREEN_GROUP_NAME, pageName);
-        SimVar.SetSimVarValue("L:A32NX_ECAM_SD_CURRENT_PAGE_INDEX", "number", this.currentPage);
+        SimVar.SetSimVarValue("L:A32NX_ECAM_SD_CURRENT_PAGE_INDEX", "number", this.currentPage).then(() => {
+            this.SwitchToPageName(this.LOWER_SCREEN_GROUP_NAME, pageName);
+        });
+
     }
 
     createUpperScreenPage() {
@@ -250,12 +252,11 @@ class A320_Neo_EICAS extends Airliners.BaseEICAS {
             this.SwitchToPageName(this.LOWER_SCREEN_GROUP_NAME, this.pageNameWhenUnselected);
         }
 
-        if (ecamAllButtonBeingPushed && !this.ecamAllButtonPrevState) { // button press
-            this.changePage(this.lowerScreenPages[(this.currentPage + 1) % this.lowerScreenPages.length].name);
+        if (ecamAllButtonBeingPushed && !this.ecamAllButtonPrevState && this.isBottomScreen) { // button press
             this.ecamCycleInterval = setInterval(() => {
                 this.changePage(this.lowerScreenPages[(this.currentPage + 1) % this.lowerScreenPages.length].name);
             }, 1000);
-        } else if (!ecamAllButtonBeingPushed && this.ecamAllButtonPrevState) { // button release
+        } else if (!ecamAllButtonBeingPushed && this.ecamAllButtonPrevState && this.isBottomScreen) { // button release
             clearInterval(this.ecamCycleInterval);
         }
 
