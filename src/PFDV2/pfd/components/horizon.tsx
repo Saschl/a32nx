@@ -205,7 +205,9 @@ export class Horizon extends DisplayComponent<HorizonProps> {
 }
 
 class FlightPathVector extends DisplayComponent<{bus: EventBus}> {
-    private isActive = false;
+    private isFdActive = false;
+
+    private isTrkFpaActive = false;
 
     private roll = new Arinc429Word(0);
 
@@ -233,6 +235,19 @@ class FlightPathVector extends DisplayComponent<{bus: EventBus}> {
 
     private FDRollOrder = 0;
 
+    private handTrkFpaStatus() {
+        if (this.isTrkFpaActive && this.isFdActive) {
+            this.bird.instance.style.visibility = 'visible';
+            this.birdPath.instance.style.visibility = 'visible';
+        } else if (this.isTrkFpaActive) {
+            this.bird.instance.style.visibility = 'visible';
+            this.birdPath.instance.style.visibility = 'hidden';
+        } else {
+            this.bird.instance.style.visibility = 'hidden';
+            this.birdPath.instance.style.visibility = 'hidden';
+        }
+    }
+
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
@@ -244,38 +259,20 @@ class FlightPathVector extends DisplayComponent<{bus: EventBus}> {
 
         sub.on('fd1Active').whenChanged().handle((fd) => {
             if (displayIndex === 1) {
-                this.isActive = this.isActive && fd;
-                if (this.isActive) {
-                    this.bird.instance.style.visibility = 'visible';
-                    this.birdPath.instance.style.visibility = 'visible';
-                } else {
-                    this.bird.instance.style.visibility = 'hidden';
-                    this.birdPath.instance.style.visibility = 'hidden';
-                }
+                this.isFdActive = fd;
+                this.handTrkFpaStatus();
             }
         });
 
         sub.on('fd2Active').whenChanged().handle((fd) => {
             if (displayIndex === 2) {
-                this.isActive = this.isActive && fd;
-                if (this.isActive) {
-                    this.bird.instance.style.visibility = 'visible';
-                    this.birdPath.instance.style.visibility = 'visible';
-                } else {
-                    this.bird.instance.style.visibility = 'hidden';
-                    this.birdPath.instance.style.visibility = 'hidden';
-                }
+                this.isFdActive = fd;
+                this.handTrkFpaStatus();
             }
         });
-        sub.on('trkFpaActive').handle((a) => {
-            this.isActive = this.isActive && a;
-            if (this.isActive) {
-                this.bird.instance.style.visibility = 'visible';
-                this.birdPath.instance.style.visibility = 'visible';
-            } else {
-                this.bird.instance.style.visibility = 'hidden';
-                this.birdPath.instance.style.visibility = 'hidden';
-            }
+        sub.on('trkFpaActive').whenChanged().handle((a) => {
+            this.isTrkFpaActive = a;
+            this.handTrkFpaStatus();
         });
 
         sub.on('groundTrackTrue').handle((gt) => {
@@ -339,7 +336,7 @@ class FlightPathVector extends DisplayComponent<{bus: EventBus}> {
     }
 
     private moveBird() {
-        if (this.isActive) {
+        if (this.isTrkFpaActive) {
             const FPA = this.pitch.value - (Math.cos(this.roll.value * Math.PI / 180) * this.aoa);
             const DA = getSmallestAngle(this.groundTrack, this.groundHeading);
 
