@@ -5,7 +5,9 @@ import { SimVarPublisher } from 'msfssdk/instruments';
 export interface PFDSimvars {
     coldDark: number,
     elec: number,
+    elecFo: number,
     potentiometer_captain: number;
+    potentiometer_fo: number;
     pitch: number;
     roll: number;
     heading: number;
@@ -93,7 +95,10 @@ export interface PFDSimvars {
 export enum PFDVars {
     ColdDark = 'L:A32NX_COLD_AND_DARK_SPAWN',
     elec = 'L:A32NX_ELEC_AC_ESS_BUS_IS_POWERED',
+    elecFo = 'L:A32NX_ELEC_AC_2_BUS_IS_POWERED',
     potentiometer_captain= 'LIGHT POTENTIOMETER:88',
+    potentiometer_fo= 'LIGHT POTENTIOMETER:90',
+
     pitch = 'L:A32NX_ADIRS_IR_1_PITCH',
     roll = 'L:A32NX_ADIRS_IR_1_ROLL',
     heading = 'L:A32NX_ADIRS_IR_1_HEADING',
@@ -184,7 +189,11 @@ export class PFDSimvarPublisher extends SimVarPublisher<PFDSimvars> {
     private static simvars = new Map<keyof PFDSimvars, SimVarDefinition>([
         ['coldDark', { name: PFDVars.ColdDark, type: SimVarValueType.Number }],
         ['elec', { name: PFDVars.elec, type: SimVarValueType.Bool }],
+        ['elecFo', { name: PFDVars.elecFo, type: SimVarValueType.Bool }],
+
         ['potentiometer_captain', { name: PFDVars.potentiometer_captain, type: SimVarValueType.Number }],
+        ['potentiometer_fo', { name: PFDVars.potentiometer_fo, type: SimVarValueType.Number }],
+
         ['pitch', { name: PFDVars.pitch, type: SimVarValueType.Number }],
         ['roll', { name: PFDVars.roll, type: SimVarValueType.Number }],
         ['heading', { name: PFDVars.heading, type: SimVarValueType.Number }],

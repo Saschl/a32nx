@@ -198,6 +198,8 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
 
     private lastAlphaProtSub = Subject.create(0);
 
+    private barTimeout= 0;
+
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
@@ -267,13 +269,14 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
         // showBars replacement
         pf.on('onGround').whenChanged().handle((g) => {
             if (g === 1) {
-                this.showBarsRef.instance.setAttribute('style', 'display:none');
-                this.barberPoleRef.instance.setAttribute('style', 'display:none');
+                this.showBarsRef.instance.setAttribute('style', 'display: none');
+                this.barberPoleRef.instance.setAttribute('style', 'display: none');
+                clearTimeout(this.barTimeout);
             } else {
-                setTimeout(() => {
+                this.barTimeout = setTimeout(() => {
                     this.showBarsRef.instance.setAttribute('style', 'display:block');
                     this.barberPoleRef.instance.setAttribute('style', 'display:block');
-                }, 10000);
+                }, 10000) as unknown as number;
             }
         });
     }

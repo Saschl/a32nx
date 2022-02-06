@@ -50,8 +50,11 @@ class A32NX_PFD extends BaseInstrument {
         this.clock.init();
 
         this.simVarPublisher.subscribe('elec');
+        this.simVarPublisher.subscribe('elecFo');
+
         this.simVarPublisher.subscribe('coldDark');
         this.simVarPublisher.subscribe('potentiometer_captain');
+        this.simVarPublisher.subscribe('potentiometer_fo');
         this.simVarPublisher.subscribe('pitch');
         this.simVarPublisher.subscribe('roll');
         this.simVarPublisher.subscribe('heading');

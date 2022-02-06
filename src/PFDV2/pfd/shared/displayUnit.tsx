@@ -2,6 +2,7 @@ import { DisplayComponent, EventBus, FSComponent, Subject, VNode } from 'msfssdk
 
 import './common.scss';
 
+import { NXDataStore } from '@shared/persistence';
 import { PFDSimvars } from './PFDSimvarPublisher';
 
 type DisplayUnitProps = {
@@ -22,9 +23,6 @@ enum DisplayUnitState {
 export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
     // FIXME obvious
     private state: Subject<DisplayUnitState> = Subject.create<DisplayUnitState>(DisplayUnitState.Off);// this.props.coldDark ? DisplayUnitState.Off : DisplayUnitState.Standby;
-    // const [timer, setTimer] = useState<number | null>(null);
-
-    // const [potentiometer] = useSimVar(`LIGHT POTENTIOMETER:${this.props.potentiometerIndex}`, 'percent over 100', 200);
 
     private readonly simvarPublisher;
 
@@ -41,23 +39,39 @@ export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
     constructor(props: DisplayUnitProps) {
         super(props);
         this.simvarPublisher = this.props.bus.getSubscriber<PFDSimvars>();
-
-        // const consumer = subscriber.on('elec');
-        // this.electricityState = ConsumerSubject.create(consumer, 0);
     }
 
     public onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        // this.updateState();
+        const url = document.getElementsByTagName('a32nx-pfd')[0].getAttribute('url');
+        const displayIndex = url ? parseInt(url.substring(url.length - 1), 10) : 0;
 
         this.simvarPublisher.on('potentiometer_captain').whenChanged().handle((value) => {
-            this.potentiometer = value;
-            this.updateState();
+            if (displayIndex === 1) {
+                this.potentiometer = value;
+                this.updateState();
+            }
+        });
+
+        this.simvarPublisher.on('potentiometer_fo').whenChanged().handle((value) => {
+            if (displayIndex === 2) {
+                this.potentiometer = value;
+                this.updateState();
+            }
         });
         this.simvarPublisher.on('elec').whenChanged().handle((value) => {
-            this.electricityState = value;
-            this.updateState();
+            if (displayIndex === 1) {
+                this.electricityState = value;
+                this.updateState();
+            }
+        });
+
+        this.simvarPublisher.on('elecFo').whenChanged().handle((value) => {
+            if (displayIndex === 2) {
+                this.electricityState = value;
+                this.updateState();
+            }
         });
 
         this.state.sub((v) => {
@@ -74,25 +88,8 @@ export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
         }, true);
     }
 
-    /*      useUpdate((deltaTime) => {
-        if (timer !== null) {
-            if (timer > 0) {
-                setTimer(timer - (deltaTime / 1000));
-            } else if (state === DisplayUnitState.Standby) {
-                setState(DisplayUnitState.Off);
-                setTimer(null);
-            } else if (state === DisplayUnitState.Selftest) {
-                setState(DisplayUnitState.On);
-                setTimer(null);
-            }
-        }
-    }); */
-
     setTimer(time: number) {
-        console.log('setting timouet');
         this.timeOut = window.setTimeout(() => {
-            console.log('firimng timouet');
-
             if (this.state.get() === DisplayUnitState.Standby) {
                 this.state.set(DisplayUnitState.Off);
             } if (this.state.get() === DisplayUnitState.Selftest) {
@@ -109,13 +106,10 @@ export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
             this.setTimer(10);
         } else if (this.state.get() === DisplayUnitState.Standby && (this.potentiometer !== 0 && this.electricityState !== 0)) {
             this.state.set(DisplayUnitState.On);
-            // setTimer(null);
             clearTimeout(this.timeOut);
         } else if (this.state.get() === DisplayUnitState.Off && (this.potentiometer !== 0 && this.electricityState !== 0 && !this.props.failed)) {
             this.state.set(DisplayUnitState.Selftest);
-            this.setTimer(1);
-
-            // setTimer(parseInt(NXDataStore.get('CONFIG_SELF_TEST_TIME', '15')));
+            this.setTimer(parseInt(NXDataStore.get('CONFIG_SELF_TEST_TIME', '15')));
         } else if (this.state.get() === DisplayUnitState.Selftest && (this.potentiometer === 0 || this.electricityState === 0)) {
             this.state.set(DisplayUnitState.Off);
             clearTimeout(this.timeOut);
@@ -151,14 +145,5 @@ export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
             </>
 
         );
-
-        /*    return (
-            <svg class="dcdu-lines">
-            <g>
-                <path d="m 21 236 h 450" />
-                <path d="m 130 246 v 124" />
-                <path d="m 362 246 v 124" />
-            </g>
-        </svg>); */
     }
 }

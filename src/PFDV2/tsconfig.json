@@ -1,5 +1,4 @@
 {
-
 "compilerOptions": {
   "incremental": false, /* Enables incremental builds */
   "target": "es2017", /* Specifies the ES2017 target, compatible with Coherent GT */
@@ -12,5 +11,8 @@
   "jsxFactory": "FSComponent.buildComponent", /* Required for FSComponent framework JSX */
   "jsxFragmentFactory": "FSComponent.Fragment", /* Required for FSComponent framework JSX */
   "jsx": "react" /* Required for FSComponent framework JSX */,
+  "paths": {
+    "@shared/*": ["../shared/src/*"]
+  }
 }
 }

@@ -236,11 +236,39 @@ class FlightPathVector extends DisplayComponent<{bus: EventBus}> {
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
+        const url = document.getElementsByTagName('a32nx-pfd')[0].getAttribute('url');
+        const displayIndex = url ? parseInt(url.substring(url.length - 1), 10) : 0;
+
         const sub = this.props.bus.getSubscriber<PFDSimvars>();
         const arSub = this.props.bus.getSubscriber<Arinc429Values>();
 
+        sub.on('fd1Active').whenChanged().handle((fd) => {
+            if (displayIndex === 1) {
+                this.isActive = this.isActive && fd;
+                if (this.isActive) {
+                    this.bird.instance.style.visibility = 'visible';
+                    this.birdPath.instance.style.visibility = 'visible';
+                } else {
+                    this.bird.instance.style.visibility = 'hidden';
+                    this.birdPath.instance.style.visibility = 'hidden';
+                }
+            }
+        });
+
+        sub.on('fd2Active').whenChanged().handle((fd) => {
+            if (displayIndex === 2) {
+                this.isActive = this.isActive && fd;
+                if (this.isActive) {
+                    this.bird.instance.style.visibility = 'visible';
+                    this.birdPath.instance.style.visibility = 'visible';
+                } else {
+                    this.bird.instance.style.visibility = 'hidden';
+                    this.birdPath.instance.style.visibility = 'hidden';
+                }
+            }
+        });
         sub.on('trkFpaActive').handle((a) => {
-            this.isActive = a;
+            this.isActive = this.isActive && a;
             if (this.isActive) {
                 this.bird.instance.style.visibility = 'visible';
                 this.birdPath.instance.style.visibility = 'visible';

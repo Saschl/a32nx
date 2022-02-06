@@ -19,7 +19,7 @@ export const VnavConfig = {
     /**
      * Whether to emit ToD pseudo waypoint
      */
-    VNAV_EMIT_TOD: true,
+    VNAV_EMIT_TOD: false,
 
     /**
      * Whether to emit (DECEL) pseudo waypoint

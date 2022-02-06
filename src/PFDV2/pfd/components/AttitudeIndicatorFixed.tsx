@@ -306,15 +306,8 @@ class FlightDirector extends DisplayComponent<{ bus: EventBus }> {
 
         const sub = this.props.bus.getSubscriber<PFDSimvars>();
 
-        /*    sub.on('fdYawCommand').whenChanged().handle(fy => {
-            this.fdYawCommand = fy;
-
-            if(this.isActive()) {
-                this.setOffset()
-            } else {
-                this.fdRef.instance.setAttribute('visibility', 'false')
-            }
-        }) */
+        const url = document.getElementsByTagName('a32nx-pfd')[0].getAttribute('url');
+        const displayIndex = url ? parseInt(url.substring(url.length - 1), 10) : 0;
 
         sub.on('activeLateralMode').whenChanged().handle((vm) => {
             this.lateralMode = vm;
@@ -336,14 +329,28 @@ class FlightDirector extends DisplayComponent<{ bus: EventBus }> {
             }
         });
 
-        // FIXME, differentiate between 1 and 2 (left and right seat)
+        // FIXME make differentiation better
         sub.on('fd1Active').whenChanged().handle((fd) => {
-            this.fdActive = fd;
+            if (displayIndex === 1) {
+                this.fdActive = fd;
 
-            if (this.isActive()) {
-                this.fdRef.instance.style.display = 'inline';
-            } else {
-                this.fdRef.instance.style.display = 'none';
+                if (this.isActive()) {
+                    this.fdRef.instance.style.display = 'inline';
+                } else {
+                    this.fdRef.instance.style.display = 'none';
+                }
+            }
+        });
+
+        sub.on('fd2Active').whenChanged().handle((fd) => {
+            if (displayIndex === 2) {
+                this.fdActive = fd;
+
+                if (this.isActive()) {
+                    this.fdRef.instance.style.display = 'inline';
+                } else {
+                    this.fdRef.instance.style.display = 'none';
+                }
             }
         });
 
