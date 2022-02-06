@@ -326,12 +326,14 @@ class FlightPathVector extends DisplayComponent<{bus: EventBus}> {
     }
 
     private handlePath() {
-        const showLateralFD = this.activeLateralMode !== 0 && this.activeLateralMode !== 34 && this.activeLateralMode !== 40;
-        const showVerticalFD = this.activeVerticalMode !== 0 && this.activeVerticalMode !== 34;
-        if (!showVerticalFD && !showLateralFD) {
-            this.birdPath.instance.style.visibility = 'hidden';
-        } else {
-            this.birdPath.instance.style.visibility = 'visible';
+        if (this.isTrkFpaActive && this.isFdActive) {
+            const showLateralFD = this.activeLateralMode !== 0 && this.activeLateralMode !== 34 && this.activeLateralMode !== 40;
+            const showVerticalFD = this.activeVerticalMode !== 0 && this.activeVerticalMode !== 34;
+            if (!showVerticalFD && !showLateralFD) {
+                this.birdPath.instance.style.visibility = 'hidden';
+            } else {
+                this.birdPath.instance.style.visibility = 'visible';
+            }
         }
     }
 
