@@ -620,7 +620,6 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
         });
 
         sub.on('selectedFpa').whenChanged().handle((fpa) => {
-            // FIXME use the svs instead of getSimvar again
             this.FPA = fpa;
             this.getText(this.activeVerticalModeSub.get());
         });
@@ -628,25 +627,28 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
         sub.on('ap_vs_selected').whenChanged().handle((svs) => {
             // FIXME use the svs instead of getSimvar again
             this.getText(this.activeVerticalModeSub.get());
-            this.displayModeChangedPath(10000);
+            // this.displayModeChangedPath(10000);
         });
 
         sub.on('fma_mode_reversion').whenChanged().handle((r) => {
-            this.displayModeChangedPath(10000);
-
             if (r) {
                 this.inModeReversionPathRef.instance.setAttribute('visibility', 'visible');
                 this.boxClassSub.set('NormalStroke None');
+                this.displayModeChangedPath(10000);
             } else {
                 this.inModeReversionPathRef.instance.setAttribute('visibility', 'hidden');
                 this.boxClassSub.set('NormalStroke White');
+                this.displayModeChangedPath(0, true);
             }
         });
 
         sub.on('fma_speed_protection').whenChanged().handle((protection) => {
-            this.displayModeChangedPath(10000);
             if (!protection) {
+                this.displayModeChangedPath(0, true);
                 this.speedProtectionPathRef.instance.setAttribute('visibility', 'hidden');
+            } else {
+                this.displayModeChangedPath(10000);
+                this.speedProtectionPathRef.instance.setAttribute('visibility', 'visible');
             }
         });
     }
@@ -662,7 +664,7 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
 
                 <text ref={this.fmaTextRef} xml:space="preserve" class="FontMedium MiddleAlign Green" x="49.921795" y="7.1040988">
 
-                    {/* set directly via innerhtmkl as tspan was invisble for some reason when set here */}
+                    {/* set directly via innerhtml as tspan was invisble for some reason when set here */}
 
                 </text>
             </g>
