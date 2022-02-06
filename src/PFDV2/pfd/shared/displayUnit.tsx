@@ -21,8 +21,7 @@ enum DisplayUnitState {
 }
 
 export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
-    // FIXME obvious
-    private state: Subject<DisplayUnitState> = Subject.create<DisplayUnitState>(DisplayUnitState.Off);// this.props.coldDark ? DisplayUnitState.Off : DisplayUnitState.Standby;
+    private state: Subject<DisplayUnitState> = Subject.create<DisplayUnitState>(SimVar.GetSimVarValue('L:A32NX_COLD_AND_DARK_SPAWN', 'Bool') ? DisplayUnitState.Off : DisplayUnitState.Standby);
 
     private readonly simvarPublisher;
 
