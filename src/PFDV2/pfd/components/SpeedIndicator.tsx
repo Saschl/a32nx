@@ -2,32 +2,14 @@ import { ClockEvents, DisplayComponent, EventBus, FSComponent, NodeReference, Su
 import { LagFilter, RateLimiter, SmoothSin } from './PFDUtils';
 import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 import { Arinc429Word } from '../shared/arinc429';
-import { VerticalTape } from './NewVerticalTape';
+import { VerticalTape } from './VerticalTape';
 import { SimplaneValues } from '../shared/SimplaneValueProvider';
 import { Arinc429Values } from '../shared/ArincValueProvider';
 
 const ValueSpacing = 10;
 const DistanceSpacing = 10;
 const DisplayRange = 42;
-/*
-const GraduationElement = (speed: number, offset: number) => {
-    if (speed < 30) {
-        return null;
-    }
 
-    let text = '';
-    if (speed % 20 === 0) {
-        text = Math.abs(speed).toString().padStart(3, '0');
-    }
-
-    return (
-        <g transform={`translate(0 ${offset})`}>
-            <path class="NormalStroke White" d="m19.031 80.818h-2.8206" />
-            <text class="FontMedium MiddleAlign White" x="8.0348943" y="82.936722">{text}</text>
-        </g>
-    );
-};
- */
 class V1BugElement extends DisplayComponent<{bus: EventBus}> {
     private offsetSub = Subject.create('translate3d(0px, 0px, 0px)');
 

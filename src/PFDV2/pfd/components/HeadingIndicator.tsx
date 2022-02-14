@@ -1,6 +1,5 @@
 import { DisplayComponent, EventBus, FSComponent, HEvent, Subject, Subscribable, VNode } from 'msfssdk';
-import { HorizontalTape } from './PFDUtils';
-import { Arinc429Word } from '../shared/arinc429';
+import { HorizontalTape } from './HorizontalTape';
 import { getSmallestAngle } from '../shared/utils';
 import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 import { Arinc429Values } from '../shared/ArincValueProvider';
@@ -9,39 +8,6 @@ import { SimplaneValues } from '../shared/SimplaneValueProvider';
 const DisplayRange = 24;
 const DistanceSpacing = 7.555;
 const ValueSpacing = 5;
-
-class GraduationElement extends DisplayComponent<{heading: number, offset: number}> {
-    render(): VNode {
-        let text = '';
-        let classText = '';
-        let tickLength = 3.8302;
-        let textYPos: number | undefined;
-
-        const roundedHeading = Math.round(this.props.heading);
-        if (roundedHeading % 10 === 0) {
-            if (roundedHeading % 30 === 0) {
-                classText = 'FontMedium';
-                textYPos = 154.74206;
-            } else {
-                classText = 'FontSmallest';
-                textYPos = 154.27985;
-            }
-            let textVal = Math.round(this.props.heading / 10) % 36;
-            if (textVal < 0) {
-                textVal += 36;
-            }
-            text = textVal.toString();
-        } else {
-            tickLength *= 0.42;
-        }
-        return (
-            <g id="HeadingTick" transform={`translate(${this.props.offset} 0)`}>
-                <path class="NormalStroke White" d={`m68.913 145.34v${tickLength}`} />
-                <text id="HeadingLabel" class={`White MiddleAlign ${classText}`} x="68.979425" y={textYPos}>{text}</text>
-            </g>
-        );
-    }
-}
 
 interface HeadingTapeProps {
     bus: EventBus;

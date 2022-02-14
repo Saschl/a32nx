@@ -4,12 +4,12 @@ import { Arinc429Word } from '../shared/arinc429';
 import {
     calculateHorizonOffsetFromPitch,
     calculateVerticalOffsetFromRoll,
-    HorizontalTape,
     LagFilter,
 } from './PFDUtils';
 import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 import { Arinc429Values } from '../shared/ArincValueProvider';
 import { getSmallestAngle } from '../shared/utils';
+import { HorizontalTape } from './HorizontalTape';
 
 const DisplayRange = 35;
 const DistanceSpacing = 15;
@@ -48,13 +48,13 @@ export class Horizon extends DisplayComponent<HorizonProps> {
 
         const apfd = this.props.bus.getSubscriber<Arinc429Values>();
 
-        apfd.on('pitchAr').handle((pitch) => {
-            const multiplier = Math.pow(10, 2);
-            const currentValueAtPrecision = Math.round(pitch.value * multiplier) / multiplier;
+        apfd.on('pitchAr').withArinc429Precision(2).handle((pitch) => {
+            /*  const multiplier = Math.pow(10, 2);
+            const currentValueAtPrecision = Math.round(pitch.value * multiplier) / multiplier; */
             if (pitch.isNormalOperation()) {
                 this.pitchGroupRef.instance.style.display = 'block';
 
-                this.pitchGroupRef.instance.style.transform = `translate3d(0px, ${calculateHorizonOffsetFromPitch(-currentValueAtPrecision)}px, 0px)`;
+                this.pitchGroupRef.instance.style.transform = `translate3d(0px, ${calculateHorizonOffsetFromPitch(-pitch.value)}px, 0px)`;
             } else {
                 this.pitchGroupRef.instance.style.display = 'none';
             }
@@ -177,7 +177,6 @@ export class Horizon extends DisplayComponent<HorizonProps> {
                 <HorizontalTape
                     type="horizon"
                     bus={this.props.bus}
-                    bugs={bugs}
                     displayRange={DisplayRange}
                     valueSpacing={ValueSpacing}
                     distanceSpacing={DistanceSpacing}
@@ -309,14 +308,14 @@ class FlightPathVector extends DisplayComponent<{bus: EventBus}> {
             this.FDRollOrder = fdr;
             const FDRollOffset = (this.FDRollOrder - this.roll.value) * 0.77;
 
-            this.birdPathWings.instance.style.transform = `rotate(${FDRollOffset} 15.5 15.5)`;
+            this.birdPathWings.instance.setAttribute('transform', `rotate(${FDRollOffset} 15.5 15.5)`);
 
             this.moveBird();
         });
 
         arSub.on('rollAr').handle((r) => {
             this.roll = r;
-            this.wings.instance.style.transform = `rotate(${-this.roll.value} 15.5 15.5)`;
+            this.wings.instance.setAttribute('transform', `rotate(${-this.roll.value} 15.5 15.5)`);
         });
 
         arSub.on('pitchAr').handle((p) => {
@@ -413,11 +412,6 @@ class TailstrikeIndicator extends DisplayComponent<{bus: EventBus}> {
 
         sub.on('radio_alt').handle((ra) => {
             this.tailStrikeConditions.altitude = ra;
-            this.needsUpdate = true;
-        });
-
-        sub.on('altitudeAr').handle((a) => {
-            this.tailStrikeConditions.altitude = a.value;
             this.needsUpdate = true;
         });
 
@@ -551,46 +545,62 @@ class SideslipIndicator extends DisplayComponent<SideslipIndicatorProps> {
 
     private classNameSub = Subject.create('Yellow');
 
-    private rollTriangleSub = Subject.create('');
+    private rollTriangle = FSComponent.createRef<SVGPathElement>();
 
-    private slideSlipSub = Subject.create('');
+    private slideSlip = FSComponent.createRef<SVGPathElement>();
+
+    private onGround = 1;
+
+    private roll = new Arinc429Word(0);
 
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        const sub = this.props.bus.getSubscriber<Arinc429Values>();
+        const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
+
+        sub.on('onGround').whenChanged().handle((og) => {
+            this.onGround = og;
+            this.determineSlideSlip();
+        });
 
         sub.on('rollAr').handle((roll) => {
-            const verticalOffset = calculateVerticalOffsetFromRoll(roll.value);
-            const isOnGround = SimVar.GetSimVarValue('SIM ON GROUND', 'number');
-            let offset = 0;
-            if (isOnGround) {
-                // on ground, lateral g is indicated. max 0.3g, max deflection is 15mm
-                const latAcc = SimVar.GetSimVarValue('ACCELERATION BODY X', 'G Force');
-                const accInG = Math.min(0.3, Math.max(-0.3, latAcc));
-                offset = -accInG * 15 / 0.3;
-            } else {
-                const beta = SimVar.GetSimVarValue('INCIDENCE BETA', 'degrees');
-                const betaTarget = SimVar.GetSimVarValue('L:A32NX_BETA_TARGET', 'Number');
-                offset = Math.max(Math.min(beta - betaTarget, 15), -15);
-            }
-
-            const betaTargetActive = SimVar.GetSimVarValue('L:A32NX_BETA_TARGET_ACTIVE', 'Number') === 1;
-            const SIIndexOffset = this.sideslipIndicatorFilter.step(offset, this.props.instrument.deltaTime / 1000);
-
-            this.rollTriangleSub.set(`translate(0 ${verticalOffset})`);
-            this.classNameSub.set(`${betaTargetActive ? 'Cyan' : 'Yellow'}`);
-            this.slideSlipSub.set(`translate(${SIIndexOffset} 0)`);
+            this.roll = roll;
+            this.determineSlideSlip();
         });
+    }
+
+    private determineSlideSlip() {
+        const multiplier = 100;
+        const currentValueAtPrecision = Math.round(this.roll.value * multiplier) / multiplier;
+        const verticalOffset = calculateVerticalOffsetFromRoll(currentValueAtPrecision);
+        let offset = 0;
+
+        if (this.onGround) {
+            // on ground, lateral g is indicated. max 0.3g, max deflection is 15mm
+            const latAcc = SimVar.GetSimVarValue('ACCELERATION BODY X', 'G Force');
+            const accInG = Math.min(0.3, Math.max(-0.3, latAcc));
+            offset = -accInG * 15 / 0.3;
+        } else {
+            const beta = SimVar.GetSimVarValue('INCIDENCE BETA', 'degrees');
+            const betaTarget = SimVar.GetSimVarValue('L:A32NX_BETA_TARGET', 'Number');
+            offset = Math.max(Math.min(beta - betaTarget, 15), -15);
+        }
+
+        const betaTargetActive = SimVar.GetSimVarValue('L:A32NX_BETA_TARGET_ACTIVE', 'Number') === 1;
+        const SIIndexOffset = this.sideslipIndicatorFilter.step(offset, this.props.instrument.deltaTime / 1000);
+
+        this.rollTriangle.instance.style.transform = `translate(0 ${verticalOffset})`;
+        this.classNameSub.set(`${betaTargetActive ? 'Cyan' : 'Yellow'}`);
+        this.slideSlip.instance.setAttribute('transform', `translate(${SIIndexOffset} 0)`);
     }
 
     render(): VNode {
         return (
-            <g id="RollTriangleGroup" transform={this.rollTriangleSub} class="NormalStroke Yellow CornerRound">
+            <g id="RollTriangleGroup" ref={this.rollTriangle} class="NormalStroke Yellow CornerRound">
                 <path d="m66.074 43.983 2.8604-4.2333 2.8604 4.2333z" />
                 <path
                     id="SideSlipIndicator"
-                    transform={this.slideSlipSub}
+                    ref={this.slideSlip}
                     d="m73.974 47.208-1.4983-2.2175h-7.0828l-1.4983 2.2175z"
                 />
             </g>

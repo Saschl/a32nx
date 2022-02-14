@@ -3,7 +3,7 @@ import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 import { Arinc429Word } from '../shared/arinc429';
 import { DigitalAltitudeReadout } from './DigitalAltitudeReadout';
 import { SimplaneValues } from '../shared/SimplaneValueProvider';
-import { VerticalTape } from './NewVerticalTape';
+import { VerticalTape } from './VerticalTape';
 import { Arinc429Values } from '../shared/ArincValueProvider';
 
 const DisplayRange = 600;
@@ -428,17 +428,17 @@ class SelectedAltIndicator extends DisplayComponent<SelectedAltIndicatorProps> {
         return (
             <>
                 <g id="SelectedAltLowerGroup" ref={this.lowerGroupRef}>
-                    <text id="SelectedAltLowerText" ref={this.SelectedAltLowerText} class="FontMedium EndAlign Cyan" x="135.7511" y="128.70299" xml:space="preserve">{this.textSub}</text>
+                    <text id="SelectedAltLowerText" ref={this.SelectedAltLowerText} class="FontMedium EndAlign Cyan" x="135.7511" y="128.70299" style="white-space: pre">{this.textSub}</text>
                     <text id="SelectedAltLowerFLText" ref={this.SelectedAltLowerFLText} class="FontSmall MiddleAlign Cyan" x="120.87094" y="128.71681">FL</text>
                 </g>
                 <g id="SelectedAltUpperGroup" ref={this.upperGroupRef}>
-                    <text id="SelectedAltUpperText" ref={this.SelectedAltUpperText} class="FontMedium EndAlign Cyan" x="136.22987" y="37.250134" xml:space="preserve">{this.textSub}</text>
+                    <text id="SelectedAltUpperText" ref={this.SelectedAltUpperText} class="FontMedium EndAlign Cyan" x="136.22987" y="37.250134" style="white-space: pre">{this.textSub}</text>
                     <text id="SelectedAltUpperFLText" ref={this.SelectedAltUpperFLText} class="FontSmall MiddleAlign Cyan" x="120.85925" y="37.125755">FL</text>
                 </g>
                 <g id="AltTapeTargetSymbol" ref={this.targetGroupRef}>
                     <path class="BlackFill" ref={this.BlackFill} />
                     <path class="NormalStroke Cyan" ref={this.targetSymbolRef} d="m122.79 83.831v6.5516h-7.0514v-8.5675l2.0147-1.0079m4.8441-3.0238v-6.5516h-6.8588v8.5675l2.0147 1.0079" />
-                    <text id="AltTapeTargetText" ref={this.AltTapeTargetText} class="FontMedium StartAlign Cyan" x="118.228" y="83.067062" xml:space="preserve">{this.textSub}</text>
+                    <text id="AltTapeTargetText" ref={this.AltTapeTargetText} class="FontMedium StartAlign Cyan" x="118.228" y="83.067062" style="white-space: pre">{this.textSub}</text>
                 </g>
             </>
         );

@@ -12,7 +12,8 @@
   "jsxFragmentFactory": "FSComponent.Fragment", /* Required for FSComponent framework JSX */
   "jsx": "react" /* Required for FSComponent framework JSX */,
   "paths": {
-    "@shared/*": ["../shared/src/*"]
+    "@shared/*": ["../shared/src/*"],
+    "@fmgc/*": ["../fmgc/src/*"],
   }
 }
 }

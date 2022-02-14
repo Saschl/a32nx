@@ -90,6 +90,7 @@ export interface PFDSimvars {
     tcasFail: boolean;
     engOneRunning: boolean;
     engTwoRunning: boolean;
+    expediteMode: boolean;
   }
 
 export enum PFDVars {
@@ -181,6 +182,7 @@ export enum PFDVars {
     tcasFail = 'L:A32NX_TCAS_FAULT',
     engOneRunning = 'GENERAL ENG COMBUSTION:1',
     engTwoRunning = 'GENERAL ENG COMBUSTION:2',
+    expediteMode = 'L:A32NX_FMA_EXPEDITE_MODE',
 
   }
 
@@ -206,7 +208,7 @@ export class PFDSimvarPublisher extends SimVarPublisher<PFDSimvars> {
         ['fma_mode_reversion', { name: PFDVars.fma_mode_reversion, type: SimVarValueType.Number }],
         ['fma_speed_protection', { name: PFDVars.fma_speed_protection, type: SimVarValueType.Number }],
         ['AThrMode', { name: PFDVars.AThrMode, type: SimVarValueType.Number }],
-        ['ap_vs_selected', { name: PFDVars.ap_vs_selected, type: SimVarValueType.Number }],
+        ['ap_vs_selected', { name: PFDVars.ap_vs_selected, type: SimVarValueType.FPM }],
         ['radio_alt', { name: PFDVars.radio_alt, type: SimVarValueType.Feet }],
         ['approachCapability', { name: PFDVars.approachCapability, type: SimVarValueType.Number }],
         ['ap1Active', { name: PFDVars.ap1Active, type: SimVarValueType.Bool }],
@@ -289,6 +291,7 @@ export class PFDSimvarPublisher extends SimVarPublisher<PFDSimvars> {
 
         ['engOneRunning', { name: PFDVars.engOneRunning, type: SimVarValueType.Bool }],
         ['engTwoRunning', { name: PFDVars.engTwoRunning, type: SimVarValueType.Bool }],
+        ['expediteMode', { name: PFDVars.expediteMode, type: SimVarValueType.Bool }],
 
     ])
 

@@ -1,7 +1,7 @@
-// import { createDeltaTimeCalculator, getSimVar, renderTarget } from '../util.js';
-
 import { DisplayComponent, EventBus, FSComponent, Subject, Subscribable, VNode } from 'msfssdk';
+import { ArmedLateralMode, ArmedVerticalMode, isArmed, LateralMode, VerticalMode } from '@shared/autopilot.js';
 import { Arinc429Word } from '../shared/arinc429';
+
 import { Arinc429Values } from '../shared/ArincValueProvider';
 import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 
@@ -41,6 +41,12 @@ export class FMA extends DisplayComponent<{ bus: EventBus }> {
 
     private armedVerticalModeSub = Subject.create(0);
 
+    private athrModeMessage = 0;
+
+    private machPreselVal = 0;
+
+    private speedPreselVal = 0;
+
     private firstBorderRef = FSComponent.createRef<SVGPathElement>();
 
     private secondBorderRef = FSComponent.createRef<SVGPathElement>();
@@ -56,113 +62,73 @@ export class FMA extends DisplayComponent<{ bus: EventBus }> {
         return false;
     }
 
+    private handleFMABorders() {
+        const isAttExcessive = this.attExcessive(this.pitch, this.roll);
+
+        this.isAttExcessiveSub.set(isAttExcessive);
+        const sharedModeActive = this.activeLateralMode === 32 || this.activeLateralMode === 33
+        || this.activeLateralMode === 34 || (this.activeLateralMode === 20 && this.activeVerticalMode === 24);
+        const BC3Message = getBC3Message(isAttExcessive, this.armedVerticalModeSub.get())[0] !== null;
+
+        const engineMessage = this.athrModeMessage;
+        const AB3Message = (this.machPreselVal !== -1
+            || this.speedPreselVal !== -1) && BC3Message && engineMessage === 0;
+
+        let secondBorder: string;
+        if (sharedModeActive && !isAttExcessive) {
+            secondBorder = '';
+        } else if (BC3Message) {
+            secondBorder = 'm66.241 0.33732v15.766';
+        } else {
+            secondBorder = 'm66.241 0.33732v20.864';
+        }
+
+        let firstBorder: string;
+        if (AB3Message && !isAttExcessive) {
+            firstBorder = 'm33.117 0.33732v15.766';
+        } else {
+            firstBorder = 'm33.117 0.33732v20.864';
+        }
+
+        this.firstBorderRef.instance.setAttribute('d', firstBorder);
+        this.secondBorderRef.instance.setAttribute('d', secondBorder);
+    }
+
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        const fm = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
+        const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
 
-        fm.on('rollAr').handle((r) => {
+        sub.on('rollAr').handle((r) => {
             this.roll = r;
         });
 
-        fm.on('pitchAr').handle((p) => {
+        sub.on('pitchAr').handle((p) => {
             this.pitch = p;
         });
 
-        fm.on('fmaVerticalArmed').whenChanged().handle((a) => {
+        sub.on('fmaVerticalArmed').whenChanged().handle((a) => {
             this.armedVerticalModeSub.set(a);
-            const isAttExcessive = this.attExcessive(this.pitch, this.roll);
-
-            this.isAttExcessiveSub.set(isAttExcessive);
-            const sharedModeActive = this.activeLateralMode === 32 || this.activeLateralMode === 33 || this.activeLateralMode === 34 || (this.activeLateralMode === 20 && this.activeVerticalMode === 24);
-            const BC3Message = getBC3Message(isAttExcessive, a)[0] !== null;
-
-            const engineMessage = SimVar.GetSimVarValue('L:A32NX_AUTOTHRUST_MODE_MESSAGE', 'enum');
-            const AB3Message = (SimVar.GetSimVarValue('L:A32NX_MachPreselVal', 'mach') !== -1
-                || SimVar.GetSimVarValue('L:A32NX_SpeedPreselVal', 'knots') !== -1) && BC3Message && engineMessage === 0;
-
-            let secondBorder: string;
-            if (sharedModeActive && !isAttExcessive) {
-                secondBorder = '';
-            } else if (BC3Message) {
-                secondBorder = 'm66.241 0.33732v15.766';
-            } else {
-                secondBorder = 'm66.241 0.33732v20.864';
-            }
-
-            let firstBorder: string;
-            if (AB3Message && !isAttExcessive) {
-                firstBorder = 'm33.117 0.33732v15.766';
-            } else {
-                firstBorder = 'm33.117 0.33732v20.864';
-            }
-
-            this.firstBorderRef.instance.setAttribute('d', firstBorder);
-            this.secondBorderRef.instance.setAttribute('d', secondBorder);
+            this.handleFMABorders();
         });
 
-        fm.on('activeLateralMode').whenChanged().handle((activeLateralMode) => {
-            const isAttExcessive = this.attExcessive(this.pitch, this.roll);
+        sub.on('activeLateralMode').whenChanged().handle((activeLateralMode) => {
             this.activeLateralMode = activeLateralMode;
-
-            this.isAttExcessiveSub.set(isAttExcessive);
-            const sharedModeActive = activeLateralMode === 32 || activeLateralMode === 33 || activeLateralMode === 34 || (activeLateralMode === 20 && this.activeVerticalMode === 24);
-            const BC3Message = getBC3Message(isAttExcessive)[0] !== null;
-
-            const engineMessage = SimVar.GetSimVarValue('L:A32NX_AUTOTHRUST_MODE_MESSAGE', 'enum');
-            const AB3Message = (SimVar.GetSimVarValue('L:A32NX_MachPreselVal', 'mach') !== -1
-                || SimVar.GetSimVarValue('L:A32NX_SpeedPreselVal', 'knots') !== -1) && BC3Message && engineMessage === 0;
-
-            let secondBorder: string;
-            if (sharedModeActive && !isAttExcessive) {
-                secondBorder = '';
-            } else if (BC3Message) {
-                secondBorder = 'm66.241 0.33732v15.766';
-            } else {
-                secondBorder = 'm66.241 0.33732v20.864';
-            }
-
-            let firstBorder: string;
-            if (AB3Message && !isAttExcessive) {
-                firstBorder = 'm33.117 0.33732v15.766';
-            } else {
-                firstBorder = 'm33.117 0.33732v20.864';
-            }
-
-            this.firstBorderRef.instance.setAttribute('d', firstBorder);
-            this.secondBorderRef.instance.setAttribute('d', secondBorder);
+            this.handleFMABorders();
         });
-        fm.on('activeVerticalMode').whenChanged().handle((activeVerticalMode) => {
-            const isAttExcessive = this.attExcessive(this.pitch, this.roll);
+        sub.on('activeVerticalMode').whenChanged().handle((activeVerticalMode) => {
             this.activeVerticalMode = activeVerticalMode;
-            const sharedModeActive = this.activeLateralMode === 32
-             || this.activeLateralMode === 33 || this.activeLateralMode === 34 || (this.activeLateralMode === 20 && activeVerticalMode === 24);
-            const BC3Message = getBC3Message(isAttExcessive)[0] !== null;
+            this.handleFMABorders();
+        });
 
-            const engineMessage = SimVar.GetSimVarValue('L:A32NX_AUTOTHRUST_MODE_MESSAGE', 'enum');
-            const AB3Message = (SimVar.GetSimVarValue('L:A32NX_MachPreselVal', 'mach') !== -1
-                || SimVar.GetSimVarValue('L:A32NX_SpeedPreselVal', 'knots') !== -1) && BC3Message && engineMessage === 0;
+        sub.on('speedPreselVal').whenChanged().handle((s) => {
+            this.speedPreselVal = s;
+            this.handleFMABorders();
+        });
 
-            let secondBorder: string;
-            if (sharedModeActive && !isAttExcessive) {
-                secondBorder = '';
-            } else if (BC3Message) {
-                secondBorder = 'm66.241 0.33732v15.766';
-            } else {
-                secondBorder = 'm66.241 0.33732v20.864';
-            }
-
-            let firstBorder: string;
-            if (AB3Message && !isAttExcessive) {
-                firstBorder = 'm33.117 0.33732v15.766';
-            } else {
-                firstBorder = 'm33.117 0.33732v20.864';
-            }
-
-            this.hiddenClassSub.set(isAttExcessive ? 'hidden' : 'visible');
-
-            this.firstBorderRef.instance.setAttribute('d', firstBorder);
-            this.secondBorderRef.instance.setAttribute('d', secondBorder);
+        sub.on('machPreselVal').whenChanged().handle((m) => {
+            this.machPreselVal = m;
+            this.handleFMABorders();
         });
     }
 
@@ -458,8 +424,6 @@ class AB3Cell extends DisplayComponent<{bus: EventBus}> {
 }
 
 class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscribable<string>}> {
-    private textSub = Subject.create<string>('V/S');
-
     private boxClassSub = Subject.create('');
 
     private boxPathStringSub = Subject.create('');
@@ -474,16 +438,19 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
 
     private fmaTextRef = FSComponent.createRef<SVGTextElement>();
 
-    private addidionalTextSub = Subject.create('V/S');
+    private selectedVS = 0;
+
+    private inSpeedProtection = 0;
+
+    private expediteMode = false;
 
     private FPA = 0;
 
-    private getText(activeVerticalMode: number): boolean {
+    private getText(): boolean {
         let text: string;
         let additionalText: string = '';
-        let inProtection = false;
 
-        switch (activeVerticalMode) {
+        switch (this.activeVerticalModeSub.get()) {
         case 31:
             text = 'G/S';
             break;
@@ -510,7 +477,7 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
             text = 'DES';
             break;
         case 13:
-            if (SimVar.GetSimVarValue('L:A32NX_FMA_EXPEDITE_MODE', 'bool')) {
+            if (this.expediteMode) {
                 text = 'EXP DES';
             } else {
                 text = 'OP DES';
@@ -520,7 +487,7 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
             text = 'CLB';
             break;
         case 12:
-            if (SimVar.GetSimVarValue('L:A32NX_FMA_EXPEDITE_MODE', 'bool')) {
+            if (this.expediteMode) {
                 text = 'EXP CLB';
             } else {
                 text = 'OP CLB';
@@ -546,7 +513,6 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
         //     text = 'ALT CRZ';
         //     break;
         case 15: {
-            inProtection = SimVar.GetSimVarValue('L:A32NX_FMA_SPEED_PROTECTION_MODE', 'bool');
             const FPAText = `${(this.FPA >= 0 ? '+' : '')}${(Math.round(this.FPA * 10) / 10).toFixed(1)}°`;
 
             text = 'FPA';
@@ -554,9 +520,7 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
             break;
         }
         case 14: {
-            const VS = SimVar.GetSimVarValue('L:A32NX_AUTOPILOT_VS_SELECTED', 'feet per minute');
-            inProtection = SimVar.GetSimVarValue('L:A32NX_FMA_SPEED_PROTECTION_MODE', 'bool');
-            const VSText = `${(VS >= 0 ? '+' : '')}${Math.round(VS).toString()}`.padStart(5, ' ');
+            const VSText = `${(this.selectedVS >= 0 ? '+' : '')}${Math.round(this.selectedVS).toString()}`.padStart(5, ' ');
 
             text = 'V/S';
 
@@ -567,7 +531,7 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
             text = '';
         }
 
-        const inSpeedProtection = inProtection && (activeVerticalMode === 14 || activeVerticalMode === 15);
+        const inSpeedProtection = this.inSpeedProtection && (this.activeVerticalModeSub.get() === 14 || this.activeVerticalModeSub.get() === 15);
 
         if (inSpeedProtection) {
             this.speedProtectionPathRef.instance.setAttribute('visibility', 'visible');
@@ -575,31 +539,18 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
             this.speedProtectionPathRef.instance.setAttribute('visibility', 'hidden');
         }
 
-        // DONE
-        /*        if(inModeReversion) {
-            this.inModeReversionPathRef.instance.setAttribute('visibility','visible');
-        } else {
-            this.inModeReversionPathRef.instance.setAttribute('visibility','hidden');
-        } */
-
         const tcasModeDisarmedMessage = SimVar.GetSimVarValue('L:A32NX_AUTOPILOT_TCAS_MESSAGE_DISARM', 'bool');
 
         const boxclass = inSpeedProtection ? 'NormalStroke None' : 'NormalStroke White';
         this.boxClassSub.set(boxclass);
 
-        const boxPathString = activeVerticalMode === 50 && tcasModeDisarmedMessage ? 'm34.656 1.8143h29.918v13.506h-29.918z' : 'm34.656 1.8143h29.918v6.0476h-29.918z';
+        const boxPathString = this.activeVerticalModeSub.get() === 50 && tcasModeDisarmedMessage ? 'm34.656 1.8143h29.918v13.506h-29.918z' : 'm34.656 1.8143h29.918v6.0476h-29.918z';
 
         this.boxPathStringSub.set(boxPathString);
 
-        this.textSub.set(text);
-        this.addidionalTextSub.set(additionalText);
+        this.inProtectionClassSub.set(inSpeedProtection ? 'PulseCyanFill' : 'Cyan');
 
-        // console.log(text);
-        // console.log(additionalText);
-
-        this.inProtectionClassSub.set(inProtection ? 'PulseCyanFill' : 'Cyan');
-
-        this.fmaTextRef.instance.innerHTML = `<tspan>${text}</tspan><tspan xml:space="preserve" class=${inProtection ? 'PulseCyanFill' : 'Cyan'}>${additionalText}</tspan>`;
+        this.fmaTextRef.instance.innerHTML = `<tspan>${text}</tspan><tspan xml:space="preserve" class=${inSpeedProtection ? 'PulseCyanFill' : 'Cyan'}>${additionalText}</tspan>`;
 
         return text.length > 0;
     }
@@ -609,9 +560,9 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
 
         const sub = this.props.bus.getSubscriber<PFDSimvars>();
 
-        sub.on('activeVerticalMode').whenChanged().handle((activeVerticalModem) => {
-            this.activeVerticalModeSub.set(activeVerticalModem);
-            const isShow = this.getText(activeVerticalModem);
+        sub.on('activeVerticalMode').whenChanged().handle((activeVerticalMode) => {
+            this.activeVerticalModeSub.set(activeVerticalMode);
+            const isShow = this.getText();
             if (isShow) {
                 this.displayModeChangedPath(10000);
             } else {
@@ -621,13 +572,12 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
 
         sub.on('selectedFpa').whenChanged().handle((fpa) => {
             this.FPA = fpa;
-            this.getText(this.activeVerticalModeSub.get());
+            this.getText();
         });
 
         sub.on('ap_vs_selected').whenChanged().handle((svs) => {
-            // FIXME use the svs instead of getSimvar again
-            this.getText(this.activeVerticalModeSub.get());
-            // this.displayModeChangedPath(10000);
+            this.selectedVS = svs;
+            this.getText();
         });
 
         sub.on('fma_mode_reversion').whenChanged().handle((r) => {
@@ -643,6 +593,7 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
         });
 
         sub.on('fma_speed_protection').whenChanged().handle((protection) => {
+            this.inSpeedProtection = protection;
             if (!protection) {
                 this.displayModeChangedPath(0, true);
                 this.speedProtectionPathRef.instance.setAttribute('visibility', 'hidden');
@@ -650,6 +601,12 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
                 this.displayModeChangedPath(10000);
                 this.speedProtectionPathRef.instance.setAttribute('visibility', 'visible');
             }
+            this.getText();
+        });
+
+        sub.on('expediteMode').whenChanged().handle((e) => {
+            this.expediteMode = e;
+            this.getText();
         });
     }
 
@@ -662,7 +619,7 @@ class B1Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subscri
                 <path ref={this.speedProtectionPathRef} class="NormalStroke Amber BlinkInfinite" d="m34.656 1.8143h29.918v6.0476h-29.918z" />
                 <path ref={this.inModeReversionPathRef} class="NormalStroke White BlinkInfinite" d="m34.656 1.8143h29.918v6.0476h-29.918z" />
 
-                <text ref={this.fmaTextRef} xml:space="preserve" class="FontMedium MiddleAlign Green" x="49.921795" y="7.1040988">
+                <text ref={this.fmaTextRef} style="white-space: pre" class="FontMedium MiddleAlign Green" x="49.921795" y="7.1040988">
 
                     {/* set directly via innerhtml as tspan was invisble for some reason when set here */}
 
@@ -738,11 +695,11 @@ class B2Cell extends DisplayComponent<{bus: EventBus}> {
 class C1Cell extends ShowForSecondsComponent<{visibility: Subscribable<string>, bus: EventBus}> {
     private textSub = Subject.create('');
 
-    private idSub = Subject.create(0);
-
     private activeLateralMode = 0;
 
     private activeVerticalMode = 0;
+
+    private armedVerticalMode = 0;
 
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
@@ -750,67 +707,71 @@ class C1Cell extends ShowForSecondsComponent<{visibility: Subscribable<string>, 
         const sub = this.props.bus.getSubscriber<PFDSimvars>();
 
         sub.on('activeLateralMode').whenChanged().handle((lm) => {
-            const isShown = this.updateText(lm, this.activeVerticalMode);
+            this.activeLateralMode = lm;
+
+            const isShown = this.updateText();
             if (isShown) {
                 this.displayModeChangedPath(10000);
             } else {
                 this.displayModeChangedPath(0, true);
             }
-            this.activeLateralMode = lm;
         });
 
         sub.on('activeVerticalMode').whenChanged().handle((lm) => {
-            const isShown = this.updateText(this.activeLateralMode, lm);
+            this.activeVerticalMode = lm;
+
+            const isShown = this.updateText();
             if (isShown) {
                 this.displayModeChangedPath(10000);
             } else {
                 this.displayModeChangedPath(0, true);
             }
-            this.activeVerticalMode = lm;
+        });
+
+        sub.on('fmaVerticalArmed').whenChanged().handle((va) => {
+            this.armedVerticalMode = va;
+
+            const isShown = this.updateText();
+            if (isShown) {
+                this.displayModeChangedPath(10000);
+            } else {
+                this.displayModeChangedPath(0, true);
+            }
         });
     }
 
-    private updateText(activeLateralMode: number, activeVerticalMode: number): boolean {
-        const armedVerticalBitmask = SimVar.GetSimVarValue('L:A32NX_FMA_VERTICAL_ARMED', 'number');
-        const finalArmed = (armedVerticalBitmask >> 5) & 1;
+    private updateText(): boolean {
+        const finalArmed = (this.armedVerticalMode >> 5) & 1;
 
         let text: string;
-        let id = 0;
-        if (activeLateralMode === 50) {
+        if (this.activeLateralMode === LateralMode.GA_TRACK) {
             text = 'GA TRK';
-            id = 1;
-        } else if (activeLateralMode === 30) {
+        } else if (this.activeLateralMode === LateralMode.LOC_CPT) {
             text = 'LOC *';
-            id = 3;
-        } else if (activeLateralMode === 10) {
+        } else if (this.activeLateralMode === LateralMode.HDG) {
             text = 'HDG';
-            id = 5;
-        } else if (activeLateralMode === 40) {
+        } else if (this.activeLateralMode === LateralMode.RWY) {
             text = 'RWY';
-            id = 6;
-        } else if (activeLateralMode === 41) {
+        } else if (this.activeLateralMode === LateralMode.RWY_TRACK) {
             text = 'RWY TRK';
-            id = 7;
-        } else if (activeLateralMode === 11) {
+        } else if (this.activeLateralMode === LateralMode.TRACK) {
             text = 'TRACK';
-            id = 8;
-        } else if (activeLateralMode === 31) {
+        } else if (this.activeLateralMode === LateralMode.LOC_TRACK) {
             text = 'LOC';
-            id = 10;
-        } else if (activeLateralMode === 20 && !finalArmed && activeVerticalMode !== 24) {
+        } else if (this.activeLateralMode === LateralMode.NAV && !finalArmed && this.activeVerticalMode !== VerticalMode.FINAL) {
             text = 'NAV';
-            id = 13;
-        } else if (activeLateralMode === 20 && finalArmed && activeVerticalMode !== 24) {
+        } else if (this.activeLateralMode === LateralMode.NAV && finalArmed && this.activeVerticalMode !== VerticalMode.FINAL) {
             text = 'APP NAV';
-            id = 12;
         } else {
             text = '';
         }
 
-        this.textSub.set(text);
-        this.idSub.set(id);
+        const hasChanged = text.length > 0 && text !== this.textSub.get();
 
-        return text.length > 0 && this.activeLateralMode !== activeLateralMode;
+        if (hasChanged || text.length === 0) {
+            this.textSub.set(text);
+        }
+        return hasChanged;
     }
 
     render(): VNode {
@@ -854,10 +815,10 @@ class C2Cell extends DisplayComponent<{bus: EventBus}> {
     private textSub = Subject.create('');
 
     private getText() {
-        const navArmed = (this.fmaLateralArmed >> 0) & 1;
-        const locArmed = (this.fmaLateralArmed >> 1) & 1;
+        const navArmed = isArmed(this.fmaLateralArmed, ArmedLateralMode.NAV);
+        const locArmed = isArmed(this.fmaLateralArmed, ArmedLateralMode.LOC);
 
-        const finalArmed = (this.fmaVerticalArmed >> 5) & 1;
+        const finalArmed = isArmed(this.fmaVerticalArmed, ArmedVerticalMode.FINAL);
 
         let text: string = '';
         if (locArmed) {
@@ -868,7 +829,7 @@ class C2Cell extends DisplayComponent<{bus: EventBus}> {
             // case 3:
             //     text = 'F-LOC';
             //     break;
-        } else if (navArmed && (finalArmed || this.activeVerticalMode === 24)) {
+        } else if (navArmed && (finalArmed || this.activeVerticalMode === VerticalMode.FINAL)) {
             text = 'APP NAV';
         } else if (navArmed) {
             text = 'NAV';
@@ -911,6 +872,27 @@ class BC1Cell extends ShowForSecondsComponent<{bus:EventBus, visibility: Subscri
 
     private textSub = Subject.create('');
 
+    private setText() {
+        let text: string;
+        if (this.lastVerticalMode === VerticalMode.ROLL_OUT) {
+            text = 'ROLL OUT';
+        } else if (this.lastVerticalMode === VerticalMode.FLARE) {
+            text = 'FLARE';
+        } else if (this.lastVerticalMode === VerticalMode.LAND) {
+            text = 'LAND';
+        } else if (this.lastVerticalMode === VerticalMode.FINAL && this.lastLateralMode === LateralMode.NAV) {
+            text = 'FINAL APP';
+        } else {
+            text = '';
+        }
+        if (text !== '') {
+            this.displayModeChangedPath(9000);
+        } else {
+            this.displayModeChangedPath(0, true);
+        }
+        this.textSub.set(text);
+    }
+
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
@@ -918,51 +900,12 @@ class BC1Cell extends ShowForSecondsComponent<{bus:EventBus, visibility: Subscri
 
         sub.on('activeVerticalMode').whenChanged().handle((v) => {
             this.lastVerticalMode = v;
-
-            let text: string;
-            if (this.lastVerticalMode === 34) {
-                text = 'ROLL OUT';
-            } else if (this.lastVerticalMode === 33) {
-                text = 'FLARE';
-            } else if (this.lastVerticalMode === 32) {
-                text = 'LAND';
-            } else if (this.lastVerticalMode === 24 && this.lastLateralMode === 20) {
-                text = 'FINAL APP';
-            } else {
-                text = '';
-            }
-            if (text !== '') {
-                this.displayModeChangedPath(9000);
-            } else {
-                this.displayModeChangedPath(0, true);
-            }
-            this.textSub.set(text);
+            this.setText();
         });
 
         sub.on('activeLateralMode').whenChanged().handle((l) => {
             this.lastLateralMode = l;
-
-            let text: string;
-            let id = 0;
-            if (this.lastVerticalMode === 34) {
-                text = 'ROLL OUT';
-                id = 1;
-            } else if (this.lastVerticalMode === 33) {
-                text = 'FLARE';
-                id = 2;
-            } else if (this.lastVerticalMode === 32) {
-                text = 'LAND';
-                id = 3;
-            } else if (this.lastVerticalMode === 24 && this.lastLateralMode === 20) {
-                text = 'FINAL APP';
-                id = 4;
-            } else {
-                text = '';
-            }
-            if (text !== '') {
-                this.displayModeChangedPath(9000);
-            }
-            this.textSub.set(text);
+            this.setText();
         });
     }
 
@@ -976,8 +919,8 @@ class BC1Cell extends ShowForSecondsComponent<{bus:EventBus, visibility: Subscri
     }
 }
 
-const getBC3Message = (isAttExcessive: boolean, armedVerticalMode?: number) => {
-    const armedVerticalBitmask = armedVerticalMode ?? SimVar.GetSimVarValue('L:A32NX_FMA_VERTICAL_ARMED', 'number');
+const getBC3Message = (isAttExcessive: boolean, armedVerticalMode: number) => {
+    const armedVerticalBitmask = armedVerticalMode;
     const TCASArmed = (armedVerticalBitmask >> 6) & 1;
 
     const trkFpaDeselectedTCAS = SimVar.GetSimVarValue('L:A32NX_AUTOPILOT_TCAS_MESSAGE_TRK_FPA_DESELECTION', 'bool');
@@ -1048,24 +991,27 @@ class BC3Cell extends DisplayComponent<{ isAttExcessive: Subscribable<boolean>, 
 
     private isAttExcessive = false;
 
+    private armedVerticalMode = 0;
+
+    private fillBC3Cell() {
+        const [text, className] = getBC3Message(this.isAttExcessive, this.armedVerticalMode);
+        this.classNameSub.set(`FontMedium MiddleAlign ${className}`);
+        if (text !== null) {
+            this.bc3Cell.instance.innerHTML = text;
+        }
+    }
+
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
         this.props.isAttExcessive.sub((e) => {
             this.isAttExcessive = e;
-            const [text, className] = getBC3Message(e);
-            this.classNameSub.set(`FontMedium MiddleAlign ${className}`);
-            if (text !== null) {
-                this.bc3Cell.instance.innerHTML = text;
-            }
+            this.fillBC3Cell();
         });
 
         this.props.verticalArmedMode.sub((v) => {
-            const [text, className] = getBC3Message(this.isAttExcessive, v);
-            this.classNameSub.set(`FontMedium MiddleAlign ${className}`);
-            if (text !== null) {
-                this.bc3Cell.instance.innerHTML = text;
-            }
+            this.armedVerticalMode = v;
+            this.fillBC3Cell();
         });
     }
 
@@ -1084,9 +1030,9 @@ class D1D2Cell extends ShowForSecondsComponent<{bus: EventBus, visibility: Subsc
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        const bus = this.props.bus.getSubscriber<PFDSimvars>();
+        const sub = this.props.bus.getSubscriber<PFDSimvars>();
 
-        bus.on('approachCapability').whenChanged().handle((c) => {
+        sub.on('approachCapability').whenChanged().handle((c) => {
             let text1: string;
             let text2: string | undefined;
             switch (c) {

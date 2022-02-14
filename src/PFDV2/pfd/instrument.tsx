@@ -147,6 +147,7 @@ class A32NX_PFD extends BaseInstrument {
         this.simVarPublisher.subscribe('tcasFail');
         this.simVarPublisher.subscribe('engOneRunning');
         this.simVarPublisher.subscribe('engTwoRunning');
+        this.simVarPublisher.subscribe('expediteMode');
 
         this.simVarPublisher.startPublish();
         this.hEventPublisher.startPublish();

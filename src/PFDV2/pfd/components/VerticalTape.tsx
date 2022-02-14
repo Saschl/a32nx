@@ -105,10 +105,12 @@ export class VerticalTape extends DisplayComponent<VerticalTapeProps> {
         super.onAfterRender(node);
 
         this.props.tapeValue.sub((newValue) => {
-            const clampedValue = Math.max(Math.min(newValue, this.props.upperLimit ?? Infinity), this.props.lowerLimit ?? -Infinity);
+            const multiplier = 100;
+            const currentValueAtPrecision = Math.round(newValue * multiplier) / multiplier;
+            const clampedValue = Math.max(Math.min(currentValueAtPrecision, this.props.upperLimit ?? Infinity), this.props.lowerLimit ?? -Infinity);
 
             let lowestValue = Math.max(Math.round((clampedValue - this.props.displayRange) / this.props.valueSpacing) * this.props.valueSpacing, this.props.lowerLimit);
-            if (lowestValue < newValue - this.props.displayRange) {
+            if (lowestValue < currentValueAtPrecision - this.props.displayRange) {
                 lowestValue += this.props.valueSpacing;
             }
 
@@ -144,31 +146,17 @@ export class VerticalTape extends DisplayComponent<VerticalTapeProps> {
                 }
             }
 
-            this.refElement.instance.style.transform = (`translate3d(0px, ${clampedValue * this.props.distanceSpacing / this.props.valueSpacing}px, 0px)`);
+            this.refElement.instance.style.transform = `translate3d(0px, ${clampedValue * this.props.distanceSpacing / this.props.valueSpacing}px, 0px)`;
         }, true);
     }
 
     render(): VNode {
-        // const bugElements: number[] = [];
-
-        /*    this.props.bugs.forEach((currentElement) => {
-            const value = currentElement[0];
-            const offset = -value * this.props.distanceSpacing / this.props.valueSpacing;
-            bugElements.push(offset);
-        }); */
         return (
             <g ref={this.refElement}>
                 {this.props.type === 'altitude' && this.buildAltitudeGraduationPoints()}
                 {this.props.type === 'speed' && this.buildSpeedGraduationPoints()}
                 {this.props.children}
-                {/*   {this.graduationElements.sub(leThing => {
-                   leThing.forEach(v => {
-                    <graduationElementFunction offset={v.offset} alt={v.elementValue} />
-                   })
-               })}  */}
-                {/*  {bugElements.forEach(offet => {
-                    <HeadingBug offset={offet}/>
-                })} */}
+
             </g>
         );
     }
