@@ -13,14 +13,19 @@ const DistanceSpacing = 7.5;
 class LandingElevationIndicator extends DisplayComponent<{bus: EventBus}> {
     private landingElevationIndicator = FSComponent.createRef<SVGPathElement>();
 
-    private altitude =0;
+    private altitude = 0;
 
     private landingElevation = 0;
+
+    private flightPhase = 0;
+
+    private delta = 0;
 
     private handleLandingElevation() {
         const delta = this.altitude - this.landingElevation;
         const offset = (delta - DisplayRange) * DistanceSpacing / ValueSpacing;
-        if (delta > DisplayRange) {
+        this.delta = delta;
+        if (delta > DisplayRange || (this.flightPhase !== 7 && this.flightPhase !== 8)) {
             this.landingElevationIndicator.instance.classList.add('HideLocDiamond');
         } else {
             this.landingElevationIndicator.instance.classList.remove('HideLocDiamond');
@@ -34,7 +39,9 @@ class LandingElevationIndicator extends DisplayComponent<{bus: EventBus}> {
         const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
 
         sub.on('fwcFlightPhase').whenChanged().handle((fp) => {
-            if (fp !== 7 && fp !== 8) {
+            this.flightPhase = fp;
+
+            if ((fp !== 7 && fp !== 8) || this.delta > DisplayRange) {
                 this.landingElevationIndicator.instance.classList.add('HideLocDiamond');
             } else {
                 this.landingElevationIndicator.instance.classList.remove('HideLocDiamond');
