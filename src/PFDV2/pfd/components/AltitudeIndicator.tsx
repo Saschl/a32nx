@@ -23,7 +23,7 @@ class LandingElevationIndicator extends DisplayComponent<{bus: EventBus}> {
         if (delta > DisplayRange) {
             this.landingElevationIndicator.instance.classList.add('HideLocDiamond');
         } else {
-            this.landingElevationIndicator.instance.classList.add('HideLocDiamond');
+            this.landingElevationIndicator.instance.classList.remove('HideLocDiamond');
         }
         this.landingElevationIndicator.instance.setAttribute('d', `m130.85 123.56h-13.096v${offset}h13.096z`);
     }
@@ -115,12 +115,6 @@ export class AltitudeIndicator extends DisplayComponent<AltitudeIndicatorProps> 
     }
 
     render(): VNode {
-        /*         if (!altitude.isNormalOperation()) {
-            return (
-                <AltTapeBackground />
-            );
-        } */
-
         return (
             <g id="AltitudeTape">
                 <AltTapeBackground />
