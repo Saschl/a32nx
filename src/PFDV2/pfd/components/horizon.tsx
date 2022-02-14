@@ -48,13 +48,13 @@ export class Horizon extends DisplayComponent<HorizonProps> {
 
         const apfd = this.props.bus.getSubscriber<Arinc429Values>();
 
-        apfd.on('pitchAr').withArinc429Precision(2).handle((pitch) => {
-            /*  const multiplier = Math.pow(10, 2);
-            const currentValueAtPrecision = Math.round(pitch.value * multiplier) / multiplier; */
+        apfd.on('pitchAr').handle((pitch) => {
+            const multiplier = Math.pow(10, 2);
+            const currentValueAtPrecision = Math.round(pitch.value * multiplier) / multiplier;
             if (pitch.isNormalOperation()) {
                 this.pitchGroupRef.instance.style.display = 'block';
 
-                this.pitchGroupRef.instance.style.transform = `translate3d(0px, ${calculateHorizonOffsetFromPitch(-pitch.value)}px, 0px)`;
+                this.pitchGroupRef.instance.style.transform = `translate3d(0px, ${calculateHorizonOffsetFromPitch(-currentValueAtPrecision)}px, 0px)`;
             } else {
                 this.pitchGroupRef.instance.style.display = 'none';
             }
