@@ -4,6 +4,7 @@ import { getSmallestAngle } from '../shared/utils';
 import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 import { Arinc429Values } from '../shared/ArincValueProvider';
 import { SimplaneValues } from '../shared/SimplaneValueProvider';
+import { getDisplayIndex } from '.';
 
 const DisplayRange = 24;
 const DistanceSpacing = 7.555;
@@ -34,13 +35,11 @@ export class HeadingTape extends DisplayComponent<HeadingTapeProps> {
                 return <></>;
             }
           */
-        const bugs = [] as [number][];
         return (
             <g ref={this.headingTapeRef}>
                 <path id="HeadingTapeBackground" d="m32.138 145.34h73.536v10.382h-73.536z" class="TapeBackground" />
                 <HorizontalTape
                     bus={this.props.bus}
-                    bugs={bugs}
                     type="headingTape"
                     displayRange={DisplayRange + 3}
                     valueSpacing={ValueSpacing}
@@ -61,11 +60,6 @@ export class HeadingOfftape extends DisplayComponent<{ bus: EventBus, failed: Su
     private ILSCourse = Subject.create(0);
 
     private lsPressed = Subject.create(false);
-
-    private getDisplayIndex = () => {
-        const url = document.getElementsByTagName('a32nx-pfd')[0].getAttribute('url');
-        return url ? parseInt(url.substring(url.length - 1), 10) : 0;
-    }
 
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
@@ -89,7 +83,7 @@ export class HeadingOfftape extends DisplayComponent<{ bus: EventBus, failed: Su
         });
 
         sub.on('hEvent').handle((eventName) => {
-            if (eventName === `A320_Neo_PFD_BTN_LS_${this.getDisplayIndex()}`) {
+            if (eventName === `A320_Neo_PFD_BTN_LS_${getDisplayIndex()}`) {
                 this.lsPressed.set(!this.lsPressed.get());
             }
         });

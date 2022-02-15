@@ -1,7 +1,7 @@
 import { ComponentProps, ConsumerSubject, DisplayComponent, EventBus, FSComponent, Subject, Subscribable, VNode } from 'msfssdk';
 import { Arinc429Word } from '../shared/arinc429';
+import { Arinc429Values } from '../shared/ArincValueProvider';
 import { DisplayUnit } from '../shared/displayUnit';
-import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 import '../style.scss';
 import { AltitudeIndicator, AltitudeIndicatorOfftape } from './AltitudeIndicator';
 import { AttitudeIndicatorFixedCenter, AttitudeIndicatorFixedUpper } from './AttitudeIndicatorFixed';
@@ -11,6 +11,11 @@ import { Horizon } from './horizon';
 import { LandingSystem } from './LandingSystemIndicator';
 import { AirspeedIndicator, AirspeedIndicatorOfftape, MachNumber } from './SpeedIndicator';
 import { VerticalSpeedIndicator } from './VerticalSpeedIndicator';
+
+export const getDisplayIndex = () => {
+    const url = document.getElementsByTagName('a32nx-pfd')[0].getAttribute('url');
+    return url ? parseInt(url.substring(url.length - 1), 10) : 0;
+};
 
 interface PFDProps extends ComponentProps {
     bus: EventBus;
@@ -27,13 +32,11 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
     public onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        const sub = this.props.bus.getSubscriber<PFDSimvars>();
+        const sub = this.props.bus.getSubscriber<Arinc429Values>();
 
-        sub.on('heading').handle((h) => {
-            const heading = new Arinc429Word(h);
-
-            if (this.headingFailed.get() !== heading.isNormalOperation()) {
-                this.headingFailed.set(!heading.isNormalOperation());
+        sub.on('headingAr').handle((h) => {
+            if (this.headingFailed.get() !== h.isNormalOperation()) {
+                this.headingFailed.set(!h.isNormalOperation());
             }
         });
     }

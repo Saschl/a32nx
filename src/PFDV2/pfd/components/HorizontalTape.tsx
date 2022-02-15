@@ -1,7 +1,5 @@
-import { EventBus, DisplayComponent, FSComponent, NodeReference, VNode } from 'msfssdk';
+import { EventBus, DisplayComponent, FSComponent, NodeReference, VNode, Subscribable } from 'msfssdk';
 import { Arinc429Values } from '../shared/ArincValueProvider';
-import { HeadingBug } from './horizon';
-import { calculateHorizonOffsetFromPitch } from './PFDUtils';
 
 interface HorizontalTapeProps {
     displayRange: number;
@@ -9,17 +7,18 @@ interface HorizontalTapeProps {
     distanceSpacing: number;
     type: 'horizon' | 'headingTape'
     bus: EventBus;
+    yOffset?: Subscribable<number>;
 }
 export class HorizontalTape extends DisplayComponent<HorizontalTapeProps> {
     private refElement = FSComponent.createRef<SVGGElement>();
-
-    private yOffset=0;
 
     private tapeOffset=0;
 
     private tickNumberRefs: NodeReference<SVGTextElement>[] = [];
 
     private currentDrawnHeading = 0;
+
+    private yOffset = 0;
 
     private buildHorizonTicks():{ticks: SVGPathElement[], labels?: SVGTextElement[]} {
         const result = { ticks: [] as SVGPathElement[], labels: [] as SVGTextElement[] };
@@ -121,20 +120,15 @@ export class HorizontalTape extends DisplayComponent<HorizontalTapeProps> {
 
         const pf = this.props.bus.getSubscriber<Arinc429Values>();
 
-        pf.on('pitchAr').handle((pitch) => {
-            if (this.props.type === 'horizon') {
-                const multiplier = 100;
-                const currentValueAtPrecision = Math.round(pitch.value * multiplier) / multiplier;
-                const yOffset = Math.max(Math.min(calculateHorizonOffsetFromPitch(-currentValueAtPrecision), 31.563), -31.563);
-                this.yOffset = yOffset;
-                this.refElement.instance.style.transform = `translate3d(${this.tapeOffset}px, ${yOffset}px, 0px)`;
-            }
+        this.props.yOffset?.sub((yOffset) => {
+            this.yOffset = yOffset;
+            this.refElement.instance.style.transform = `translate3d(${this.tapeOffset}px, ${yOffset}px, 0px)`;
         });
 
         pf.on('headingAr').handle((newVal) => {
             const multiplier = 100;
             const currentValueAtPrecision = Math.round(newVal.value * multiplier) / multiplier;
-            const tapeOffset = -currentValueAtPrecision % 10 * this.props.distanceSpacing / this.props.valueSpacing;
+            const tapeOffset = Math.round((-newVal.value % 10 * this.props.distanceSpacing / this.props.valueSpacing) * multiplier) / multiplier;
 
             if (currentValueAtPrecision / 10 >= this.currentDrawnHeading + 1 || currentValueAtPrecision / 10 <= this.currentDrawnHeading) {
                 this.currentDrawnHeading = Math.floor(currentValueAtPrecision / 10);
@@ -170,8 +164,6 @@ export class HorizontalTape extends DisplayComponent<HorizontalTapeProps> {
     }
 
     render(): VNode {
-        const bugElements: number[] = [];
-
         const tapeStuff = this.props.type === 'horizon' ? this.buildHorizonTicks() : this.buildHeadingTicks();
 
         return (
@@ -179,12 +171,8 @@ export class HorizontalTape extends DisplayComponent<HorizontalTapeProps> {
             <g id="HeadingTick" ref={this.refElement}>
 
                 {tapeStuff.ticks}
-
                 {this.props.type === 'headingTape' && tapeStuff.labels}
 
-                {bugElements.forEach((offet) => {
-                    <HeadingBug offset={offet} />;
-                })}
             </g>
 
         );

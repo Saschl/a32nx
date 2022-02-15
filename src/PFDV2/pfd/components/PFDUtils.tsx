@@ -1,9 +1,3 @@
-import { DisplayComponent, EventBus, FSComponent, NodeReference, Subscribable, VNode } from 'msfssdk';
-import { Arinc429Word } from '../shared/arinc429';
-import { HeadingBug } from './horizon';
-import { PFDSimvars } from '../shared/PFDSimvarPublisher';
-import { Arinc429Values } from '../shared/ArincValueProvider';
-
 export const calculateHorizonOffsetFromPitch = (pitch: number) => {
     if (pitch > -5 && pitch <= 20) {
         return pitch * 1.8;

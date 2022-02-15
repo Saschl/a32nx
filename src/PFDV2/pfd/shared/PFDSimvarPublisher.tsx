@@ -92,6 +92,7 @@ export interface PFDSimvars {
     engTwoRunning: boolean;
     expediteMode: boolean;
     setHoldSpeed: boolean;
+    vls: number;
   }
 
 export enum PFDVars {
@@ -185,6 +186,7 @@ export enum PFDVars {
     engTwoRunning = 'GENERAL ENG COMBUSTION:2',
     expediteMode = 'L:A32NX_FMA_EXPEDITE_MODE',
     setHoldSpeed = 'L:A32NX_PFD_MSG_SET_HOLD_SPEED',
+    vls = 'L:A32NX_SPEEDS_VLS',
 
   }
 
@@ -295,11 +297,12 @@ export class PFDSimvarPublisher extends SimVarPublisher<PFDSimvars> {
         ['engTwoRunning', { name: PFDVars.engTwoRunning, type: SimVarValueType.Bool }],
         ['expediteMode', { name: PFDVars.expediteMode, type: SimVarValueType.Bool }],
         ['setHoldSpeed', { name: PFDVars.setHoldSpeed, type: SimVarValueType.Bool }],
+        ['vls', { name: PFDVars.vls, type: SimVarValueType.Number }],
 
     ])
 
     /**
-     * Create a NavComSimVarPublisher
+     * Create a PFDSimvarPublisher
      * @param bus The EventBus to publish to
      */
     public constructor(bus: EventBus) {

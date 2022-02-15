@@ -333,7 +333,7 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
                     </VerticalTape>
 
                     <g ref={this.showBarsRef}>
-                        <VLsBar airspeed={this.speedSub} VAlphaProt={this.lastAlphaProtSub} />
+                        <VLsBar bus={this.props.bus} />
                         <VAlphaLimBar airspeed={this.speedSub} />
                     </g>
 
@@ -544,51 +544,60 @@ class SpeedTrendArrow extends DisplayComponent<{ airspeed: Subscribable<number>,
     }
 }
 
-class VLsBar extends DisplayComponent<{ VAlphaProt:Subscribable<number>, airspeed: Subscribable<number> }> {
+interface VLSState {
+    alphaProtSpeed: number;
+    airSpeed: number;
+    vls: number;
+}
+class VLsBar extends DisplayComponent<{ bus: EventBus }> {
     private previousTime = (new Date() as any).appTime();
-
-    private lastVls = 0;
 
     private vlsPath = Subject.create<string>('');
 
-    private lastVAlphaProt: number = 0;
-
-    private lastAirSpeed =0;
+    private vlsState: VLSState = {
+        alphaProtSpeed: 0,
+        airSpeed: 0,
+        vls: 0,
+    }
 
     private smoothSpeeds = (vlsDestination: number) => {
         const currentTime = (new Date() as any).appTime();
         const deltaTime = currentTime - this.previousTime;
 
         const seconds = deltaTime / 1000;
-        this.lastVls = SmoothSin(this.lastVls, vlsDestination, 0.5, seconds);
-        return this.lastVls;
+        const vls = SmoothSin(this.vlsState.vls, vlsDestination, 0.5, seconds);
+        this.previousTime = currentTime;
+        return vls;
     };
+
+    private setVlsPath(vls: number) {
+        const airSpeed = this.vlsState.airSpeed;
+
+        const VLsPos = (airSpeed - vls) * DistanceSpacing / ValueSpacing + 80.818;
+        const offset = (vls - this.vlsState.alphaProtSpeed) * DistanceSpacing / ValueSpacing;
+
+        this.vlsPath.set(`m19.031 ${VLsPos}h 1.9748v${offset}`);
+    }
 
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        this.props.VAlphaProt.sub((alpha) => {
-            this.lastVAlphaProt = alpha;
+        const sub = this.props.bus.getSubscriber<Arinc429Values & PFDSimvars & ClockEvents>();
 
-            const airSpeed = this.lastAirSpeed;
-
-            const VLs = this.smoothSpeeds(SimVar.GetSimVarValue('L:A32NX_SPEEDS_VLS', 'number'));
-
-            const VLsPos = (airSpeed - VLs) * DistanceSpacing / ValueSpacing + 80.818;
-            const offset = (VLs - this.lastVAlphaProt) * DistanceSpacing / ValueSpacing;
-
-            this.vlsPath.set(`m19.031 ${VLsPos}h 1.9748v${offset}`);
+        sub.on('alpha_prot').handle((a) => {
+            this.vlsState.alphaProtSpeed = a;
+            this.setVlsPath(this.vlsState.vls);
         });
 
-        this.props.airspeed.sub((airSpeed) => {
-            this.lastAirSpeed = airSpeed;
+        sub.on('speedAr').handle((s) => {
+            this.vlsState.airSpeed = s.value;
+            this.setVlsPath(this.vlsState.vls);
+        });
 
-            const VLs = this.smoothSpeeds(SimVar.GetSimVarValue('L:A32NX_SPEEDS_VLS', 'number'));
-
-            const VLsPos = (airSpeed - VLs) * DistanceSpacing / ValueSpacing + 80.818;
-            const offset = (VLs - this.lastVAlphaProt) * DistanceSpacing / ValueSpacing;
-
-            this.vlsPath.set(`m19.031 ${VLsPos}h 1.9748v${offset}`);
+        sub.on('vls').handle((vls) => {
+            const smoothedVls = this.smoothSpeeds(vls);
+            this.setVlsPath(smoothedVls);
+            this.vlsState.vls = smoothedVls;
         });
 
         /*     if (VLs - airspeed < -DisplayRange) {

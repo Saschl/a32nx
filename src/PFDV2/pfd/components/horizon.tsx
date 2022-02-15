@@ -1,4 +1,4 @@
-import { ClockEvents, DisplayComponent, EventBus, FSComponent, Subject, VNode } from 'msfssdk';
+import { ClockEvents, DisplayComponent, EventBus, FSComponent, Subject, Subscribable, VNode } from 'msfssdk';
 import { Arinc429Word } from '../shared/arinc429';
 
 import {
@@ -10,15 +10,71 @@ import { PFDSimvars } from '../shared/PFDSimvarPublisher';
 import { Arinc429Values } from '../shared/ArincValueProvider';
 import { getSmallestAngle } from '../shared/utils';
 import { HorizontalTape } from './HorizontalTape';
+import { SimplaneValues } from '../shared/SimplaneValueProvider';
+import { getDisplayIndex } from '.';
 
 const DisplayRange = 35;
 const DistanceSpacing = 15;
 const ValueSpacing = 10;
 
-export class HeadingBug extends DisplayComponent<{offset: number}> {
-    render(): VNode | null {
+class HeadingBug extends DisplayComponent<{bus: EventBus, isCaptainSide: boolean, yOffset: Subscribable<number>}> {
+    private isActive = false;
+
+    private selectedHeading = 0;
+
+    private heading = new Arinc429Word(0);
+
+    private horizonHeadingBug = FSComponent.createRef<SVGGElement>();
+
+    private yOffset = 0;
+
+    private calculateAndSetOffset() {
+        const headingDelta = getSmallestAngle(this.selectedHeading, this.heading.value);
+
+        const offset = headingDelta * DistanceSpacing / ValueSpacing;
+
+        if (Math.abs(offset) <= DisplayRange + 10) {
+            this.horizonHeadingBug.instance.style.transform = `translate3d(${offset}px, ${this.yOffset}px, 0px)`;
+        }
+    }
+
+    onAfterRender(node: VNode): void {
+        super.onAfterRender(node);
+
+        const sub = this.props.bus.getSubscriber<PFDSimvars & SimplaneValues & Arinc429Values>();
+
+        sub.on('selectedHeading').whenChanged().handle((s) => {
+            if (this.isActive) {
+                this.selectedHeading = s;
+                this.calculateAndSetOffset();
+            }
+        });
+
+        sub.on('headingAr').handle((h) => {
+            if (this.isActive) {
+                this.heading = h;
+                this.calculateAndSetOffset();
+            }
+        });
+
+        sub.on(this.props.isCaptainSide ? 'fd1Active' : 'fd2Active').whenChanged().handle((fd) => {
+            this.isActive = !fd;
+            if (this.isActive) {
+                this.horizonHeadingBug.instance.classList.remove('HideLocDiamond');
+            } else {
+                this.horizonHeadingBug.instance.classList.add('HideLocDiamond');
+            }
+        });
+
+        this.props.yOffset.sub((yOffset) => {
+            this.yOffset = yOffset;
+            this.calculateAndSetOffset();
+        });
+    }
+
+    render(): VNode {
         return (
-            <g id="HorizonHeadingBug" transform={`translate(${this.props.offset} 0)`}>
+            <g ref={this.horizonHeadingBug} id="HorizonHeadingBug">
                 <path class="ThickOutline" d="m68.906 80.823v-9.0213" />
                 <path class="ThickStroke Cyan" d="m68.906 80.823v-9.0213" />
             </g>
@@ -43,13 +99,15 @@ export class Horizon extends DisplayComponent<HorizonProps> {
 
     private rollGroupRef = FSComponent.createRef<SVGGElement>();
 
+    private yOffset = Subject.create(0);
+
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
         const apfd = this.props.bus.getSubscriber<Arinc429Values>();
 
         apfd.on('pitchAr').handle((pitch) => {
-            const multiplier = Math.pow(10, 2);
+            const multiplier = 100;
             const currentValueAtPrecision = Math.round(pitch.value * multiplier) / multiplier;
             if (pitch.isNormalOperation()) {
                 this.pitchGroupRef.instance.style.display = 'block';
@@ -58,10 +116,12 @@ export class Horizon extends DisplayComponent<HorizonProps> {
             } else {
                 this.pitchGroupRef.instance.style.display = 'none';
             }
+            const yOffset = Math.max(Math.min(calculateHorizonOffsetFromPitch(-currentValueAtPrecision), 31.563), -31.563);
+            this.yOffset.set(yOffset);
         });
 
         apfd.on('rollAr').handle((roll) => {
-            const multiplier = Math.pow(10, 3);
+            const multiplier = 100;
             const currentValueAtPrecision = Math.round(roll.value * multiplier) / multiplier;
             if (roll.isNormalOperation()) {
                 this.rollGroupRef.instance.style.display = 'block';
@@ -74,8 +134,6 @@ export class Horizon extends DisplayComponent<HorizonProps> {
     }
 
     render(): VNode {
-        /*   const yOffset = Math.max(Math.min(calculateHorizonOffsetFromPitch(-this.props.pitch.value), 31.563), -31.563); */
-
         const bugs: [number][] = [];
         if (!Number.isNaN(this.props.selectedHeading) && !this.props.FDActive) {
             bugs.push([this.props.selectedHeading]);
@@ -180,8 +238,9 @@ export class Horizon extends DisplayComponent<HorizonProps> {
                     displayRange={DisplayRange}
                     valueSpacing={ValueSpacing}
                     distanceSpacing={DistanceSpacing}
+                    yOffset={this.yOffset}
                 />
-
+                <HeadingBug bus={this.props.bus} isCaptainSide={getDisplayIndex() === 1} yOffset={this.yOffset} />
                 {/*    {this.props.heading.isNormalOperation()
                 && (
                     <HorizontalTape

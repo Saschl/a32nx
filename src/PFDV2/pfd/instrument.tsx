@@ -148,8 +148,8 @@ class A32NX_PFD extends BaseInstrument {
         this.simVarPublisher.subscribe('engOneRunning');
         this.simVarPublisher.subscribe('engTwoRunning');
         this.simVarPublisher.subscribe('expediteMode');
-
         this.simVarPublisher.subscribe('setHoldSpeed');
+        this.simVarPublisher.subscribe('vls');
 
         this.simVarPublisher.startPublish();
         this.hEventPublisher.startPublish();
