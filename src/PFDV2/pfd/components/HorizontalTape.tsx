@@ -128,7 +128,7 @@ export class HorizontalTape extends DisplayComponent<HorizontalTapeProps> {
         pf.on('headingAr').handle((newVal) => {
             const multiplier = 100;
             const currentValueAtPrecision = Math.round(newVal.value * multiplier) / multiplier;
-            const tapeOffset = Math.round((-newVal.value % 10 * this.props.distanceSpacing / this.props.valueSpacing) * multiplier) / multiplier;
+            const tapeOffset = -currentValueAtPrecision % 10 * this.props.distanceSpacing / this.props.valueSpacing;
 
             if (currentValueAtPrecision / 10 >= this.currentDrawnHeading + 1 || currentValueAtPrecision / 10 <= this.currentDrawnHeading) {
                 this.currentDrawnHeading = Math.floor(currentValueAtPrecision / 10);

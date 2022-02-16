@@ -93,6 +93,7 @@ export interface PFDSimvars {
     expediteMode: boolean;
     setHoldSpeed: boolean;
     vls: number;
+    alphaLim: number;
   }
 
 export enum PFDVars {
@@ -187,7 +188,7 @@ export enum PFDVars {
     expediteMode = 'L:A32NX_FMA_EXPEDITE_MODE',
     setHoldSpeed = 'L:A32NX_PFD_MSG_SET_HOLD_SPEED',
     vls = 'L:A32NX_SPEEDS_VLS',
-
+    alphaLim = 'L:A32NX_SPEEDS_ALPHA_MAX',
   }
 
 /** A publisher to poll and publish nav/com simvars. */
@@ -298,6 +299,7 @@ export class PFDSimvarPublisher extends SimVarPublisher<PFDSimvars> {
         ['expediteMode', { name: PFDVars.expediteMode, type: SimVarValueType.Bool }],
         ['setHoldSpeed', { name: PFDVars.setHoldSpeed, type: SimVarValueType.Bool }],
         ['vls', { name: PFDVars.vls, type: SimVarValueType.Number }],
+        ['alphaLim', { name: PFDVars.alphaLim, type: SimVarValueType.Number }],
 
     ])
 

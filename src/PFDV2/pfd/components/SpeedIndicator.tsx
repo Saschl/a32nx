@@ -334,7 +334,7 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
 
                     <g ref={this.showBarsRef}>
                         <VLsBar bus={this.props.bus} />
-                        <VAlphaLimBar airspeed={this.speedSub} />
+                        <VAlphaLimBar bus={this.props.bus} />
                     </g>
 
                     <SpeedTrendArrow airspeed={this.speedSub} instrument={this.props.instrument} />
@@ -611,28 +611,44 @@ class VLsBar extends DisplayComponent<{ bus: EventBus }> {
     }
 }
 
-class VAlphaLimBar extends DisplayComponent<{ airspeed: Subscribable<number> }> {
-    private offsetPath = Subject.create<string>('');
+class VAlphaLimBar extends DisplayComponent<{ bus: EventBus }> {
+    private VAlimIndicator = FSComponent.createRef<SVGPathElement>();
+
+    private airSpeed = new Arinc429Word(0);
+
+    private vAlphaLim = 0;
+
+    private setAlphaLimBarPath() {
+        if (this.vAlphaLim - this.airSpeed.value < -DisplayRange) {
+            this.VAlimIndicator.instance.style.visibility = 'hidden';
+        } else {
+            this.VAlimIndicator.instance.style.visibility = 'visible';
+
+            const delta = this.airSpeed.value - DisplayRange - this.vAlphaLim;
+            const offset = delta * DistanceSpacing / ValueSpacing;
+
+            this.VAlimIndicator.instance.setAttribute('d', `m19.031 123.56h3.425v${offset}h-3.425z`);
+        }
+    }
 
     onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        this.props.airspeed.sub((airSpeed) => {
-            const VAlphalim = SimVar.GetSimVarValue('L:A32NX_SPEEDS_ALPHA_MAX', 'number');
+        const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
 
-            if (VAlphalim - airSpeed < -DisplayRange) {
-                return null;
-            }
+        sub.on('speedAr').handle((s) => {
+            this.airSpeed = s;
+            this.setAlphaLimBarPath();
+        });
 
-            const delta = airSpeed - DisplayRange - VAlphalim;
-            const offset = delta * DistanceSpacing / ValueSpacing;
-
-            this.offsetPath.set(`m19.031 123.56h3.425v${offset}h-3.425z`);
+        sub.on('alphaLim').handle((al) => {
+            this.vAlphaLim = al;
+            this.setAlphaLimBarPath();
         });
     }
 
     render(): VNode {
-        return <path id="VAlimIndicator" class="Fill Red" d={this.offsetPath} />;
+        return <path ref={this.VAlimIndicator} id="VAlimIndicator" class="Fill Red" />;
     }
 }
 
