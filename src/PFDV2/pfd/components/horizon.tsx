@@ -34,7 +34,10 @@ class HeadingBug extends DisplayComponent<{bus: EventBus, isCaptainSide: boolean
         const offset = headingDelta * DistanceSpacing / ValueSpacing;
 
         if (Math.abs(offset) <= DisplayRange + 10) {
+            this.horizonHeadingBug.instance.classList.remove('HideLocDiamond');
             this.horizonHeadingBug.instance.style.transform = `translate3d(${offset}px, ${this.yOffset}px, 0px)`;
+        } else {
+            this.horizonHeadingBug.instance.classList.add('HideLocDiamond');
         }
     }
 
@@ -44,15 +47,15 @@ class HeadingBug extends DisplayComponent<{bus: EventBus, isCaptainSide: boolean
         const sub = this.props.bus.getSubscriber<PFDSimvars & SimplaneValues & Arinc429Values>();
 
         sub.on('selectedHeading').whenChanged().handle((s) => {
+            this.selectedHeading = s;
             if (this.isActive) {
-                this.selectedHeading = s;
                 this.calculateAndSetOffset();
             }
         });
 
         sub.on('headingAr').handle((h) => {
+            this.heading = h;
             if (this.isActive) {
-                this.heading = h;
                 this.calculateAndSetOffset();
             }
         });
@@ -68,7 +71,9 @@ class HeadingBug extends DisplayComponent<{bus: EventBus, isCaptainSide: boolean
 
         this.props.yOffset.sub((yOffset) => {
             this.yOffset = yOffset;
-            this.calculateAndSetOffset();
+            if (this.isActive) {
+                this.calculateAndSetOffset();
+            }
         });
     }
 
