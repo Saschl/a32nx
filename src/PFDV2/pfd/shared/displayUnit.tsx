@@ -1,16 +1,14 @@
-import { DisplayComponent, EventBus, FSComponent, Subject, VNode } from 'msfssdk';
+import { DisplayComponent, EventBus, FSComponent, Subscribable, VNode } from 'msfssdk';
 
 import './common.scss';
 
 import { NXDataStore } from '@shared/persistence';
 import { PFDSimvars } from './PFDSimvarPublisher';
+import { getDisplayIndex } from '../components';
 
 type DisplayUnitProps = {
-    // electricitySimvar: number
-    potentiometerIndex?: number
-    failed?: boolean,
-    coldDark?: boolean,
     bus: EventBus,
+    failed: Subscribable<boolean>;
 }
 
 enum DisplayUnitState {
@@ -21,7 +19,7 @@ enum DisplayUnitState {
 }
 
 export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
-    private state: Subject<DisplayUnitState> = Subject.create<DisplayUnitState>(SimVar.GetSimVarValue('L:A32NX_COLD_AND_DARK_SPAWN', 'Bool') ? DisplayUnitState.Off : DisplayUnitState.Standby);
+    private state: DisplayUnitState = SimVar.GetSimVarValue('L:A32NX_COLD_AND_DARK_SPAWN', 'Bool') ? DisplayUnitState.Off : DisplayUnitState.Standby;
 
     private readonly simvarPublisher;
 
@@ -37,6 +35,10 @@ export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
 
     private backLightBleedRef = FSComponent.createRef<HTMLDivElement>();
 
+    private isHomeCockpitMode = false;
+
+    private failed = false;
+
     constructor(props: DisplayUnitProps) {
         super(props);
         this.simvarPublisher = this.props.bus.getSubscriber<PFDSimvars>();
@@ -45,78 +47,70 @@ export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
     public onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        const url = document.getElementsByTagName('a32nx-pfd')[0].getAttribute('url');
-        const displayIndex = url ? parseInt(url.substring(url.length - 1), 10) : 0;
+        const isCaptainSide = getDisplayIndex() === 1;
 
-        this.simvarPublisher.on('potentiometer_captain').whenChanged().handle((value) => {
-            if (displayIndex === 1) {
-                this.potentiometer = value;
-                this.updateState();
-            }
+        this.simvarPublisher.on(isCaptainSide ? 'potentiometer_captain' : 'potentiometer_fo').whenChanged().handle((value) => {
+            this.potentiometer = value;
+            this.updateState();
         });
 
-        this.simvarPublisher.on('potentiometer_fo').whenChanged().handle((value) => {
-            if (displayIndex === 2) {
-                this.potentiometer = value;
-                this.updateState();
-            }
-        });
-        this.simvarPublisher.on('elec').whenChanged().handle((value) => {
-            if (displayIndex === 1) {
-                this.electricityState = value;
-                this.updateState();
-            }
+        this.simvarPublisher.on(isCaptainSide ? 'elec' : 'elecFo').whenChanged().handle((value) => {
+            this.electricityState = value;
+            this.updateState();
         });
 
-        this.simvarPublisher.on('elecFo').whenChanged().handle((value) => {
-            if (displayIndex === 2) {
-                this.electricityState = value;
-                this.updateState();
-            }
+        this.props.failed.sub((f) => {
+            this.failed = f;
+            this.updateState();
         });
 
-        this.state.sub((v) => {
-            if (v === DisplayUnitState.Selftest) {
-                this.selfTestRef.instance.style.display = 'block';
-                this.pfdRef.instance.style.display = 'none';
-                this.backLightBleedRef.instance.style.display = 'block';
-            } else if (v === DisplayUnitState.On) {
-                this.selfTestRef.instance.style.display = 'none';
-                this.pfdRef.instance.style.display = 'block';
-                this.backLightBleedRef.instance.style.display = 'block';
-            } else {
-                this.selfTestRef.instance.style.display = 'none';
-                this.pfdRef.instance.style.display = 'none';
-                this.backLightBleedRef.instance.style.display = 'none';
-            }
-        }, true);
+        NXDataStore.getAndSubscribe('HOME_COCKPIT_ENABLED', (_key, val) => {
+            this.isHomeCockpitMode = val === '1';
+            this.updateState();
+        }, '0');
     }
 
     setTimer(time: number) {
         this.timeOut = window.setTimeout(() => {
-            if (this.state.get() === DisplayUnitState.Standby) {
-                this.state.set(DisplayUnitState.Off);
-            } if (this.state.get() === DisplayUnitState.Selftest) {
-                this.state.set(DisplayUnitState.On);
+            if (this.state === DisplayUnitState.Standby) {
+                this.state = DisplayUnitState.Off;
+            } if (this.state === DisplayUnitState.Selftest) {
+                this.state = DisplayUnitState.On;
             }
+            this.updateState();
         }, time * 1000);
     }
 
     updateState() {
-        if (this.state.get() !== DisplayUnitState.Off && this.props.failed) {
-            this.state.set(DisplayUnitState.Off);
-        } else if (this.state.get() === DisplayUnitState.On && (this.potentiometer === 0 || this.electricityState === 0)) {
-            this.state.set(DisplayUnitState.Standby);
+        if (this.state !== DisplayUnitState.Off && this.failed) {
+            this.state = DisplayUnitState.Off;
+            clearTimeout(this.timeOut);
+        } else if (this.state === DisplayUnitState.On && (this.potentiometer === 0 || this.electricityState === 0)) {
+            this.state = DisplayUnitState.Standby;
             this.setTimer(10);
-        } else if (this.state.get() === DisplayUnitState.Standby && (this.potentiometer !== 0 && this.electricityState !== 0)) {
-            this.state.set(DisplayUnitState.On);
+        } else if (this.state === DisplayUnitState.Standby && (this.potentiometer !== 0 && this.electricityState !== 0)) {
+            this.state = DisplayUnitState.On;
             clearTimeout(this.timeOut);
-        } else if (this.state.get() === DisplayUnitState.Off && (this.potentiometer !== 0 && this.electricityState !== 0 && !this.props.failed)) {
-            this.state.set(DisplayUnitState.Selftest);
+        } else if (this.state === DisplayUnitState.Off && (this.potentiometer !== 0 && this.electricityState !== 0 && !this.failed)) {
+            this.state = DisplayUnitState.Selftest;
             this.setTimer(parseInt(NXDataStore.get('CONFIG_SELF_TEST_TIME', '15')));
-        } else if (this.state.get() === DisplayUnitState.Selftest && (this.potentiometer === 0 || this.electricityState === 0)) {
-            this.state.set(DisplayUnitState.Off);
+        } else if (this.state === DisplayUnitState.Selftest && (this.potentiometer === 0 || this.electricityState === 0)) {
+            this.state = DisplayUnitState.Off;
             clearTimeout(this.timeOut);
+        }
+
+        if (this.state === DisplayUnitState.Selftest) {
+            this.selfTestRef.instance.style.display = 'block';
+            this.pfdRef.instance.style.display = 'none';
+            this.backLightBleedRef.instance.style.display = this.isHomeCockpitMode ? 'none' : 'block';
+        } else if (this.state === DisplayUnitState.On) {
+            this.selfTestRef.instance.style.display = 'none';
+            this.pfdRef.instance.style.display = 'block';
+            this.backLightBleedRef.instance.style.display = this.isHomeCockpitMode ? 'none' : 'block';
+        } else {
+            this.selfTestRef.instance.style.display = 'none';
+            this.pfdRef.instance.style.display = 'none';
+            this.backLightBleedRef.instance.style.display = 'none';
         }
     }
 
@@ -128,7 +122,6 @@ export class DisplayUnit extends DisplayComponent<DisplayUnitProps> {
 
                 <svg ref={this.selfTestRef} class="SelfTest" viewBox="0 0 600 600">
                     <rect class="SelfTestBackground" x="0" y="0" width="100%" height="100%" />
-
                     <text
                         class="SelfTestText"
                         x="50%"

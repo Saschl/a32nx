@@ -1,4 +1,5 @@
-import { ComponentProps, ConsumerSubject, DisplayComponent, EventBus, FSComponent, Subject, Subscribable, VNode } from 'msfssdk';
+import { A320Failure, FailuresConsumer } from '@flybywiresim/failures';
+import { ClockEvents, ComponentProps, DisplayComponent, EventBus, FSComponent, Subject, VNode } from 'msfssdk';
 import { Arinc429Word } from '../shared/arinc429';
 import { Arinc429Values } from '../shared/ArincValueProvider';
 import { DisplayUnit } from '../shared/displayUnit';
@@ -25,27 +26,38 @@ interface PFDProps extends ComponentProps {
 export class PFDComponent extends DisplayComponent<PFDProps> {
     private headingFailed = Subject.create(true);
 
+    private displayFailed = Subject.create(false);
+
+    private failuresConsumer;
+
     constructor(props: PFDProps) {
         super(props);
+        this.failuresConsumer = new FailuresConsumer('A32NX');
     }
 
     public onAfterRender(node: VNode): void {
         super.onAfterRender(node);
 
-        const sub = this.props.bus.getSubscriber<Arinc429Values>();
+        this.failuresConsumer.register(getDisplayIndex() === 1 ? A320Failure.LeftPfdDisplay : A320Failure.RightPfdDisplay);
+
+        const sub = this.props.bus.getSubscriber<Arinc429Values & ClockEvents>();
 
         sub.on('headingAr').handle((h) => {
             if (this.headingFailed.get() !== h.isNormalOperation()) {
                 this.headingFailed.set(!h.isNormalOperation());
             }
         });
+
+        sub.on('realTime').atFrequency(1).handle((_t) => {
+            this.failuresConsumer.update();
+            this.displayFailed.set(this.failuresConsumer.isActive(getDisplayIndex() === 1 ? A320Failure.LeftPfdDisplay : A320Failure.RightPfdDisplay));
+        });
     }
 
     render(): VNode {
         return (
             <DisplayUnit
-                potentiometerIndex={88}
-                failed={false}
+                failed={this.displayFailed}
                 bus={this.props.bus}
             >
                 <svg class="pfd-svg" version="1.1" viewBox="0 0 158.75 158.75" xmlns="http://www.w3.org/2000/svg">
@@ -69,13 +81,6 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
                     <HeadingTape bus={this.props.bus} failed={this.headingFailed} />
                     <AltitudeIndicator bus={this.props.bus} />
                     <AirspeedIndicator
-                        /*        airspeed={clampedAirspeed}
-                        airspeedAcc={filteredAirspeedAcc} */
-                        /*   FWCFlightPhase={FlightPhase} */
-                        /*    altitude={altitude}
-                        VLs={vls}
-                        VMax={VMax}
-                        showBars={showSpeedBars} */
                         bus={this.props.bus}
                         instrument={this.props.instrument}
                     />
