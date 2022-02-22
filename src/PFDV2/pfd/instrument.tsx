@@ -1,5 +1,4 @@
-import { Clock, FSComponent } from 'msfssdk';
-import { EventBus, HEventPublisher } from 'msfssdk/data';
+import { Clock, FSComponent, EventBus, HEventPublisher } from 'msfssdk';
 import { PFDComponent } from './components';
 import { AdirsValueProvider } from './shared/AdirsValueProvider';
 import { ArincValueProvider } from './shared/ArincValueProvider';
@@ -151,6 +150,8 @@ class A32NX_PFD extends BaseInstrument {
         this.simVarPublisher.subscribe('setHoldSpeed');
         this.simVarPublisher.subscribe('vls');
         this.simVarPublisher.subscribe('alphaLim');
+        this.simVarPublisher.subscribe('trkFpaDeselectedTCAS');
+        this.simVarPublisher.subscribe('tcasRaInhibited');
 
         this.simVarPublisher.startPublish();
         this.hEventPublisher.startPublish();

@@ -1,9 +1,12 @@
+
 {
+  "extends": "../tsconfig.json",
+
 "compilerOptions": {
   "incremental": false, /* Enables incremental builds */
   "target": "es2017", /* Specifies the ES2017 target, compatible with Coherent GT */
   "module": "es2015", /* Ensures that modules are at least es2015 */
-  "strict": true, /* Enables strict type checking, highly recommended but optional */
+  "strict": false, /* Enables strict type checking, highly recommended but optional */
   "esModuleInterop": true, /* Emits additional JS to work with CommonJS modules */
   "skipLibCheck": true, /* Skip type checking on library .d.ts files */
   "forceConsistentCasingInFileNames": true, /* Ensures correct import casing */
@@ -11,10 +14,6 @@
   "jsxFactory": "FSComponent.buildComponent", /* Required for FSComponent framework JSX */
   "jsxFragmentFactory": "FSComponent.Fragment", /* Required for FSComponent framework JSX */
   "jsx": "react" /* Required for FSComponent framework JSX */,
-  "paths": {
-    "@shared/*": ["../shared/src/*"],
-    "@fmgc/*": ["../fmgc/src/*"],
-    "@flybywiresim/failures": ["../failures"],
-  }
+
 }
 }

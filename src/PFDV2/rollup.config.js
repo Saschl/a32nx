@@ -1,4 +1,6 @@
-import typescript from '@rollup/plugin-typescript';
+'use strict';
+
+import ts from 'rollup-plugin-typescript2';
 import resolve from '@rollup/plugin-node-resolve';
 import scss from 'rollup-plugin-scss';
 
@@ -10,5 +12,9 @@ export default {
         dir: '../../flybywire-aircraft-a320-neo/html_ui/Pages/VCockpit/Instruments/A32NX/PFD',
         format: 'es',
     },
-    plugins: [scss({ output: '../../flybywire-aircraft-a320-neo/html_ui/Pages/VCockpit/Instruments/A32NX/PFD/pfd.css' }), typescript({ include: ['**/*.ts', '**/*.tsx', '../shared/src/*.ts', '../fmgc/src/**/*.ts', '../failures/src/**/*.ts'] }), resolve()],
+    plugins: [scss(
+        { output: '../../flybywire-aircraft-a320-neo/html_ui/Pages/VCockpit/Instruments/A32NX/PFD/pfd.css' },
+    ),
+    // typescript({ include: ['**/*.ts', '**/*.tsx', '../shared/src/*.ts', '../fmgc/src/**/ControlLaw.ts', '../failures/src/**/*.ts'] }), resolve()],
+    resolve(), ts()],
 };

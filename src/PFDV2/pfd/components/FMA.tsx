@@ -49,6 +49,10 @@ export class FMA extends DisplayComponent<{ bus: EventBus }> {
 
     private setHoldSpeed = false;
 
+    private tcasRaInhibited = Subject.create(false);
+
+    private trkFpaDeselected = Subject.create(false);
+
     private firstBorderRef = FSComponent.createRef<SVGPathElement>();
 
     private secondBorderRef = FSComponent.createRef<SVGPathElement>();
@@ -70,11 +74,12 @@ export class FMA extends DisplayComponent<{ bus: EventBus }> {
         this.isAttExcessiveSub.set(isAttExcessive);
         const sharedModeActive = this.activeLateralMode === 32 || this.activeLateralMode === 33
         || this.activeLateralMode === 34 || (this.activeLateralMode === 20 && this.activeVerticalMode === 24);
-        const BC3Message = getBC3Message(isAttExcessive, this.armedVerticalModeSub.get(), this.setHoldSpeed)[0] !== null;
+        const BC3Message = getBC3Message(isAttExcessive, this.armedVerticalModeSub.get(),
+            this.setHoldSpeed, this.trkFpaDeselected.get(), this.tcasRaInhibited.get())[0] !== null;
 
         const engineMessage = this.athrModeMessage;
         const AB3Message = (this.machPreselVal !== -1
-            || this.speedPreselVal !== -1) && BC3Message && engineMessage === 0;
+            || this.speedPreselVal !== -1) && !BC3Message && engineMessage === 0;
 
         let secondBorder: string;
         if (sharedModeActive && !isAttExcessive) {
@@ -137,6 +142,16 @@ export class FMA extends DisplayComponent<{ bus: EventBus }> {
             this.setHoldSpeed = shs;
             this.handleFMABorders();
         });
+
+        sub.on('tcasRaInhibited').whenChanged().handle((tra) => {
+            this.tcasRaInhibited.set(tra);
+            this.handleFMABorders();
+        });
+
+        sub.on('trkFpaDeselectedTCAS').whenChanged().handle((trk) => {
+            this.trkFpaDeselected.set(trk);
+            this.handleFMABorders();
+        });
     }
 
     render(): VNode {
@@ -151,7 +166,12 @@ export class FMA extends DisplayComponent<{ bus: EventBus }> {
 
                 <Row1 bus={this.props.bus} hiddenClassSub={this.hiddenClassSub} />
                 <Row2 bus={this.props.bus} hiddenClassSub={this.hiddenClassSub} />
-                <Row3 bus={this.props.bus} hiddenClassSub={this.hiddenClassSub} isAttExcessiveSub={this.isAttExcessiveSub} verticalArmedModeSub={this.armedVerticalModeSub} />
+                <Row3
+                    bus={this.props.bus}
+                    hiddenClassSub={this.hiddenClassSub}
+                    isAttExcessiveSub={this.isAttExcessiveSub}
+                    verticalArmedModeSub={this.armedVerticalModeSub}
+                />
             </g>
         );
     }
@@ -926,12 +946,9 @@ class BC1Cell extends ShowForSecondsComponent<{bus:EventBus, visibility: Subscri
     }
 }
 
-const getBC3Message = (isAttExcessive: boolean, armedVerticalMode: number, setHoldSpeed: boolean) => {
+const getBC3Message = (isAttExcessive: boolean, armedVerticalMode: number, setHoldSpeed: boolean, trkFpaDeselectedTCAS: boolean, tcasRaInhibited: boolean) => {
     const armedVerticalBitmask = armedVerticalMode;
     const TCASArmed = (armedVerticalBitmask >> 6) & 1;
-
-    const trkFpaDeselectedTCAS = SimVar.GetSimVarValue('L:A32NX_AUTOPILOT_TCAS_MESSAGE_TRK_FPA_DESELECTION', 'bool');
-    const tcasRaInhibited = SimVar.GetSimVarValue('L:A32NX_AUTOPILOT_TCAS_MESSAGE_RA_INHIBITED', 'bool');
 
     let text: string;
     let className: string;
@@ -991,7 +1008,7 @@ const getBC3Message = (isAttExcessive: boolean, armedVerticalMode: number, setHo
     return [text, className];
 };
 
-class BC3Cell extends DisplayComponent<{ isAttExcessive: Subscribable<boolean>, bus: EventBus }> {
+class BC3Cell extends DisplayComponent<{ isAttExcessive: Subscribable<boolean>, bus: EventBus, }> {
     private bc3Cell = FSComponent.createRef<SVGTextElement>();
 
     private classNameSub = Subject.create('');
@@ -1002,8 +1019,12 @@ class BC3Cell extends DisplayComponent<{ isAttExcessive: Subscribable<boolean>, 
 
     private setHoldSpeed = false;
 
+    private tcasRaInhibited = false;
+
+    private trkFpaDeselected = false;
+
     private fillBC3Cell() {
-        const [text, className] = getBC3Message(this.isAttExcessive, this.armedVerticalMode, this.setHoldSpeed);
+        const [text, className] = getBC3Message(this.isAttExcessive, this.armedVerticalMode, this.setHoldSpeed, this.trkFpaDeselected, this.tcasRaInhibited);
         this.classNameSub.set(`FontMedium MiddleAlign ${className}`);
         if (text !== null) {
             this.bc3Cell.instance.innerHTML = text;
@@ -1027,6 +1048,16 @@ class BC3Cell extends DisplayComponent<{ isAttExcessive: Subscribable<boolean>, 
 
         sub.on('setHoldSpeed').whenChanged().handle((shs) => {
             this.setHoldSpeed = shs;
+            this.fillBC3Cell();
+        });
+
+        sub.on('tcasRaInhibited').whenChanged().handle((tra) => {
+            this.tcasRaInhibited = tra;
+            this.fillBC3Cell();
+        });
+
+        sub.on('trkFpaDeselectedTCAS').whenChanged().handle((trk) => {
+            this.trkFpaDeselected = trk;
             this.fillBC3Cell();
         });
     }

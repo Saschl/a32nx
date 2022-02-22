@@ -1,6 +1,4 @@
-import { EventBus, SimVarDefinition, SimVarValueType } from 'msfssdk/data';
-
-import { SimVarPublisher } from 'msfssdk/instruments';
+import { EventBus, SimVarDefinition, SimVarValueType, SimVarPublisher } from 'msfssdk';
 
 export interface PFDSimvars {
     coldDark: number,
@@ -94,6 +92,8 @@ export interface PFDSimvars {
     setHoldSpeed: boolean;
     vls: number;
     alphaLim: number;
+    trkFpaDeselectedTCAS: boolean,
+    tcasRaInhibited: boolean,
   }
 
 export enum PFDVars {
@@ -189,6 +189,8 @@ export enum PFDVars {
     setHoldSpeed = 'L:A32NX_PFD_MSG_SET_HOLD_SPEED',
     vls = 'L:A32NX_SPEEDS_VLS',
     alphaLim = 'L:A32NX_SPEEDS_ALPHA_MAX',
+    trkFpaDeselectedTCAS= 'L:A32NX_AUTOPILOT_TCAS_MESSAGE_TRK_FPA_DESELECTION',
+    tcasRaInhibited = 'L:A32NX_AUTOPILOT_TCAS_MESSAGE_RA_INHIBITED',
   }
 
 /** A publisher to poll and publish nav/com simvars. */
@@ -301,6 +303,8 @@ export class PFDSimvarPublisher extends SimVarPublisher<PFDSimvars> {
         ['vls', { name: PFDVars.vls, type: SimVarValueType.Number }],
         ['alphaLim', { name: PFDVars.alphaLim, type: SimVarValueType.Number }],
 
+        ['trkFpaDeselectedTCAS', { name: PFDVars.trkFpaDeselectedTCAS, type: SimVarValueType.Bool }],
+        ['tcasRaInhibited', { name: PFDVars.tcasRaInhibited, type: SimVarValueType.Bool }],
     ])
 
     /**
