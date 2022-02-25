@@ -30,7 +30,7 @@ export const WeatherTerrainBackdrop: FC<WeatherTerrainBackdropProps> = memo(({ m
         }
     }, [wxrSysSwitch]);
 
-    if (mode === Mode.ARC) {
+    if (mode === Mode.ARC && wxr !== BingMapWeatherMode.OFF) {
         return (
             <>
                 <div className="BingMap" style={{ width: '1650px', position: 'absolute', left: '-185px', top: '210px', zIndex: 90 }}>
@@ -46,7 +46,7 @@ export const WeatherTerrainBackdrop: FC<WeatherTerrainBackdropProps> = memo(({ m
             </>
         );
     // TODO FIXME: better clipping mask and refactor
-    } if (mode === Mode.ROSE_NAV) {
+    } if (mode === Mode.ROSE_NAV && wxr !== BingMapWeatherMode.OFF) {
         return (
             <>
                 <div className="BingMap" style={{ clip: 'rect(410px, 1650px, 1500px, 0px)', width: '1650px', position: 'absolute', left: '-185px', top: '-188px', zIndex: 90 }}>
