@@ -85,7 +85,7 @@ class EngineControl {
   double paramImbalance;
 
   const double LBS_TO_KGS = 0.4535934;
-  const double KGS_TO_LBS = 1/0.4535934;
+  const double KGS_TO_LBS = 1 / 0.4535934;
   const double FUEL_THRESHOLD = 661;  // lbs/sec
 
   bool isFlexActive = false;
@@ -662,21 +662,21 @@ class EngineControl {
   /// </summary>
   void checkPayload() {
     double fuelWeightGallon = simVars->getFuelWeightGallon();
-    double aircraftEmptyWeight = simVars->getEmptyWeight();                                   // in LBS
+    double aircraftEmptyWeight = simVars->getEmptyWeight();  // in LBS
     double conversionFactor = simVars->getConversionFactor();
     double perPaxWeightLbs = simVars->getPerPaxWeight() / conversionFactor;                   // in LBS
     double aircraftTotalWeight = simVars->getTotalWeight();                                   // in LBS
     double fuelTotalWeight = simVars->getFuelTotalQuantity() * fuelWeightGallon;              // in LBS
     double payloadTotalWeight = aircraftTotalWeight - aircraftEmptyWeight - fuelTotalWeight;  // in LBS
 
-    double paxRows1to6Actual = simVars->getPaxRows1to6Actual() * perPaxWeightLbs;                       // in LBS
-    double paxRows7to13Actual = simVars->getPaxRows7to13Actual() * perPaxWeightLbs;                     // in LBS
-    double paxRows14to21Actual = simVars->getPaxRows14to21Actual() * perPaxWeightLbs;                   // in LBS
-    double paxRows22to29Actual = simVars->getPaxRows22to29Actual() * perPaxWeightLbs;                   // in LBS
-    double paxRows1to6Desired = simVars->getPaxRows1to6Desired() * perPaxWeightLbs;                     // in LBS
-    double paxRows7to13Desired = simVars->getPaxRows7to13Desired() * perPaxWeightLbs;                   // in LBS
-    double paxRows14to21Desired = simVars->getPaxRows14to21Desired() * perPaxWeightLbs;                 // in LBS
-    double paxRows22to29Desired = simVars->getPaxRows22to29Desired() * perPaxWeightLbs;                 // in LBS
+    double paxRows1to6Actual = simVars->getPaxRows1to6Actual() * perPaxWeightLbs;                 // in LBS
+    double paxRows7to13Actual = simVars->getPaxRows7to13Actual() * perPaxWeightLbs;               // in LBS
+    double paxRows14to21Actual = simVars->getPaxRows14to21Actual() * perPaxWeightLbs;             // in LBS
+    double paxRows22to29Actual = simVars->getPaxRows22to29Actual() * perPaxWeightLbs;             // in LBS
+    double paxRows1to6Desired = simVars->getPaxRows1to6Desired() * perPaxWeightLbs;               // in LBS
+    double paxRows7to13Desired = simVars->getPaxRows7to13Desired() * perPaxWeightLbs;             // in LBS
+    double paxRows14to21Desired = simVars->getPaxRows14to21Desired() * perPaxWeightLbs;           // in LBS
+    double paxRows22to29Desired = simVars->getPaxRows22to29Desired() * perPaxWeightLbs;           // in LBS
     double cargoFwdContainerActual = simVars->getCargoFwdContainerActual() / conversionFactor;    // in LBS
     double cargoAftContainerActual = simVars->getCargoAftContainerActual() / conversionFactor;    // in LBS
     double cargoAftBaggageActual = simVars->getCargoAftBaggageActual() / conversionFactor;        // in LBS
@@ -1062,7 +1062,7 @@ class EngineControl {
   /// <summary>
   /// Initialize the FADEC and Fuel model
   /// </summary>
-  void initialize(const char* acftRegistration) {
+  void initialize(const std::string acftRegistration) {
     std::cout << "FADEC: Initializing EngineControl" << std::endl;
 
     simVars = new SimVars();

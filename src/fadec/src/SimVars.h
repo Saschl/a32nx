@@ -33,7 +33,7 @@ struct SimulationData {
 };
 
 struct SimulationDataLivery {
-  char atc_id[32] = "";
+  std::string atc_id = "";
 };
 
 /// <summary>
