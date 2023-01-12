@@ -377,7 +377,12 @@ export class LegsProcedure {
    * @returns The mapped leg.
    */
   public mapBearingAndDistanceFromOrigin(leg: RawProcedureLeg): WayPoint {
-      const origin = this.getLoadedFacility(leg.originIcao ?? leg.fixIcao);
+        let origin = undefined;
+        try {
+            origin = this.getLoadedFacility(leg.fixIcao);
+        } catch (e) {
+            origin = this.getLoadedFacility(leg.originIcao)
+        }
       const originIdent = origin.icao.substring(7, 12).trim();
       const course = leg.trueDegrees ? leg.course : A32NX_Util.magneticToTrue(leg.course, Facilities.getMagVar(origin.lat, origin.lon));
       // this is the leg length for FC, and the DME distance for FD
