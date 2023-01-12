@@ -129,7 +129,7 @@ export class LegsProcedure {
 
           // Some procedures don't start with 15 (initial fix) but instead start with a heading and distance from
           // a fix: the procedure then starts with the fix exactly
-          if (this._currentIndex === 0 && currentLeg.type === 10 && !this._addedProcedureStart) {
+          if (this._currentIndex === 0 && currentLeg.type === 10 && !this._addedProcedureStart && currentLeg.fixIcao[0] !=='R') {
               mappedLeg = this.mapExactFix(currentLeg);
               this._addedProcedureStart = true;
           } else {
@@ -377,7 +377,7 @@ export class LegsProcedure {
    * @returns The mapped leg.
    */
   public mapBearingAndDistanceFromOrigin(leg: RawProcedureLeg): WayPoint {
-      const origin = this.getLoadedFacility(leg.fixIcao);
+      const origin = this.getLoadedFacility(leg.originIcao ?? leg.fixIcao);
       const originIdent = origin.icao.substring(7, 12).trim();
       const course = leg.trueDegrees ? leg.course : A32NX_Util.magneticToTrue(leg.course, Facilities.getMagVar(origin.lat, origin.lon));
       // this is the leg length for FC, and the DME distance for FD
