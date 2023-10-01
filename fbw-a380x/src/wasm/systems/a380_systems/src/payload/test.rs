@@ -8,7 +8,9 @@ use rand::seq::IteratorRandom;
 use rand::SeedableRng;
 use systems::electrical::Electricity;
 use systems::payload::{BoardingRate, GsxState};
+use uom::si::f64::Ratio;
 use uom::si::mass::pound;
+use uom::si::ratio::percent;
 
 use super::*;
 use crate::payload::A380Payload;
@@ -30,6 +32,10 @@ impl BoardingTestAircraft {
 
     fn pax_num(&self, ps: usize) -> i8 {
         self.payload.pax_num(ps)
+    }
+
+    fn total_pax_num(&self) -> i32 {
+        self.payload.total_pax_num()
     }
 
     fn pax_payload(&self, ps: usize) -> Mass {
@@ -166,12 +172,15 @@ impl BoardingTestBed {
     }
 
     fn double_gate_boarding(mut self) -> Self {
-        self.write_by_name("NUM_BOARDING_GATES", 2);
+        self.write_by_name("INTERACTIVE POINT OPEN:0", Ratio::new::<percent>(100.));
+        self.write_by_name("INTERACTIVE POINT OPEN:2", Ratio::new::<percent>(100.));
         self
     }
 
     fn triple_gate_boarding(mut self) -> Self {
-        self.write_by_name("NUM_BOARDING_GATES", 3);
+        self.write_by_name("INTERACTIVE POINT OPEN:0", Ratio::new::<percent>(100.));
+        self.write_by_name("INTERACTIVE POINT OPEN:2", Ratio::new::<percent>(100.));
+        self.write_by_name("INTERACTVIE POINT OPEN:10", Ratio::new::<percent>(100.));
         self
     }
 
@@ -208,8 +217,9 @@ impl BoardingTestBed {
 
     fn board_gsx_pax_half(mut self) -> Self {
         let mut max_pax = 0;
+
         for ps in 0..A380Payload::A380_PAX.len() {
-            max_pax += test_bed().query(|a: &BoardingTestAircraft| a.max_pax(ps)) as i32;
+            max_pax += test_bed().query(|a| a.max_pax(ps)) as i32;
         }
         self.write_by_name("FSDT_GSX_NUMPASSENGERS_BOARDING_TOTAL", max_pax / 2);
         self
@@ -224,27 +234,8 @@ impl BoardingTestBed {
         self
     }
 
-    fn deboard_gsx_pax_half(mut self) -> Self {
-        let mut max_pax = 0;
-        for ps in 0..A380Payload::A380_PAX.len() {
-            max_pax += test_bed().query(|a| a.max_pax(ps)) as i32;
-        }
-        self.write_by_name("FSDT_GSX_NUMPASSENGERS_DEBOARDING_TOTAL", max_pax / 2);
-        self
-    }
-
-    fn deboard_gsx_pax_full(mut self) -> Self {
-        let mut max_pax = 0;
-        for ps in 0..A380Payload::A380_PAX.len() {
-            max_pax += test_bed().query(|a| a.max_pax(ps)) as i32;
-        }
-        self.write_by_name("FSDT_GSX_NUMPASSENGERS_DEBOARDING_TOTAL", max_pax);
-        self
-    }
-
-    #[allow(dead_code)]
-    fn deboard_gsx_pax_num(mut self, value: i32) -> Self {
-        self.write_by_name("FSDT_GSX_NUMPASSENGERS_DEBOARDING_TOTAL", value);
+    fn deboard_gsx_pax(mut self, pax_deboard: i32) -> Self {
+        self.write_by_name("FSDT_GSX_NUMPASSENGERS_DEBOARDING_TOTAL", pax_deboard);
         self
     }
 
@@ -386,16 +377,40 @@ impl BoardingTestBed {
         assert!(!pax_complete_sound);
     }
 
+    fn has_sound_pax_complete(&mut self) {
+        let pax_complete_sound: bool = self.read_by_name("SOUND_BOARDING_COMPLETE");
+        assert!(pax_complete_sound);
+        assert!(self.sound_pax_complete());
+    }
+
     fn has_sound_pax_ambience(&mut self) {
         let pax_ambience: bool = self.read_by_name("SOUND_PAX_AMBIENCE");
         assert!(self.sound_pax_ambience());
         assert!(pax_ambience);
     }
 
+    fn has_sound_pax_boarding(&mut self) {
+        let pax_boarding: bool = self.read_by_name("SOUND_PAX_BOARDING");
+        assert!(pax_boarding);
+        assert!(self.sound_pax_boarding());
+    }
+
     fn has_no_sound_pax_ambience(&mut self) {
         let pax_ambience: bool = self.read_by_name("SOUND_PAX_AMBIENCE");
         assert!(!self.sound_pax_ambience());
         assert!(!pax_ambience);
+    }
+
+    fn has_no_sound_pax_boarding(&mut self) {
+        let pax_boarding: bool = self.read_by_name("SOUND_PAX_BOARDING");
+        assert!(!pax_boarding);
+        assert!(!self.sound_pax_boarding());
+    }
+
+    fn has_no_sound_pax_deboarding(&mut self) {
+        let pax_boarding: bool = self.read_by_name("SOUND_PAX_DEBOARDING");
+        assert!(!pax_boarding);
+        assert!(!self.sound_pax_deboarding());
     }
 
     fn with_pax(mut self, ps: usize, pax_qty: i8) -> Self {
@@ -462,6 +477,10 @@ impl BoardingTestBed {
             self.target_pax(ps, 0);
         }
         self
+    }
+
+    fn has_pax(&self, pax_num: i32) {
+        assert_eq!(pax_num, self.total_pax_num());
     }
 
     fn has_no_pax(&self) {
@@ -641,6 +660,10 @@ impl BoardingTestBed {
 
     fn pax_num(&self, ps: usize) -> i8 {
         self.query(|a| a.pax_num(ps))
+    }
+
+    fn total_pax_num(&self) -> i32 {
+        self.query(|a| a.total_pax_num())
     }
 
     fn pax_payload(&self, ps: usize) -> Mass {
@@ -1570,16 +1593,21 @@ fn gsx_boarding_half_pax() {
         .gsx_performing_board_state()
         .board_gsx_pax_half()
         .board_gsx_cargo_half()
-        .and_run()
-        .gsx_complete_board_state()
-        .and_stabilize();
+        .and_run();
+
+    test_bed.has_sound_pax_boarding();
+    test_bed.has_no_sound_pax_deboarding();
+
+    let mut test_bed = test_bed.gsx_complete_board_state().and_stabilize();
 
     test_bed.has_all_stations_half_pax();
     test_bed.has_all_stations_half_cargo();
 
     test_bed = test_bed.and_run();
     test_bed.has_sound_pax_ambience();
-    test_bed.sound_boarding_complete_reset();
+    test_bed.has_no_sound_pax_boarding();
+    test_bed.has_no_sound_pax_deboarding();
+    test_bed.sound_pax_complete();
 }
 
 #[test]
@@ -1606,7 +1634,35 @@ fn gsx_boarding_full_pax() {
 
     test_bed = test_bed.and_run();
     test_bed.has_sound_pax_ambience();
-    test_bed.sound_boarding_complete_reset();
+    test_bed.has_sound_pax_complete();
+}
+
+#[test]
+fn gsx_deboarding_initial_state() {
+    let mut test_bed = test_bed_with()
+        .init_vars()
+        .init_vars_gsx()
+        .with_full_cargo()
+        .with_pax(A380Pax::MainAftA.into(), 25)
+        .with_pax(A380Pax::MainAftB.into(), 25)
+        .with_pax(A380Pax::MainFwdA.into(), 25)
+        .with_pax(A380Pax::MainFwdB.into(), 25)
+        .target_no_pax()
+        .target_no_cargo()
+        .gsx_requested_deboard_state()
+        .and_run()
+        .gsx_performing_deboard_state()
+        .deboard_gsx_pax(10)
+        .and_run();
+
+    // Check that pax moves and cargo remain the same when GSX has started performing
+    test_bed.has_pax(90);
+    test_bed.has_full_cargo();
+
+    test_bed = test_bed.and_run().and_stabilize();
+
+    test_bed.has_pax(90);
+    test_bed.has_full_cargo();
 }
 
 #[test]
@@ -1621,11 +1677,11 @@ fn gsx_deboarding_full_pax() {
         .gsx_requested_deboard_state()
         .and_run()
         .gsx_performing_deboard_state()
-        .deboard_gsx_pax_half()
+        .deboard_gsx_pax(259)
         .deboard_gsx_cargo_half()
         .and_run()
         .and_stabilize()
-        .deboard_gsx_pax_full()
+        .deboard_gsx_pax(519)
         .deboard_gsx_cargo_full()
         .and_run()
         .gsx_complete_deboard_state();
@@ -1650,11 +1706,11 @@ fn gsx_deboarding_half_pax() {
         .gsx_requested_deboard_state()
         .and_run()
         .gsx_performing_deboard_state()
-        .deboard_gsx_pax_half()
+        .deboard_gsx_pax(0)
         .deboard_gsx_cargo_half()
         .and_run()
         .and_stabilize()
-        .deboard_gsx_pax_full()
+        .deboard_gsx_pax(259)
         .deboard_gsx_cargo_full()
         .and_run()
         .gsx_complete_deboard_state();
