@@ -18,6 +18,7 @@ jobs:
       VMASTER_PRE_RELEASE_ID: 32243965
       VMASTER_PRE_RELEASE_TAG: vmaster
       BUILD_DIR_NAME: master
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v3
@@ -57,6 +58,8 @@ jobs:
       - name: Delete old GitHub Pre-Release assets
         #uses: mknejp/delete-release-assets@v1
         run: gh release delete-asset ${{ env.MASTER_PRE_RELEASE_TAG }} './*' -y
+        env:
+           GH_TOKEN: ${{ github.token }}
         #with:
         #  token: ${{ github.token }}
         #  tag: ${{ env.MASTER_PRE_RELEASE_TAG }}
