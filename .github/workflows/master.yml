@@ -57,7 +57,7 @@ jobs:
     #      ./scripts/cf-cdn.sh $CDN_BUCKET_DESTINATION ./fbw-a32nx/out/build-modules
       - name: Delete old GitHub Pre-Release assets
         #uses: mknejp/delete-release-assets@v1
-        run: gh release delete-asset ${{ env.MASTER_PRE_RELEASE_TAG }} './*' -y
+        run: gh release delete-asset ${{ env.MASTER_PRE_RELEASE_TAG }} ./* -y
         env:
            GH_TOKEN: ${{ github.token }}
         #with:
