@@ -56,15 +56,15 @@ jobs:
     #    run: |
     #      ./scripts/cf-cdn.sh $CDN_BUCKET_DESTINATION ./fbw-a32nx/out/build-modules
       - name: Delete old GitHub Pre-Release assets
-        #uses: mknejp/delete-release-assets@v1
-        run: gh release delete-asset ${{ env.MASTER_PRE_RELEASE_TAG }} ./* -y
+        uses: mknejp/delete-release-assets@v1
+        #run: find . -name "*.tmp" -print0 | xargs -i gh release delete-asset ${{ env.MASTER_PRE_RELEASE_TAG }} {} -y
         env:
            GH_TOKEN: ${{ github.token }}
-        #with:
-        #  token: ${{ github.token }}
-        #  tag: ${{ env.MASTER_PRE_RELEASE_TAG }}
-        #  assets: "*"
-        #  fail-if-no-assets: false
+        with:
+          token: ${{ github.token }}
+          tag: ${{ env.MASTER_PRE_RELEASE_TAG }}
+          assets: "*"
+          fail-if-no-assets: false
 
       - name: Upload aircraft package to GitHub Pre-Release Assets
         # uses: actions/upload-release-asset@v1.0.2
