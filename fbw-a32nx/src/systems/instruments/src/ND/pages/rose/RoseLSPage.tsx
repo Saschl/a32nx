@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0
 
-import { ComponentProps, DisplayComponent, FSComponent, MappedSubject, Subject, Subscribable, VNode } from '@microsoft/msfs-sdk';
+import { ComponentProps, ConsumerSubject, DisplayComponent, FSComponent, MappedSubject, Subject, Subscribable, VNode } from '@microsoft/msfs-sdk';
 import { Arinc429WordData } from '@flybywiresim/fbw-sdk';
 import { DmcEvents } from 'instruments/src/MsfsAvionicsCommon/providers/DmcPublisher';
 import { VorSimVars } from 'instruments/src/MsfsAvionicsCommon/providers/VorBusPublisher';
@@ -20,38 +20,48 @@ export interface RoseLsProps extends RoseModeProps {
 export class RoseLSPage extends RoseMode<RoseLsProps> {
     isVisible = Subject.create(false);
 
-    //  private readonly headingWord = Arinc429ConsumerSubject.create(null);
+    private readonly courseSub = ConsumerSubject.create(null, 0);
 
-    private readonly courseSub = Subject.create(0);
+    private readonly courseDeviationSub = ConsumerSubject.create(null, 0);
 
-    private readonly courseDeviationSub = Subject.create(0);
+    private readonly ilsAvailableSub = ConsumerSubject.create(null, false);
 
-    private readonly ilsAvailableSub = Subject.create(false);
+    private readonly ilsFrequencySub = ConsumerSubject.create(null, 0);
 
-    private readonly ilsFrequencySub = Subject.create(0);
+    private readonly localizerValidSub = ConsumerSubject.create(null, false);
 
-    private readonly localizerValidSub = Subject.create(false);
+    onAfterRender(node: VNode) {
+        super.onAfterRender(node);
+
+        const sub = this.props.bus.getSubscriber<AdirsSimVars & DmcEvents & VorSimVars>();
+        const index: 3 | 4 = this.props.index + 2 as (3|4);
+
+        this.courseSub.setConsumer(sub.on(`nav${index}Obs`).whenChanged()).pause();
+        this.courseDeviationSub.setConsumer(sub.on(`nav${index}RadialError`).whenChanged()).pause();
+        this.ilsAvailableSub.setConsumer(sub.on(`nav${index}Available`).whenChanged()).pause();
+        this.ilsFrequencySub.setConsumer(sub.on(`nav${index}Frequency`).whenChanged()).pause();
+        this.localizerValidSub.setConsumer(sub.on('localizerValid').whenChanged()).pause();
+    }
 
     onShow() {
         super.onShow();
 
         const publisher = this.props.bus.getPublisher<NDControlEvents>();
 
-        const sub = this.props.bus.getSubscriber<AdirsSimVars & DmcEvents & VorSimVars>();
-
-        const index: 3 | 4 = this.props.index + 2 as (3|4);
-
-        sub.on(`nav${index}Obs`).whenChanged().handle((v) => this.courseSub.set(v));
-
-        sub.on(`nav${index}RadialError`).whenChanged().handle((v) => this.courseDeviationSub.set(v));
-
-        sub.on(`nav${index}Available`).whenChanged().handle((v) => this.ilsAvailableSub.set(v));
-
-        sub.on(`nav${index}Frequency`).whenChanged().handle((v) => this.ilsFrequencySub.set(v));
-
-        sub.on('localizerValid').whenChanged().handle((v) => this.localizerValidSub.set(v));
-
         publisher.pub('set_show_map', false);
+        this.courseSub.resume();
+        this.courseDeviationSub.resume();
+        this.ilsAvailableSub.resume();
+        this.ilsFrequencySub.resume();
+        this.localizerValidSub.resume();
+    }
+
+    onHide() {
+        this.courseSub.pause();
+        this.courseDeviationSub.pause();
+        this.ilsAvailableSub.pause();
+        this.ilsFrequencySub.pause();
+        this.localizerValidSub.pause();
     }
 
     render(): VNode | null {
@@ -143,7 +153,7 @@ class IlsCaptureOverlay extends DisplayComponent<IlsCaptureOverlayProps> {
                         />
                         <path
                             d="M352,256 L416,256 M384,134 L384,294 M384,474 L384,634"
-                            class="rounded Magenta"
+                            class="Magenta rounded"
                             id="ils-course-pointer"
                             stroke-width={4}
                         />
@@ -159,7 +169,7 @@ class IlsCaptureOverlay extends DisplayComponent<IlsCaptureOverlayProps> {
                         />
                         <path
                             d="M384,304 L384,464"
-                            class="rounded Magenta"
+                            class="Magenta rounded"
                             transform={this.deviation.map((cdiPx) => `translate(${cdiPx}, 0)`)}
                             id="ils-deviation"
                             stroke-width={4}
