@@ -296,10 +296,6 @@
     - Number
     - Flaps config for TakeOff, 1, 2 or 3
 
-- A32NX_SPEEDS_V2
-    - Number
-    - TakeOff V2 Speed calculated based on A32NX_VSPEEDS_TO_CONF config
-
 - A32NX_SPEEDS_VLS_APP
     - Number
     - vls calculated for config full whether A32NX_VSPEEDS_LANDING_CONF3 or not
@@ -598,6 +594,13 @@
 - A32NX_OVHD_{name}_PB_IS_RELEASED
     - Bool
     - True when the push button is RELEASED
+    - {name}
+        - ELEC_IDG_1
+        - ELEC_IDG_2
+
+- A32NX_OVHD_{name}_PB_IS_DISC
+    - Bool
+    - True when the idg is disconnected
     - {name}
         - ELEC_IDG_1
         - ELEC_IDG_2
@@ -1383,6 +1386,10 @@ These variables are the interface between the 3D model and the systems/code.
     - Bool
     - Indicates if the T/D REACHED message is shown on the PFD
 
+- A32NX_PFD_MSG_CHECK_SPEED_MODE
+    - Bool
+    - Indicates if the CHECK SPEED MODE message is shown on the PFD
+
 - A32NX_PFD_LINEAR_DEVIATION_ACTIVE
     - Bool
     - Indicates if the linear deviation is shown on the PFD
@@ -1777,7 +1784,7 @@ In the variables below, {number} should be replaced with one item in the set: { 
        15,16,17 | ALIGN_7_10_MINUTES
        16,17 | ALIGN_6_MINUTES
        15,17 | ALIGN_5_MINUTES
-       16 | ALIGN_4_MINUTES
+       17 | ALIGN_4_MINUTES
        15,16 | ALIGN_3_MINUTES
        16 | ALIGN_2_MINUTES
        15 | ALIGN_1_MINUTES
@@ -2820,6 +2827,10 @@ In the variables below, {number} should be replaced with one item in the set: { 
 
 ## Pneumatic
 
+- A32NX_ASU_TURNED_ON:
+    - Turns the Air Starter Unit on or off
+    - Bool
+
 - A32NX_PNEU_ENG_{number}_IP_PRESSURE:
     - Pressure in intermediate pressure compression chamber
     - PSI
@@ -2930,6 +2941,10 @@ In the variables below, {number} should be replaced with one item in the set: { 
         - 1
         - 2
 
+- A32NX_PNEU_APU_BLEED_CONTAINER_PRESSURE:
+    - Indicates the APU internal bleed pressure.
+    - PSI absolute
+
 - A32NX_PNEU_XBLEED_VALVE_FULLY_OPEN:
     - Indicates whether the cross bleed air valve is fully open
     - Bool
@@ -3034,6 +3049,13 @@ In the variables below, {number} should be replaced with one item in the set: { 
     - High Pressure warning in the right wing anti ice valve
     - Bool
 
+- A32NX_BUTTON_OVHD_ANTI_ICE_ENG_1_POSITION:
+    - Indicates whether the overhead ENG ANTI ICE button is illuminated for engine 1
+    - Bool
+
+- A32NX_BUTTON_OVHD_ANTI_ICE_ENG_2_POSITION:
+    - Indicates whether the overhead ENG ANTI ICE button is illuminated for engine 2
+    - Bool
 ## Autoflight (ATA 22)
 
 - - A32NX_FAC_{number}_PUSHBUTTON_PRESSED
