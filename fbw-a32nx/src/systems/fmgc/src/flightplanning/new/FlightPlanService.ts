@@ -6,7 +6,7 @@
 import { FlightPlanIndex, FlightPlanManager } from '@fmgc/flightplanning/new/FlightPlanManager';
 import { FpmConfig, FpmConfigs } from '@fmgc/flightplanning/new/FpmConfig';
 import { FlightPlanLegFlags } from '@fmgc/flightplanning/new/legs/FlightPlanLeg';
-import { Fix, Waypoint } from '@flybywiresim/fbw-sdk';
+import { Fix, FlightPlanAsoboSync, Waypoint } from '@flybywiresim/fbw-sdk';
 import { NavigationDatabase } from '@fmgc/NavigationDatabase';
 import { Coordinates, Degrees } from 'msfs-geo';
 import { EventBus } from '@microsoft/msfs-sdk';
@@ -21,18 +21,22 @@ import { FlightPlanPerformanceData } from '@fmgc/flightplanning/new/plans/perfor
 export class FlightPlanService<P extends FlightPlanPerformanceData = FlightPlanPerformanceData> implements FlightPlanInterface<P> {
     private readonly flightPlanManager: FlightPlanManager<P>;
 
+    private readonly flightplanSync: FlightPlanAsoboSync;
+
     private config: FpmConfig = FpmConfigs.A320_HONEYWELL_H3;
 
     navigationDatabase: NavigationDatabase;
 
     constructor(private readonly bus: EventBus, private readonly performanceDataInit: P) {
         this.flightPlanManager = new FlightPlanManager<P>(this.bus, this.performanceDataInit, Math.round(Math.random() * 10_000), true);
+        this.flightplanSync = new FlightPlanAsoboSync(this.bus);
     }
 
     createFlightPlans() {
         this.flightPlanManager.create(FlightPlanIndex.Active);
         this.flightPlanManager.create(FlightPlanIndex.Uplink);
         this.flightPlanManager.create(FlightPlanIndex.FirstSecondary);
+        this.flightplanSync.init();
     }
 
     get(index: number) {

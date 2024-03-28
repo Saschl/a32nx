@@ -64,7 +64,7 @@ class ExtrasHost extends BaseInstrument {
         this.pushbuttonCheck = new PushbuttonCheck(this.bus, this.notificationManager);
         this.versionCheck = new VersionCheck(this.bus);
         this.keyInterceptor = new KeyInterceptor(this.bus, this.notificationManager);
-        this.flightPlanAsoboSync = new FlightPlanAsoboSync(this.bus);
+        //  this.flightPlanAsoboSync = new FlightPlanAsoboSync(this.bus);
 
         console.log('A32NX_EXTRASHOST: Created');
     }
@@ -100,7 +100,7 @@ class ExtrasHost extends BaseInstrument {
                 this.versionCheck.startPublish();
                 this.keyInterceptor.startPublish();
                 this.simVarPublisher.startPublish();
-                this.flightPlanAsoboSync.init();
+                //   this.flightPlanAsoboSync.init();
             }
             this.gameState = gs;
         } else {

@@ -71,6 +71,15 @@ export type FacilitySearchTypeToDatabaseItem = {
 }
 
 export class FacilityCache {
+    private static INSTANCE: FacilityCache | null = null;
+
+    public static getInstance(): FacilityCache {
+        if (!this.INSTANCE) {
+            this.INSTANCE = new FacilityCache();
+        }
+        return this.INSTANCE;
+    }
+
     public static readonly FACILITY_SEARCH_TYPE_TO_SESSION_CLASS: Record<SupportedFacilitySearchType, new(sessionID: number) => CoherentNearestSearchSession> = {
         [FacilitySearchType.Airport]: NearestAirportSearchSession,
         [FacilitySearchType.Intersection]: NearestIntersectionSearchSession,
@@ -97,7 +106,7 @@ export class FacilityCache {
 
     private airwayFixCache = new Map<string, Waypoint[]>();
 
-    constructor() {
+    private constructor() {
         this.listener = RegisterViewListener('JS_LISTENER_FACILITY');
 
         Coherent.on('SendAirport', this.receiveFacility.bind(this));

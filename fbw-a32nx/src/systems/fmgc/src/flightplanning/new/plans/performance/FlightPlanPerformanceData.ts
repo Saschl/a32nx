@@ -6,11 +6,11 @@
 import { MathUtils } from '@flybywiresim/fbw-sdk';
 
 export interface FlightPlanPerformanceData {
-    v1: number;
+    v1: number | undefined;
 
-    vr: number;
+    vr: number | undefined;
 
-    v2: number;
+    v2: number | undefined;
 
     databaseTransitionAltitude: number,
 

@@ -79,7 +79,7 @@ export class MsfsBackend implements DataInterface {
     private ndbSearchSession: NearestSearchSession<string, string> | undefined;
 
     constructor() {
-        this.cache = new FacilityCache();
+        this.cache = FacilityCache.getInstance();
         this.mapping = new MsfsMapping(this.cache);
 
         RegisterViewListener('JS_LISTENER_FACILITY', () => {
