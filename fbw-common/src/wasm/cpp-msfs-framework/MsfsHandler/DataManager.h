@@ -36,6 +36,7 @@ using SimObjectBasePtr = std::shared_ptr<SimObjectBase>;
 using ClientEventPtr = std::shared_ptr<ClientEvent>;
 template <typename T>
 using DataDefinitionVariablePtr = std::shared_ptr<DataDefinitionVariable<T>>;
+using DataDefinitionVector = std::vector<DataDefinition>;
 template <typename T>
 using ClientDataAreaVariablePtr = std::shared_ptr<ClientDataAreaVariable<T>>;
 template <typename T, std::size_t ChunkSize>
@@ -229,7 +230,7 @@ class DataManager {
    *
    * @param varName Name of the variable in the sim
    * @param unit SimUnit of the variable (default=Number)
-   * @param updateMode optional DataManager update mode of the variable (default=UpdateMode::NO_AUTO_UPDATE)
+   * @param autoReading optional if variable should be read automatically (default=false)
    * @param maxAgeTime optional maximum age of the variable in seconds (default=0)
    * @param maxAgeTicks optional maximum age of the variable in ticks (default=0)
    * @return A shared pointer to the variable

@@ -15,11 +15,11 @@ import { GenericDisplayManagementEvents } from '../../types/GenericDisplayManage
 import { GenericVorEvents } from '../../types/GenericVorEvents';
 
 export interface RoseLsProps<T extends number> extends RoseModeProps<T> {
-    index: 1 | 2,
+  index: 1 | 2;
 }
 
 export class RoseLSPage<T extends number> extends RoseMode<T, RoseLsProps<T>> {
-    isVisible = Subject.create(false);
+  isVisible = Subject.create(false);
 
     private readonly courseSub = ConsumerSubject.create(null, 0);
 
@@ -44,10 +44,10 @@ export class RoseLSPage<T extends number> extends RoseMode<T, RoseLsProps<T>> {
         this.localizerValidSub.setConsumer(sub.on('localizerValid').whenChanged()).pause();
     }
 
-    onShow() {
-        super.onShow();
+  onShow() {
+    super.onShow();
 
-        const publisher = this.props.bus.getPublisher<NDControlEvents>();
+    const publisher = this.props.bus.getPublisher<NDControlEvents>();
 
         publisher.pub('set_show_map', false);
         this.courseSub.resume();
@@ -65,120 +65,122 @@ export class RoseLSPage<T extends number> extends RoseMode<T, RoseLsProps<T>> {
         this.localizerValidSub.pause();
     }
 
-    render(): VNode | null {
-        return (
-            <g visibility={this.isVisible.map((v) => (v ? 'visible' : 'hidden'))}>
-                <IlsInfoIndicator bus={this.props.bus} index={this.props.index} />
+  render(): VNode | null {
+    return (
+      <g visibility={this.isVisible.map((v) => (v ? 'visible' : 'hidden'))}>
+        <IlsInfoIndicator bus={this.props.bus} index={this.props.index} />
 
-                <GlideSlope bus={this.props.bus} />
+        <GlideSlope bus={this.props.bus} />
 
-                <RoseModeUnderlay
-                    bus={this.props.bus}
-                    heading={this.props.headingWord}
-                    visible={this.isVisible}
-                    rangeValues={this.props.rangeValues}
-                />
+        <RoseModeUnderlay
+          bus={this.props.bus}
+          heading={this.props.headingWord}
+          visible={this.isVisible}
+          rangeValues={this.props.rangeValues}
+        />
 
-                <IlsCaptureOverlay
-                    heading={this.props.headingWord}
-                    course={this.courseSub}
-                    courseDeviation={this.courseDeviationSub}
-                    available={this.localizerValidSub}
-                    ilsFrequency={this.ilsFrequencySub}
-
-                />
-            </g>
-        );
-    }
+        <IlsCaptureOverlay
+          heading={this.props.headingWord}
+          course={this.courseSub}
+          courseDeviation={this.courseDeviationSub}
+          available={this.localizerValidSub}
+          ilsFrequency={this.ilsFrequencySub}
+        />
+      </g>
+    );
+  }
 }
 
 interface IlsCaptureOverlayProps extends ComponentProps {
-    heading: Subscribable<Arinc429WordData>,
-    course: Subscribable<number>,
-    courseDeviation: Subscribable<number>,
-    available: Subscribable<boolean>,
-    ilsFrequency: Subscribable<number>,
+  heading: Subscribable<Arinc429WordData>;
+  course: Subscribable<number>;
+  courseDeviation: Subscribable<number>;
+  available: Subscribable<boolean>;
+  ilsFrequency: Subscribable<number>;
 }
 
 class IlsCaptureOverlay extends DisplayComponent<IlsCaptureOverlayProps> {
-        // we can't tell if the course is valid from the MSFS radio, so at least check that the frequency is
-        private readonly pointerVisibilitySub = MappedSubject.create(([ilsFrequency]) => {
-            return (ilsFrequency >= 108 && ilsFrequency <= 112) ? 'inherit' : 'hidden';
-        }, this.props.ilsFrequency);
+  // we can't tell if the course is valid from the MSFS radio, so at least check that the frequency is
+  private readonly pointerVisibilitySub = MappedSubject.create(([ilsFrequency]) => {
+    return ilsFrequency >= 108 && ilsFrequency <= 112 ? 'inherit' : 'hidden';
+  }, this.props.ilsFrequency);
 
-        private readonly visible = MappedSubject.create(([heading]) => {
-            return heading.isNormalOperation();
-        }, this.props.heading);
+  private readonly visible = MappedSubject.create(([heading]) => {
+    return heading.isNormalOperation();
+  }, this.props.heading);
 
-        private readonly rotation = MappedSubject.create(([heading, course]) => {
-            if (heading.isNormalOperation()) {
-                return course - heading.value;
-            }
-            return 0;
-        }, this.props.heading, this.props.course);
+  private readonly rotation = MappedSubject.create(
+    ([heading, course]) => {
+      if (heading.isNormalOperation()) {
+        return course - heading.value;
+      }
+      return 0;
+    },
+    this.props.heading,
+    this.props.course,
+  );
 
-        private readonly pointerColor = MappedSubject.create(([heading]) => {
-            if (heading.isNormalOperation()) {
-                return 'Cyan';
-            }
+  private readonly pointerColor = MappedSubject.create(([heading]) => {
+    if (heading.isNormalOperation()) {
+      return 'Cyan';
+    }
 
-            return 'White';
-        }, this.props.heading)
+    return 'White';
+  }, this.props.heading);
 
-        private readonly deviation = MappedSubject.create(([courseDeviation]) => {
-            const dots = Math.max(-2, Math.min(2, courseDeviation / 0.8));
-            return dots * 74;
-        }, this.props.courseDeviation);
+  private readonly deviation = MappedSubject.create(([courseDeviation]) => {
+    const dots = Math.max(-2, Math.min(2, courseDeviation / 0.8));
+    return dots * 74;
+  }, this.props.courseDeviation);
 
-        render(): VNode {
-            return (
-                <g
-                    visibility={this.visible.map((visible) => (visible ? 'inherit' : 'hidden'))}
-                    transform={this.rotation.map((deg) => `rotate(${deg} 384 384)`)}
-                    stroke="white"
-                    strokeWidth={3}
-                    fill="none"
-                >
-                    <g id="ils-deviation-scale">
-                        <circle cx={236} cy={384} r={5} />
-                        <circle cx={310} cy={384} r={5} />
-                        <circle cx={458} cy={384} r={5} />
-                        <circle cx={532} cy={384} r={5} />
-                    </g>
+  render(): VNode {
+    return (
+      <g
+        visibility={this.visible.map((visible) => (visible ? 'inherit' : 'hidden'))}
+        transform={this.rotation.map((deg) => `rotate(${deg} 384 384)`)}
+        stroke="white"
+        strokeWidth={3}
+        fill="none"
+      >
+        <g id="ils-deviation-scale">
+          <circle cx={236} cy={384} r={5} />
+          <circle cx={310} cy={384} r={5} />
+          <circle cx={458} cy={384} r={5} />
+          <circle cx={532} cy={384} r={5} />
+        </g>
 
-                    <g visibility={this.pointerVisibilitySub}>
-                        <path
-                            d="M352,256 L416,256 M384,134 L384,294 M384,474 L384,634"
-                            class="rounded shadow"
-                            id="ils-course-pointer-shadow"
-                            stroke-width={4.5}
-                        />
-                        <path
-                            d="M352,256 L416,256 M384,134 L384,294 M384,474 L384,634"
-                            class="Magenta rounded"
-                            id="ils-course-pointer"
-                            stroke-width={4}
-                        />
-                    </g>
+        <g visibility={this.pointerVisibilitySub}>
+          <path
+            d="M352,256 L416,256 M384,134 L384,294 M384,474 L384,634"
+            class="rounded shadow"
+            id="ils-course-pointer-shadow"
+            stroke-width={4.5}
+          />
+          <path
+            d="M352,256 L416,256 M384,134 L384,294 M384,474 L384,634"
+            class="Magenta rounded"
+            id="ils-course-pointer"
+            stroke-width={4}
+          />
+        </g>
 
-                    <g visibility={this.props.available.map((a) => (a ? 'inherit' : 'hidden'))}>
-                        <path
-                            d="M384,304 L384,464"
-                            class="rounded shadow"
-                            transform={this.deviation.map((cdiPx) => `translate(${cdiPx}, 0)`)}
-                            id="ils-deviation-shadow"
-                            stroke-width={4.5}
-                        />
-                        <path
-                            d="M384,304 L384,464"
-                            class="Magenta rounded"
-                            transform={this.deviation.map((cdiPx) => `translate(${cdiPx}, 0)`)}
-                            id="ils-deviation"
-                            stroke-width={4}
-                        />
-                    </g>
-
-                </g>
-            );
-        }
+        <g visibility={this.props.available.map((a) => (a ? 'inherit' : 'hidden'))}>
+          <path
+            d="M384,304 L384,464"
+            class="rounded shadow"
+            transform={this.deviation.map((cdiPx) => `translate(${cdiPx}, 0)`)}
+            id="ils-deviation-shadow"
+            stroke-width={4.5}
+          />
+          <path
+            d="M384,304 L384,464"
+            class="Magenta rounded"
+            transform={this.deviation.map((cdiPx) => `translate(${cdiPx}, 0)`)}
+            id="ils-deviation"
+            stroke-width={4}
+          />
+        </g>
+      </g>
+    );
+  }
 }

@@ -74,6 +74,9 @@ bool FlyByWireInterface::update(double sampleTime) {
   // get data & inputs
   result &= readDataAndLocalVariables(sampleTime);
 
+  // get sim data
+  SimData simData = simConnectInterface.getSimData();
+
   // update performance monitoring
   result &= updatePerformanceMonitoring(sampleTime);
 
@@ -87,10 +90,10 @@ bool FlyByWireInterface::update(double sampleTime) {
   result &= handleFcuInitialization(calculatedSampleTime);
 
   // do not process laws in pause or slew
-  if (simConnectInterface.getSimData().slew_on) {
+  if (simData.slew_on) {
     wasInSlew = true;
     return result;
-  } else if (pauseDetected || simConnectInterface.getSimData().cameraState >= 10.0) {
+  } else if (pauseDetected || simData.cameraState >= 10.0 || !idIsReady->get() || simData.simulationTime < 2) {
     return result;
   }
 
@@ -155,11 +158,14 @@ bool FlyByWireInterface::update(double sampleTime) {
   // update FO side with FO Sync ON
   result &= updateFoSide(calculatedSampleTime);
 
-  // update flight data recorder
-  flightDataRecorder.update(&autopilotStateMachine, &autopilotLaws, &autoThrust, engineData, additionalData);
+  // do not further process when active pause is on
+  if (!simConnectInterface.isSimInActivePause()) {
+    // update flight data recorder
+    flightDataRecorder.update(&autopilotStateMachine, &autopilotLaws, &autoThrust, engineData, additionalData);
+  }
 
   // if default AP is on -> disconnect it
-  if (simConnectInterface.getSimData().autopilot_master_on) {
+  if (simData.autopilot_master_on) {
     simConnectInterface.sendEvent(SimConnectInterface::Events::AUTOPILOT_OFF);
   }
 
@@ -217,13 +223,11 @@ void FlyByWireInterface::loadConfiguration() {
 
   // --------------------------------------------------------------------------
   // load values - autothrust
-  autothrustThrustLimitReverse = INITypeConversion::getDouble(iniStructure, "AUTOTHRUST", "THRUST_LIMIT_REVERSE", -45.0);
-
-  // initialize local variable for reverse
-  idAutothrustThrustLimitREV->set(autothrustThrustLimitReverse);
+  autothrustThrustLimitReversePercentageToga =
+      INITypeConversion::getDouble(iniStructure, "AUTOTHRUST", "THRUST_LIMIT_REVERSE_PERCENTAGE_TOGA", 0.813);
 
   // print configuration into console
-  std::cout << "WASM: AUTOTHRUST : THRUST_LIMIT_REVERSE    = " << autothrustThrustLimitReverse << std::endl;
+  std::cout << "WASM: AUTOTHRUST : THRUST_LIMIT_REVERSE_PERCENTAGE_TOGA    = " << autothrustThrustLimitReversePercentageToga << std::endl;
 
   // --------------------------------------------------------------------------
   // load values - flight controls
@@ -1233,6 +1237,11 @@ bool FlyByWireInterface::updateAdirs(int adirsIndex) {
 }
 
 bool FlyByWireInterface::updateElac(double sampleTime, int elacIndex) {
+  // do not further process when active pause is on
+  if (simConnectInterface.isSimInActivePause()) {
+    return true;
+  }
+
   const int oppElacIndex = elacIndex == 0 ? 1 : 0;
   SimData simData = simConnectInterface.getSimData();
   SimInput simInput = simConnectInterface.getSimInput();
@@ -1346,8 +1355,8 @@ bool FlyByWireInterface::updateElac(double sampleTime, int elacIndex) {
 
       bool blueHighPressure = idHydBluePressurised->get();
 
-      bool elac2EmerPowersupplyActive = elac2EmerPowersupplyRelayOutput &&
-                                        (elac2EmerPowersupplyTimerRelayOutput || elac2EmerPowersupplyNoseWheelCondition || blueHighPressure);
+      bool elac2EmerPowersupplyActive = elac2EmerPowersupplyRelayOutput && (elac2EmerPowersupplyTimerRelayOutput ||
+                                                                            elac2EmerPowersupplyNoseWheelCondition || blueHighPressure);
 
       powerSupplyAvailable = elac2EmerPowersupplyActive ? idElecBat2HotBusPowered->get() : idElecDcBus2Powered->get();
     }
@@ -1370,6 +1379,11 @@ bool FlyByWireInterface::updateElac(double sampleTime, int elacIndex) {
 }
 
 bool FlyByWireInterface::updateSec(double sampleTime, int secIndex) {
+  // do not further process when active pause is on
+  if (simConnectInterface.isSimInActivePause()) {
+    return true;
+  }
+
   const int oppSecIndex = secIndex == 0 ? 1 : 0;
   SimData simData = simConnectInterface.getSimData();
   SimInput simInput = simConnectInterface.getSimInput();
@@ -1592,6 +1606,11 @@ bool FlyByWireInterface::updateFcdc(double sampleTime, int fcdcIndex) {
 }
 
 bool FlyByWireInterface::updateFac(double sampleTime, int facIndex) {
+  // do not further process when active pause is on
+  if (simConnectInterface.isSimInActivePause()) {
+    return true;
+  }
+
   const int oppFacIndex = facIndex == 0 ? 1 : 0;
   SimData simData = simConnectInterface.getSimData();
   SimInputRudderTrim trimInput = simConnectInterface.getSimInputRudderTrim();
@@ -2136,6 +2155,11 @@ bool FlyByWireInterface::updateAutopilotStateMachine(double sampleTime) {
 }
 
 bool FlyByWireInterface::updateAutopilotLaws(double sampleTime) {
+  // do not further process when active pause is on
+  if (simConnectInterface.isSimInActivePause()) {
+    return true;
+  }
+
   // get data from interface ------------------------------------------------------------------------------------------
   SimData simData = simConnectInterface.getSimData();
 
@@ -2381,6 +2405,9 @@ bool FlyByWireInterface::updateAutothrust(double sampleTime) {
   idThrottlePosition3d_1->set(idThrottlePositionLookupTable3d.get(thrustLeverAngle_1->get()));
   idThrottlePosition3d_2->set(idThrottlePositionLookupTable3d.get(thrustLeverAngle_2->get()));
 
+  // update reverser thrust limit
+  idAutothrustThrustLimitREV->set(idAutothrustThrustLimitTOGA->get() * autothrustThrustLimitReversePercentageToga);
+
   // set client data if needed
   if (!autoThrustEnabled || !autopilotStateMachineEnabled || !flyByWireEnabled) {
     ClientDataLocalVariablesAutothrust ClientDataLocalVariablesAutothrust = {
@@ -2489,6 +2516,7 @@ bool FlyByWireInterface::updateAutothrust(double sampleTime) {
     autoThrustInput.in.input.ATHR_reset_disable = simConnectInterface.getSimInputThrottles().ATHR_reset_disable == 1;
     autoThrustInput.in.input.is_TCAS_active = getTcasAdvisoryState() > 1;
     autoThrustInput.in.input.target_TCAS_RA_rate_fpm = autopilotStateMachineOutput.H_dot_c_fpm;
+    autoThrustInput.in.input.tracking_mode_on_override = simConnectInterface.isSimInActivePause();
 
     // step the model -------------------------------------------------------------------------------------------------
     autoThrust.setExternalInputs(&autoThrustInput);

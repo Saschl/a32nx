@@ -4,9 +4,11 @@ mod brakes;
 mod cargo_doors;
 mod elevators;
 mod flaps;
+mod fuel;
 mod gear;
 mod nose_wheel_steering;
 mod payload;
+mod reversers;
 mod rudder;
 mod spoilers;
 mod trimmable_horizontal_stabilizer;
@@ -18,9 +20,11 @@ use brakes::brakes;
 use cargo_doors::cargo_doors;
 use elevators::elevators;
 use flaps::flaps;
+use fuel::fuel;
 use gear::gear;
 use nose_wheel_steering::nose_wheel_steering;
 use payload::payload;
+use reversers::reversers;
 use rudder::rudder;
 use spoilers::spoilers;
 use std::error::Error;
@@ -419,6 +423,7 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
 
         Ok(())
     })?
+    .with_aspect(reversers)?
     .with_aspect(brakes)?
     .with_aspect(cargo_doors)?
     .with_aspect(autobrakes)?
@@ -430,6 +435,7 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .with_aspect(rudder)?
     .with_aspect(gear)?
     .with_aspect(payload)?
+    .with_aspect(fuel)?
     .with_aspect(trimmable_horizontal_stabilizer)?
     .build(A380::new)?;
 
