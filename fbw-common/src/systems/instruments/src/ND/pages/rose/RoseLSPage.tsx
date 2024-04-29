@@ -2,7 +2,16 @@
 //
 // SPDX-License-Identifier: GPL-3.0
 
-import { ComponentProps, ConsumerSubject, DisplayComponent, FSComponent, MappedSubject, Subject, Subscribable, VNode } from '@microsoft/msfs-sdk';
+import {
+  ComponentProps,
+  ConsumerSubject,
+  DisplayComponent,
+  FSComponent,
+  MappedSubject,
+  Subject,
+  Subscribable,
+  VNode,
+} from '@microsoft/msfs-sdk';
 import { Arinc429WordData } from '@flybywiresim/fbw-sdk';
 
 import { RoseMode, RoseModeProps } from './RoseMode';
@@ -21,49 +30,49 @@ export interface RoseLsProps<T extends number> extends RoseModeProps<T> {
 export class RoseLSPage<T extends number> extends RoseMode<T, RoseLsProps<T>> {
   isVisible = Subject.create(false);
 
-    private readonly courseSub = ConsumerSubject.create(null, 0);
+  private readonly courseSub = ConsumerSubject.create(null, 0);
 
-    private readonly courseDeviationSub = ConsumerSubject.create(null, 0);
+  private readonly courseDeviationSub = ConsumerSubject.create(null, 0);
 
-    private readonly ilsAvailableSub = ConsumerSubject.create(null, false);
+  private readonly ilsAvailableSub = ConsumerSubject.create(null, false);
 
-    private readonly ilsFrequencySub = ConsumerSubject.create(null, 0);
+  private readonly ilsFrequencySub = ConsumerSubject.create(null, 0);
 
-    private readonly localizerValidSub = ConsumerSubject.create(null, false);
+  private readonly localizerValidSub = ConsumerSubject.create(null, false);
 
-    onAfterRender(node: VNode) {
-        super.onAfterRender(node);
+  onAfterRender(node: VNode) {
+    super.onAfterRender(node);
 
-        const sub = this.props.bus.getSubscriber<GenericAdirsEvents & GenericDisplayManagementEvents & GenericVorEvents>();
-        const index: 3 | 4 = this.props.index + 2 as (3|4);
+    const sub = this.props.bus.getSubscriber<GenericAdirsEvents & GenericDisplayManagementEvents & GenericVorEvents>();
+    const index: 3 | 4 = (this.props.index + 2) as 3 | 4;
 
-        this.courseSub.setConsumer(sub.on(`nav${index}Obs`).whenChanged()).pause();
-        this.courseDeviationSub.setConsumer(sub.on(`nav${index}RadialError`).whenChanged()).pause();
-        this.ilsAvailableSub.setConsumer(sub.on(`nav${index}Available`).whenChanged()).pause();
-        this.ilsFrequencySub.setConsumer(sub.on(`nav${index}Frequency`).whenChanged()).pause();
-        this.localizerValidSub.setConsumer(sub.on('localizerValid').whenChanged()).pause();
-    }
+    this.courseSub.setConsumer(sub.on(`nav${index}Obs`).whenChanged()).pause();
+    this.courseDeviationSub.setConsumer(sub.on(`nav${index}RadialError`).whenChanged()).pause();
+    this.ilsAvailableSub.setConsumer(sub.on(`nav${index}Available`).whenChanged()).pause();
+    this.ilsFrequencySub.setConsumer(sub.on(`nav${index}Frequency`).whenChanged()).pause();
+    this.localizerValidSub.setConsumer(sub.on('localizerValid').whenChanged()).pause();
+  }
 
   onShow() {
     super.onShow();
 
     const publisher = this.props.bus.getPublisher<NDControlEvents>();
 
-        publisher.pub('set_show_map', false);
-        this.courseSub.resume();
-        this.courseDeviationSub.resume();
-        this.ilsAvailableSub.resume();
-        this.ilsFrequencySub.resume();
-        this.localizerValidSub.resume();
-    }
+    publisher.pub('set_show_map', false);
+    this.courseSub.resume();
+    this.courseDeviationSub.resume();
+    this.ilsAvailableSub.resume();
+    this.ilsFrequencySub.resume();
+    this.localizerValidSub.resume();
+  }
 
-    onHide() {
-        this.courseSub.pause();
-        this.courseDeviationSub.pause();
-        this.ilsAvailableSub.pause();
-        this.ilsFrequencySub.pause();
-        this.localizerValidSub.pause();
-    }
+  onHide() {
+    this.courseSub.pause();
+    this.courseDeviationSub.pause();
+    this.ilsAvailableSub.pause();
+    this.ilsFrequencySub.pause();
+    this.localizerValidSub.pause();
+  }
 
   render(): VNode | null {
     return (
