@@ -2031,7 +2031,7 @@ export class PseudoFWC {
         systemStatus && speeds && !brakesHot && doors && !this.flapsMcduDisagree.get() && !surfacesNotTo;
 
       this.toConfigNormal.set(this.toConfigNormalConf.write(toConfigNormal, deltaTime));
-    } else if (this.toMemo.get() === 0) {
+    } else if (this.fwcFlightPhase.get() >= 7) {
       this.toConfigNormal.set(this.toConfigNormalConf.write(false, deltaTime));
     }
 
