@@ -2001,7 +2001,7 @@ export class PseudoFWC {
 
     /* T.O. CONFIG CHECK */
 
-    if (this.toMemo.get() && this.toConfigTestRaw) {
+    if (this.toMemo.get() === 1 && this.toConfigTestRaw) {
       // TODO Note that fuel tank low pressure and gravity feed warnings are not included
       const systemStatus =
         this.engine1Generator.get() &&
@@ -2031,6 +2031,8 @@ export class PseudoFWC {
         systemStatus && speeds && !brakesHot && doors && !this.flapsMcduDisagree.get() && !surfacesNotTo;
 
       this.toConfigNormal.set(this.toConfigNormalConf.write(toConfigNormal, deltaTime));
+    } else if (this.toMemo.get() === 0) {
+      this.toConfigNormal.set(this.toConfigNormalConf.write(false, deltaTime));
     }
 
     /* CLEAR AND RECALL */
