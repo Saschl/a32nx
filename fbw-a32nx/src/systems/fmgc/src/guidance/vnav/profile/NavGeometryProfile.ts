@@ -75,12 +75,25 @@ export enum VerticalCheckpointReason {
 }
 
 export interface VerticalCheckpoint {
+  /** The reason of this checkpoint being present in the profile */
   reason: VerticalCheckpointReason;
+
+  /** The distance, in nautical miles, from the start of the flight plan to this checkpoint */
   distanceFromStart: NauticalMiles;
+
+  /** The time, in seconds, from the present to this checkpoint */
   secondsFromPresent: Seconds;
+
+  /** The altitude, in feet, at this checkpoint */
   altitude: Feet;
+
+  /** The fuel, in pounds, remaining at this checkpoint */
   remainingFuelOnBoard: number;
+
+  /** The speed, in KCAS, at this checkpoint */
   speed: Knots;
+
+  /** The mach number at this checkpoint */
   mach: Mach;
 }
 

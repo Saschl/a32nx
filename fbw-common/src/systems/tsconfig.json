@@ -5,7 +5,7 @@
     "resolveJsonModule" : true,
     "typeRoots": [
       "../typings",
-      "../../../node_modules/@types",
+      "../../../node_modules/@types"
     ],
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
@@ -18,7 +18,8 @@
       "@typings/*": ["../typings/*"],
       "@flybywiresim/fbw-sdk": ["./index.ts"],
       "@flybywiresim/flypad": ["./instruments/src/EFB/index.ts"],
-      "@flybywiresim/checklists": ["./shared/src/checklists/index.ts"]
+      "@flybywiresim/checklists": ["./shared/src/checklists/index.ts"],
+      "@localization/*": ["../../../fbw-a32nx/src/localization/*"],
     }
   }
 }

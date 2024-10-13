@@ -53,10 +53,10 @@ import { FMBusPublisher } from '../MsfsAvionicsCommon/providers/FMBusPublisher';
 import { FcuBusPublisher, FcuSimVars } from '../MsfsAvionicsCommon/providers/FcuBusPublisher';
 import { RopRowOansPublisher } from '@flybywiresim/msfs-avionics-common';
 import { SimplaneValueProvider } from 'instruments/src/MsfsAvionicsCommon/providers/SimplaneValueProvider';
+import { VerticalDisplayDummy } from './VD/VerticalDisplay';
 
 import './style.scss';
 import './oans-style.scss';
-import { VerticalDisplayDummy } from 'instruments/src/ND/VerticalDisplay';
 
 declare type MousePosition = {
   x: number;

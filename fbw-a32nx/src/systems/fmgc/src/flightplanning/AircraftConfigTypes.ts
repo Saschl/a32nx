@@ -60,6 +60,9 @@ export interface VnavConfig {
    * This value is in lbs.
    */
   MAXIMUM_FUEL_ESTIMATE: number;
+
+  /** Whether to compute the EFIS vertical profile. For aircraft with VDs */
+  COMPUTE_EFIS_VERTICAL_PROFILE: boolean;
 }
 
 /** Only covers aircraft specific configs, no debug switches */

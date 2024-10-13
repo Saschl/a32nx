@@ -162,3 +162,33 @@ export interface TcasWxrMessage {
   text: string;
   color: 'White' | 'Amber';
 }
+
+export interface VerticalProfileVector {
+  startDistance: number;
+  startAltitude: number;
+  endDistance: number;
+  endAltitude: number;
+}
+
+export interface VerticalProfileSymbol {
+  databaseId: string;
+  ident: string;
+
+  /** The distance in front of the aircraft of this symbol, along the flight path, in nautical miles */
+  distance: number;
+
+  /** The altitude of this symbol, in feet */
+  altitude: number;
+
+  direction?: number; // true
+  length?: number; // nautical miles
+  type: NdSymbolTypeFlags;
+  constraints?: string[];
+  radials?: number[];
+  radii?: number[];
+}
+
+export interface VerticalProfile {
+  vectors: VerticalProfileVector[];
+  symbols: VerticalProfileSymbol[];
+}

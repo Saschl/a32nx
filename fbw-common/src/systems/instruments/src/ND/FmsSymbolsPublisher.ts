@@ -1,8 +1,8 @@
-// Copyright (c) 2021-2023 FlyByWire Simulations
+// Copyright (c) 2021-2024 FlyByWire Simulations
 //
 // SPDX-License-Identifier: GPL-3.0
 
-import { NdSymbol, NdTraffic, PathVector } from '@flybywiresim/fbw-sdk';
+import { NdSymbol, NdTraffic, PathVector, VerticalProfile } from '@flybywiresim/fbw-sdk';
 
 export interface FmsSymbolsData {
   symbols: NdSymbol[];
@@ -13,4 +13,5 @@ export interface FmsSymbolsData {
   vectorsAlternate: PathVector[];
   vectorsSecondary: PathVector[];
   traffic: NdTraffic[];
+  verticalProfile: VerticalProfile;
 }

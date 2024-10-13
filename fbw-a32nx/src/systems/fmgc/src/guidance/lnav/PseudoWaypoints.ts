@@ -345,7 +345,7 @@ export class PseudoWaypoints implements GuidanceComponent {
           return [lla, distanceFromEndOfLeg, i];
         }
 
-        if (VnavConfig.DEBUG_PROFILE) {
+        if (VnavConfig.DEBUG_PWP) {
           console.error(`[FMS/PseudoWaypoints] Tried to place PWP ${debugString} on ${geometryLeg.repr}, but failed`);
         }
 
@@ -353,7 +353,7 @@ export class PseudoWaypoints implements GuidanceComponent {
       }
     }
 
-    if (DEBUG) {
+    if (VnavConfig.DEBUG_PWP) {
       console.error(`[FMS/PseudoWaypoints] ${distanceFromEnd.toFixed(2)}nm is larger than the total lateral path.`);
     }
 

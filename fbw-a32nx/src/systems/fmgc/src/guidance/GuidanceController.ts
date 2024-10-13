@@ -34,6 +34,7 @@ import { XFLeg } from './lnav/legs/XF';
 import { VMLeg } from './lnav/legs/VM';
 import { ConsumerValue, EventBus } from '@microsoft/msfs-sdk';
 import { FlightPhaseManagerEvents } from '@fmgc/flightphase';
+import { EfisVerticalProfile } from '@fmgc/efis/EfisVerticalProfile';
 
 // How often the (milliseconds)
 const GEOMETRY_RECOMPUTATION_TIMER = 5_000;
@@ -82,6 +83,8 @@ export class GuidanceController {
   pseudoWaypoints: PseudoWaypoints;
 
   efisVectors: EfisVectors;
+
+  efisVerticalProfile: EfisVerticalProfile | null;
 
   get activeGeometry(): Geometry | null {
     return this.getGeometryForFlightPlan(FlightPlanIndex.Active);
@@ -295,6 +298,10 @@ export class GuidanceController {
     );
     this.pseudoWaypoints = new PseudoWaypoints(flightPlanService, this, this.atmosphericConditions);
     this.efisVectors = new EfisVectors(this.bus, this.flightPlanService, this, efisInterfaces);
+
+    if (this.acConfig.vnavConfig.COMPUTE_EFIS_VERTICAL_PROFILE) {
+      this.efisVerticalProfile = new EfisVerticalProfile(this.vnavDriver);
+    }
   }
 
   init() {
@@ -433,6 +440,15 @@ export class GuidanceController {
     } catch (e) {
       console.error('[FMS] Error during EFIS vectors update. See exception below.');
       console.error(e);
+    }
+
+    if (this.efisVerticalProfile) {
+      try {
+        this.efisVerticalProfile.update(deltaTime);
+      } catch (e) {
+        console.error('[FMS] Error during EFIS Vertical Profile update. See exception below.');
+        console.error(e);
+      }
     }
 
     try {

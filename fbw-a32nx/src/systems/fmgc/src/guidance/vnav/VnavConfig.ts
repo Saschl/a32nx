@@ -21,9 +21,14 @@ export const VnavConfig = {
   VNAV_EMIT_CDA_FLAP_PWP: false,
 
   /**
-   * Whether to pring debug information and errors during the VNAV computation.
+   * Whether to print debug information and errors during the VNAV computation.
    */
   DEBUG_PROFILE: false,
+
+  /**
+   * Whether to print debug information and errors during the VNAV PWP computation.
+   */
+  DEBUG_PWP: false,
 
   /**
    * Whether to print guidance debug information on the ND
