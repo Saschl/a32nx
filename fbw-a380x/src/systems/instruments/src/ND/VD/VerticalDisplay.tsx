@@ -18,7 +18,7 @@ import {
 import { NDSimvars } from 'instruments/src/ND/NDSimvarPublisher';
 import { DmcLogicEvents } from 'instruments/src/MsfsAvionicsCommon/providers/DmcPublisher';
 
-import './style.scss';
+import '../style.scss';
 import { SimplaneValues } from 'instruments/src/MsfsAvionicsCommon/providers/SimplaneValueProvider';
 import { VerticalCanvasMap } from './VerticalCanvasMap';
 
