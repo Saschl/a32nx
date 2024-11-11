@@ -30,6 +30,8 @@ import {
   EfisNdMode,
   MapParameters,
   EfisSide,
+  FmsOansData,
+  FcuSimVars,
 } from '@flybywiresim/fbw-sdk';
 import {
   BBox,
@@ -50,10 +52,8 @@ import { bearingTo, clampAngle, Coordinates, distanceTo, placeBearingDistance } 
 
 import { OansControlEvents } from './OansControlEventPublisher';
 import { reciprocal } from '@fmgc/guidance/lnav/CommonGeometry';
-import { FcuSimVars } from './FcuBusPublisher';
-import { FmsOansData } from './FmsOansPublisher';
 import { FmsDataStore } from './OancControlPanelUtils';
-import { BrakeToVacateUtils } from './BrakeToVacateUtils';
+import { OansBrakeToVacateSelection } from './OansBrakeToVacateSelection';
 import { STYLE_DATA } from './style-data';
 import { OancMovingModeOverlay, OancStaticModeOverlay } from './OancMovingModeOverlay';
 import { OancAircraftIcon } from './OancAircraftIcon';
@@ -146,6 +146,8 @@ export interface OancProps<T extends number> extends ComponentProps {
 }
 
 export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
+  private readonly sub = this.props.bus.getSubscriber<FcuSimVars & OansControlEvents & FmsOansData>();
+
   private readonly animationContainerRef = [
     FSComponent.createRef<HTMLDivElement>(),
     FSComponent.createRef<HTMLDivElement>(),
@@ -296,6 +298,8 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
 
   public readonly arpReferencedMapParams = new MapParameters();
 
+  private readonly oansVisible = ConsumerSubject.create<boolean>(null, false);
+
   private readonly efisNDModeSub = ConsumerSubject.create<EfisNdMode>(null, EfisNdMode.PLAN);
 
   private readonly efisOansRangeSub = ConsumerSubject.create<number>(null, 4);
@@ -306,7 +310,7 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
 
   private readonly fmsDataStore = new FmsDataStore(this.props.bus);
 
-  private readonly btvUtils = new BrakeToVacateUtils<T>(
+  private readonly btvUtils = new OansBrakeToVacateSelection<T>(
     this.props.bus,
     this.labelManager,
     this.aircraftOnGround,
@@ -352,6 +356,8 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
 
   private readonly zoomLevelScales: number[] = this.props.zoomValues.map((it) => 1 / ((it * 2) / DEFAULT_SCALE_NM));
 
+  private readonly oansNotAvailable = ConsumerSubject.create(this.sub.on('oansNotAvail'), true);
+
   public getZoomLevelInverseScale() {
     const multiplier = this.overlayNDModeSub.get() === EfisNdMode.ROSE_NAV ? 0.5 : 1;
 
@@ -365,42 +371,39 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
     this.labelContainerRef.instance.addEventListener('mousemove', this.handleCursorPanMove.bind(this));
     this.labelContainerRef.instance.addEventListener('mouseup', this.handleCursorPanStop.bind(this));
 
-    const sub = this.props.bus.getSubscriber<FcuSimVars & OansControlEvents & FmsOansData>();
+    this.oansVisible.setConsumer(this.sub.on('ndShowOans'));
 
-    this.efisNDModeSub.setConsumer(sub.on('ndMode'));
+    this.efisNDModeSub.setConsumer(this.sub.on('ndMode'));
 
     this.efisNDModeSub.sub((mode) => {
       this.handleNDModeChange(mode);
       this.handleLabelFilter();
     }, true);
 
-    this.efisOansRangeSub.setConsumer(sub.on('oansRange'));
+    this.efisOansRangeSub.setConsumer(this.sub.on('oansRange'));
 
     this.efisOansRangeSub.sub((range) => this.zoomLevelIndex.set(range), true);
 
-    sub
+    this.sub
       .on('oansDisplayAirport')
       .whenChanged()
       .handle((airport) => {
         this.loadAirportMap(airport);
       });
 
-    sub
-      .on('oansNotAvail')
-      .whenChanged()
-      .handle((na) => {
-        if (this.props.messageScreenRef.getOrDefault()) {
-          if (na) {
-            this.props.messageScreenRef.instance.style.visibility = 'visible';
-            this.props.messageScreenRef.instance.innerText = 'NOT AVAIL';
-            this.props.messageScreenRef.instance.classList.add('amber');
-          } else if (this.props.messageScreenRef.instance.innerText === 'NOT AVAIL') {
-            this.props.messageScreenRef.instance.style.visibility = 'hidden';
-            this.props.messageScreenRef.instance.innerText = '';
-            this.props.messageScreenRef.instance.classList.remove('amber');
-          }
+    this.oansNotAvailable.sub((na) => {
+      if (this.props.messageScreenRef.getOrDefault()) {
+        if (na) {
+          this.props.messageScreenRef.instance.style.visibility = 'visible';
+          this.props.messageScreenRef.instance.innerText = 'NOT AVAIL';
+          this.props.messageScreenRef.instance.classList.add('amber');
+        } else if (this.props.messageScreenRef.instance.innerText === 'NOT AVAIL') {
+          this.props.messageScreenRef.instance.style.visibility = 'hidden';
+          this.props.messageScreenRef.instance.innerText = '';
+          this.props.messageScreenRef.instance.classList.remove('amber');
         }
-      });
+      }
+    }, true);
 
     this.fmsDataStore.origin.sub(() => this.updateLabelClasses());
     this.fmsDataStore.departureRunway.sub(() => this.updateLabelClasses());
@@ -907,8 +910,14 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
 
   private lastTime = 0;
 
-  private projectCoordinates(coordinates: Coordinates): [number, number] {
-    return globalToAirportCoordinates(this.arpCoordinates, coordinates);
+  /**
+   *
+   * @param coordinates coordinates to be transformed
+   * @param out Output argument: Write projected coordinates here
+   */
+  private projectCoordinates(coordinates: Coordinates, out: Position): Position {
+    globalToAirportCoordinates(this.arpCoordinates, coordinates, out);
+    return out;
   }
 
   public Update() {
@@ -956,6 +965,21 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
       this.positionVisible.set(false);
     }
 
+    this.projectCoordinates(this.ppos, this.projectedPpos);
+
+    this.props.bus.getPublisher<FmsOansData>().pub('oansAirportLocalCoordinates', this.projectedPpos, true);
+    this.btvUtils.updateRwyAheadAdvisory(
+      this.ppos,
+      this.arpCoordinates,
+      this.planeTrueHeading.get(),
+      this.layerFeatures[2],
+    );
+
+    // If OANS is not visible on this side (i.e. range selector is not on ZOOM), don't continue here to save runtime
+    if (!this.oansVisible.get()) {
+      return;
+    }
+
     const mapTargetHeading = this.modeAnimationMapNorthUp.get() ? 0 : this.planeTrueHeading.get();
     this.mapHeading.set(mapTargetHeading);
 
@@ -990,18 +1014,6 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
       [offsetX, offsetY] = [shiftBy, shiftBy];
     } else {
       [offsetX, offsetY] = this.canvasCentreReferencedMapParams.coordinatesToXYy(this.referencePos);
-    }
-
-    [this.projectedPpos[0], this.projectedPpos[1]] = this.projectCoordinates(this.ppos);
-
-    if (this.props.side === 'L') {
-      this.btvUtils.updateRemainingDistances(this.projectedPpos);
-      this.btvUtils.updateRwyAheadAdvisory(
-        this.ppos,
-        this.arpCoordinates,
-        this.planeTrueHeading.get(),
-        this.layerFeatures[2],
-      );
     }
 
     // TODO figure out how to not need this
@@ -1090,7 +1102,7 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
     this.planeTrueHeading.set(SimVar.GetSimVarValue('PLANE HEADING DEGREES TRUE', 'Degrees'));
 
     if (this.arpCoordinates) {
-      [this.projectedPpos[0], this.projectedPpos[1]] = this.projectCoordinates(this.ppos);
+      this.projectCoordinates(this.ppos, this.projectedPpos);
     }
   }
 
