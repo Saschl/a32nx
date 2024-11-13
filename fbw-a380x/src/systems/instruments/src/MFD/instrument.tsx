@@ -11,7 +11,7 @@ import { FmcService } from 'instruments/src/MFD/FMC/FmcService';
 import { FmcServiceInterface } from 'instruments/src/MFD/FMC/FmcServiceInterface';
 import { MfdComponent } from './MFD';
 import { MfdSimvarPublisher } from './shared/MFDSimvarPublisher';
-import { FailuresConsumer } from '@flybywiresim/fbw-sdk';
+import { FailuresConsumer, FbwAircraftSentryClient } from '@flybywiresim/fbw-sdk';
 import { A380Failure } from '@failures';
 import { FGDataPublisher } from '../MsfsAvionicsCommon/providers/FGDataPublisher';
 import { FmsMfdPublisher } from '../MsfsAvionicsCommon/providers/FmsMfdPublisher';
@@ -52,6 +52,13 @@ class MfdInstrument implements FsInstrument {
     this.backplane.addPublisher('fms', this.fmsDataPublisher);
 
     this.fmcService = new FmcService(this.bus, this.mfdCaptRef.getOrDefault(), this.failuresConsumer);
+
+    new FbwAircraftSentryClient().onInstrumentLoaded({
+      dsn: process.env.SENTRY_DSN,
+      buildInfoFilePrefix: process.env.AIRCRAFT_PROJECT_PREFIX,
+      root: true,
+      enableTracing: false,
+    });
 
     this.doInit();
   }

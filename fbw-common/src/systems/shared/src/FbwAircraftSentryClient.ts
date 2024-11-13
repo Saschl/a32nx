@@ -23,12 +23,12 @@ export interface FbwAircraftSentryClientConfiguration {
   /**
    * Sentry DSN
    */
-  dsn: string;
+  dsn: string | undefined;
 
   /**
    * Prefix of `build_info.json` file, for fetching commit SHA
    */
-  buildInfoFilePrefix: string;
+  buildInfoFilePrefix: string | undefined;
 
   /**
    * Whether to enable interaction tracing
