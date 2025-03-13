@@ -5,10 +5,10 @@ pub(crate) mod legacy {
     use std::cell::Cell;
     use std::rc::Rc;
 
-    use msfs::sys::{ID32, UINT32};
+    use msfs::sys::{FsEventId, FsVarParamArray, ID32, UINT32};
 
-    pub fn execute_calculator_code<T>(_code: &str) {}
-
+    /*     pub fn execute_calculator_code<T>(_code: &str) {}
+     */
     pub fn trigger_key_event(_event_id: ID32, _value: UINT32) {}
 
     pub fn trigger_key_event_ex1(
@@ -20,6 +20,8 @@ pub(crate) mod legacy {
         _value4: UINT32,
     ) {
     }
+
+    pub fn fs_events_trigger_key_event(event_id: FsEventId, value: FsVarParamArray) {}
 
     #[derive(Debug)]
     pub struct AircraftVariable {}
@@ -35,6 +37,31 @@ pub(crate) mod legacy {
 
         pub fn get(&self) -> f64 {
             0.
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct AircraftVariableApi {
+        value: Rc<Cell<f64>>,
+    }
+
+    impl AircraftVariableApi {
+        pub fn from(
+            _name: &str,
+            _units: &str,
+            _index: u32,
+        ) -> Result<Self, Box<dyn std::error::Error>> {
+            Ok(Self {
+                value: Rc::new(Cell::new(0.)),
+            })
+        }
+
+        pub fn get(&self) -> f64 {
+            0.
+        }
+
+        pub fn set(&self, value: f64) {
+            self.value.set(value);
         }
     }
 
@@ -55,6 +82,27 @@ pub(crate) mod legacy {
         }
 
         pub fn set_value(&self, value: f64) {
+            self.value.set(value);
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct NamedVariableApi {
+        value: Rc<Cell<f64>>,
+    }
+
+    impl NamedVariableApi {
+        pub fn from(_name: &str, _unit: &str) -> Self {
+            Self {
+                value: Rc::new(Cell::new(0.)),
+            }
+        }
+
+        pub fn get(&self) -> f64 {
+            self.value.get()
+        }
+
+        pub fn set(&self, value: f64) {
             self.value.set(value);
         }
     }

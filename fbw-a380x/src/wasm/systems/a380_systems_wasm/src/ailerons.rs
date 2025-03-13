@@ -114,17 +114,18 @@ pub(super) fn ailerons(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Er
                 / 3.;
             let spoiler_roll_asymetry = SPOILER_ROLL_COEFF * (values[8] - values[9]);
 
-            aileron_roll_asymetry + spoiler_roll_asymetry + elevator_roll_component
+            (aileron_roll_asymetry + spoiler_roll_asymetry + elevator_roll_component)
+                .clamp(-1.0, -0.000001)
         },
-        Variable::aspect("HYD_FINAL_AILERON_FEEDBACK"),
+        Variable::aircraft("AILERON POSITION", "POSITION", 0),
     );
 
-    builder.variables_to_object(Box::new(RollSimOutput { ailerons: 0. }));
+    //  builder.variables_to_object(Box::new(RollSimOutput { ailerons: 0. }));
 
     Ok(())
 }
 
-#[sim_connect::data_definition]
+/* #[sim_connect::data_definition]
 struct RollSimOutput {
     #[name = "AILERON POSITION"]
     #[unit = "Position"]
@@ -146,7 +147,7 @@ impl VariablesToObject for RollSimOutput {
     }
 
     set_data_on_sim_object!();
-}
+} */
 
 fn hyd_deflection_to_msfs_deflection(
     hyd_deflection: f64,

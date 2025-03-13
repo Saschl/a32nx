@@ -43,9 +43,24 @@ use systems::shared::{
 use systems_wasm::{MsfsSimulationBuilder, Variable};
 use trimmable_horizontal_stabilizer::trimmable_horizontal_stabilizer;
 
-#[msfs::gauge(name=systems)]
-async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
+#[cfg(not(target_arch = "wasm32"))]
+use crate::msfs::{
+    legacy::AircraftVariable, legacy::AircraftVariableApi, legacy::NamedVariableApi,
+    sys::FsVarParamArray, sys::FsVarParamVariant, sys::FsVarParamVariant__bindgen_ty_1,
+};
+
+#[cfg(target_arch = "wasm32")]
+use ::msfs::{
+    legacy::AircraftVariable, legacy::AircraftVariableApi, legacy::NamedVariable,
+    legacy::NamedVariableApi, sys::FsVarParamArray, sys::FsVarParamVariant,
+    sys::FsVarParamVariant__bindgen_ty_1,
+};
+
+#[msfs::system(name=systems)]
+async fn systems(mut gauge: msfs::System) -> Result<(), Box<dyn Error>> {
     let mut sim_connect = gauge.open_simconnect("systems")?;
+
+    println!("Starting A380 systems");
 
     let key_prefix = "A32NX_";
     let (mut simulation, mut handler) = MsfsSimulationBuilder::new(
@@ -417,9 +432,9 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
         (34_021, FailureType::RadioAntennaDirectCoupling(2)),
         (34_022, FailureType::RadioAntennaDirectCoupling(3)),
     ])
-    .provides_aircraft_variable("ACCELERATION BODY X", "feet per second squared", 0)?
+    /*     .provides_aircraft_variable("ACCELERATION BODY X", "feet per second squared", 0)?
     .provides_aircraft_variable("ACCELERATION BODY Y", "feet per second squared", 0)?
-    .provides_aircraft_variable("ACCELERATION BODY Z", "feet per second squared", 0)?
+    .provides_aircraft_variable("ACCELERATION BODY Z", "feet per second squared", 0)? */
     .provides_aircraft_variable("AIRSPEED INDICATED", "Knots", 0)?
     .provides_aircraft_variable("AIRSPEED MACH", "Mach", 0)?
     .provides_aircraft_variable("AIRSPEED TRUE", "Knots", 0)?
@@ -428,13 +443,13 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .provides_aircraft_variable("AMBIENT PRECIP RATE", "millimeters of water", 0)?
     .provides_aircraft_variable("AMBIENT PRESSURE", "inHg", 0)?
     .provides_aircraft_variable("AMBIENT TEMPERATURE", "celsius", 0)?
-    .provides_aircraft_variable("AMBIENT WIND DIRECTION", "Degrees", 0)?
+    .provides_aircraft_variable("AMBIENT WIND DIRECTION", "degree", 0)?
     .provides_aircraft_variable("AMBIENT WIND VELOCITY", "Knots", 0)?
     .provides_aircraft_variable("AMBIENT WIND X", "meter per second", 0)?
     .provides_aircraft_variable("AMBIENT WIND Y", "meter per second", 0)?
     .provides_aircraft_variable("AMBIENT WIND Z", "meter per second", 0)?
     .provides_aircraft_variable("ANTISKID BRAKES ACTIVE", "Bool", 0)?
-    .provides_aircraft_variable("CENTER WHEEL ROTATION ANGLE", "Degrees", 0)?
+    .provides_aircraft_variable("CENTER WHEEL ROTATION ANGLE", "degree", 0)?
     .provides_aircraft_variable("CONTACT POINT COMPRESSION", "Percent", 0)?
     .provides_aircraft_variable("CONTACT POINT COMPRESSION", "Percent", 1)?
     .provides_aircraft_variable("CONTACT POINT COMPRESSION", "Percent", 2)?
@@ -445,7 +460,7 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .provides_aircraft_variable("ENG ON FIRE", "Bool", 3)?
     .provides_aircraft_variable("ENG ON FIRE", "Bool", 4)?
     .provides_aircraft_variable("FUEL TOTAL QUANTITY WEIGHT", "Pounds", 0)?
-    .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 1)?
+    /*     .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 1)?
     .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 2)?
     .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 3)?
     .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 4)?
@@ -455,7 +470,7 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 8)?
     .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 9)?
     .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 10)?
-    .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 11)?
+    .provides_aircraft_variable("FUELSYSTEM TANK QUANTITY", "gallons", 11)? */
     .provides_aircraft_variable("FUELSYSTEM LINE FUEL FLOW", "gallons per hour", 141)?
     .provides_aircraft_variable("GEAR ANIMATION POSITION", "Percent", 0)?
     .provides_aircraft_variable("GEAR ANIMATION POSITION", "Percent", 1)?
@@ -480,12 +495,12 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .provides_aircraft_variable("LIGHT BEACON", "Bool", 0)?
     .provides_aircraft_variable("LIGHT BEACON ON", "Bool", 0)?
     .provides_aircraft_variable("PLANE ALT ABOVE GROUND", "Feet", 0)?
-    .provides_aircraft_variable("PLANE PITCH DEGREES", "Degrees", 0)?
-    .provides_aircraft_variable("PLANE BANK DEGREES", "Degrees", 0)?
-    .provides_aircraft_variable("PLANE HEADING DEGREES MAGNETIC", "Degrees", 0)?
-    .provides_aircraft_variable("PLANE HEADING DEGREES TRUE", "Degrees", 0)?
-    .provides_aircraft_variable("PLANE LATITUDE", "degree latitude", 0)?
-    .provides_aircraft_variable("PLANE LONGITUDE", "degree longitude", 0)?
+    .provides_aircraft_variable("PLANE PITCH DEGREES", "degree", 0)?
+    .provides_aircraft_variable("PLANE BANK DEGREES", "degree", 0)?
+    .provides_aircraft_variable("PLANE HEADING DEGREES MAGNETIC", "degree", 0)?
+    .provides_aircraft_variable("PLANE HEADING DEGREES TRUE", "degree", 0)?
+    .provides_aircraft_variable("PLANE LATITUDE", "degree", 0)?
+    .provides_aircraft_variable("PLANE LONGITUDE", "degree", 0)?
     .provides_aircraft_variable("PRESSURE ALTITUDE", "Feet", 0)?
     .provides_aircraft_variable("PUSHBACK STATE", "Enum", 0)?
     .provides_aircraft_variable("PUSHBACK ANGLE", "Radians", 0)?
@@ -512,16 +527,16 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .provides_aircraft_variable("TURB ENG JET THRUST", "Pounds", 3)?
     .provides_aircraft_variable("TURB ENG JET THRUST", "Pounds", 4)?
     .provides_aircraft_variable("UNLIMITED FUEL", "Bool", 0)?
-    .provides_aircraft_variable("VELOCITY BODY X", "feet per second", 0)?
+    /*     .provides_aircraft_variable("VELOCITY BODY X", "feet per second", 0)?
     .provides_aircraft_variable("VELOCITY BODY Y", "feet per second", 0)?
-    .provides_aircraft_variable("VELOCITY BODY Z", "feet per second", 0)?
+    .provides_aircraft_variable("VELOCITY BODY Z", "feet per second", 0)? */
     .provides_aircraft_variable("VELOCITY WORLD Y", "feet per minute", 0)?
     .provides_aircraft_variable("WHEEL RPM", "RPM", 1)?
     .provides_aircraft_variable("WHEEL RPM", "RPM", 2)?
-    .provides_aircraft_variable("ROTATION VELOCITY BODY X", "degree per second", 0)?
+    /*     .provides_aircraft_variable("ROTATION VELOCITY BODY X", "degree per second", 0)?
     .provides_aircraft_variable("ROTATION VELOCITY BODY Y", "degree per second", 0)?
-    .provides_aircraft_variable("ROTATION VELOCITY BODY Z", "degree per second", 0)?
-    .provides_aircraft_variable(
+    .provides_aircraft_variable("ROTATION VELOCITY BODY Z", "degree per second", 0)? */
+    /*   .provides_aircraft_variable(
         "ROTATION ACCELERATION BODY X",
         "radian per second squared",
         0,
@@ -535,8 +550,8 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
         "ROTATION ACCELERATION BODY Z",
         "radian per second squared",
         0,
-    )?
-    .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 1)?
+    )? */
+    /*     .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 1)?
     .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 2)?
     .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 3)?
     .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 4)?
@@ -553,7 +568,7 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 15)?
     .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 16)?
     .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 17)?
-    .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 18)?
+    .provides_aircraft_variable("PAYLOAD STATION WEIGHT", "Pounds", 18)? */
     .provides_named_variable("FSDT_GSX_BOARDING_STATE")?
     .provides_named_variable("FSDT_GSX_DEBOARDING_STATE")?
     .provides_named_variable("FSDT_GSX_NUMPASSENGERS_BOARDING_TOTAL")?
@@ -595,26 +610,31 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
 
         Ok(())
     })?
-    .with_aspect(reversers)?
-    .with_aspect(brakes)?
-    .with_aspect(cargo_doors)?
-    .with_aspect(autobrakes)?
-    .with_aspect(nose_wheel_steering)?
-    .with_aspect(body_wheel_steering)?
-    .with_aspect(fire)?
-    .with_aspect(flaps)?
-    .with_aspect(spoilers)?
-    .with_aspect(ailerons)?
-    .with_aspect(elevators)?
-    .with_aspect(rudder)?
-    .with_aspect(gear)?
-    .with_aspect(payload)?
-    .with_aspect(fuel)?
-    .with_aspect(trimmable_horizontal_stabilizer)?
+    /*  .with_aspect(reversers)? */
+    /*     .with_aspect(brakes)?
+        .with_aspect(cargo_doors)?
+        .with_aspect(autobrakes)?
+        .with_aspect(nose_wheel_steering)?
+        .with_aspect(body_wheel_steering)?
+        .with_aspect(fire)?
+        .with_aspect(flaps)?
+        .with_aspect(spoilers)?
+        /*  .with_aspect(ailerons)?
+        .with_aspect(elevators)?
+        .with_aspect(rudder)? */
+        .with_aspect(gear)?
+        .with_aspect(payload)?
+        .with_aspect(fuel)? */
+        /*  .with_aspect(trimmable_horizontal_stabilizer)? */
     .build(A380::new)?;
 
-    while let Some(event) = gauge.next_event().await {
-        handler.handle(event, &mut simulation, sim_connect.as_mut().get_mut())?;
+    while let Some(events) = gauge.next_event().await {
+        handler.handle(
+            events.event,
+            events.delta_time,
+            &mut simulation,
+            sim_connect.as_mut().get_mut(),
+        )?;
     }
 
     Ok(())

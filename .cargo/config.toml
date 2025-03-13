@@ -1,12 +1,13 @@
 [net]
 git-fetch-with-cli = true
 
-[target.wasm32-wasi]
+[target.wasm32-wasip1]
 rustflags = [
   "-Ctarget-feature=-crt-static,+bulk-memory",
   "-Clink-self-contained=no",
-  "-Clink-arg=-l","-Clink-arg=c", "-Clink-arg=/workdir/MSFS_SDK/WASM/wasi-sysroot/lib/wasm32-wasi/libclang_rt.builtins-wasm32.a",
-  "-Clink-arg=-L", "-Clink-arg=/workdir/MSFS_SDK/WASM/wasi-sysroot/lib/wasm32-wasi",
+  "-Clink-arg=-l","-Clink-arg=c", "-Clink-arg=/workdir/MSFS2024_SDK/WASM/wasi-sysroot/lib/wasm32-wasi/libclang_rt.builtins-wasm32.a",
+  "-Clink-arg=-L", "-Clink-arg=/workdir/MSFS2024_SDK/WASM/wasi-sysroot/lib/wasm32-wasi",
+  "-Clink-arg=-L", "-Clink-arg=/workdir/MSFS2024_SDK/WASM/WasmVersions/MSFS_WasmVersions.a",
   "-Clink-arg=--export-table",
   "-Clink-arg=--allow-undefined",
   "-Clink-arg=--export-dynamic",
@@ -17,5 +18,6 @@ rustflags = [
   "-Clink-arg=--export=mallinfo",
   "-Clink-arg=--export=mchunkit_begin",
   "-Clink-arg=--export=mchunkit_next",
-  "-Clink-arg=--export=get_pages_state"
+  "-Clink-arg=--export=get_pages_state",
+  "-Clink-arg=-zstack-size=8388608"
 ]

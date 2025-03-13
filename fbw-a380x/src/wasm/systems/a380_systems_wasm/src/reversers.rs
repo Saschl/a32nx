@@ -11,17 +11,67 @@ pub(super) fn reversers(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn E
     builder.map_many(
         ExecuteOn::PreTick,
         vec![
-            Variable::aircraft("ACCELERATION BODY Z", "Feet per second squared", 0),
+            Variable::aircraft("ACCELERATION BODY Z", "feet per second squared", 0),
             Variable::aspect("REVERSER_DELTA_ACCEL"),
         ],
         |values| values[0] + values[1],
         Variable::aspect("ACCELERATION_BODY_Z_WITH_REVERSER"),
     );
+    builder.map_many_if(
+        ExecuteOn::PostTick,
+        vec![
+            Variable::aircraft("VELOCITY BODY Z", "feet/second", 0),
+            Variable::aspect("REVERSER_DELTA_SPEED"),
+            Variable::aspect("BRAKE LEFT FORCE FACTOR"),
+            Variable::aspect("BRAKE RIGHT FORCE FACTOR"),
+        ],
+        |values| {
+            let brakes_in_use = values[2] + values[3] > 0.05;
 
-    builder.variables_to_object(Box::new(ReverserThrust {
-        velocity_z: 0.,
-        angular_acc_y: 0.,
-    }));
+            //println!("ReverserThrust::speed is: {:?}", values[0]);
+
+            let mut speed = values[0];
+            //if (values[1].abs() > 0.) {
+            if values[0] < 0.
+                && values[0] > LOW_SPEED_MODE_SPEED_THRESHOLD_FOOT_PER_SEC
+                && !brakes_in_use
+            {
+                speed = (values[0] + LOW_SPEED_MODE_SPEED_FORCE_MULTIPLIER * values[1])
+            } else {
+                speed = (values[0] + values[1])
+            };
+            //  }
+            speed
+        },
+        |values| values[1].abs() > 0.,
+        Variable::aircraft("VELOCITY BODY Z", "feet/second", 0),
+    );
+
+    builder.map_many_if(
+        ExecuteOn::PostTick,
+        vec![
+            Variable::aircraft(
+                "ROTATION ACCELERATION BODY Y",
+                "radian per second squared",
+                0,
+            ),
+            Variable::named("REVERSER_ANGULAR_ACCELERATION"),
+        ],
+        |values| {
+            let mut accel = values[0];
+            //    if (values[1].abs() > 0.) {
+            //accel =
+            values[0] + ASYMETRY_EFFECT_MAGIC_MULTIPLIER * values[1]
+            //   }
+            //accel
+        },
+        |values| values[1].abs() > 0.,
+        Variable::aircraft(
+            "ROTATION ACCELERATION BODY Y",
+            "radian per second squared",
+            0,
+        ),
+    );
 
     Ok(())
 }
@@ -34,7 +84,7 @@ const LOW_SPEED_MODE_SPEED_FORCE_MULTIPLIER: f64 = 3.;
 // Multiplier to tune the angular torque caused by thrust reverser asymetry
 const ASYMETRY_EFFECT_MAGIC_MULTIPLIER: f64 = 10.;
 
-#[sim_connect::data_definition]
+/* #[sim_connect::data_definition]
 struct ReverserThrust {
     #[name = "VELOCITY BODY Z"]
     #[unit = "Feet per second"]
@@ -79,4 +129,4 @@ impl VariablesToObject for ReverserThrust {
     }
 
     set_data_on_sim_object!();
-}
+} */

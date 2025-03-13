@@ -3,7 +3,7 @@ use std::error::Error;
 use msfs::sim_connect;
 use msfs::{sim_connect::SimConnect, sim_connect::SIMCONNECT_OBJECT_ID_USER};
 
-use systems_wasm::aspects::{MsfsAspectBuilder, ObjectWrite, VariablesToObject};
+use systems_wasm::aspects::{ExecuteOn, MsfsAspectBuilder, ObjectWrite, VariablesToObject};
 use systems_wasm::{set_data_on_sim_object, Variable};
 
 pub(super) fn payload(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Error>> {
@@ -39,6 +39,15 @@ pub(super) fn payload(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Err
         Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 8),
         Variable::aspect("PAYLOAD_STATION_8_REQ"),
     );
+
+    /*     for i in 1..=8 {
+        builder.map(
+            ExecuteOn::PostTick,
+            Variable::aspect(&format!("PAYLOAD_STATION_{i}_REQ")),
+            |value| value,
+            Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", i),
+        );
+    } */
 
     builder.variables_to_object(Box::new(Payload {
         payload_station_1: 0.,

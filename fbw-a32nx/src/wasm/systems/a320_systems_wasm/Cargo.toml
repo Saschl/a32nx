@@ -13,4 +13,4 @@ uom = "0.36.0"
 a320_systems = { path = "../a320_systems" }
 systems = { path = "../../../../../fbw-common/src/wasm/systems/systems" }
 systems_wasm = { path = "../../../../../fbw-common/src/wasm/systems/systems_wasm" }
-msfs = { git = "https://github.com/flybywiresim/msfs-rs", branch = "main" }
+msfs = { git = "https://github.com/flybywiresim/msfs-rs", branch = "feat/add_trigger_key_event_ex1" }

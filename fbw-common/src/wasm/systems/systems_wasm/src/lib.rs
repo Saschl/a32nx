@@ -6,9 +6,17 @@ mod failures;
 mod msfs;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::msfs::legacy::{AircraftVariable, NamedVariable};
+use crate::msfs::{
+    legacy::AircraftVariable, legacy::AircraftVariableApi, legacy::NamedVariableApi,
+    sys::FsVarParamArray, sys::FsVarParamVariant, sys::FsVarParamVariant__bindgen_ty_1,
+};
+
 #[cfg(target_arch = "wasm32")]
-use ::msfs::legacy::{AircraftVariable, NamedVariable};
+use ::msfs::{
+    legacy::AircraftVariable, legacy::AircraftVariableApi, legacy::NamedVariable,
+    legacy::NamedVariableApi, sys::FsVarParamArray, sys::FsVarParamVariant,
+    sys::FsVarParamVariant__bindgen_ty_1,
+};
 
 use crate::anti_ice::{engine_anti_ice, wing_anti_ice};
 use crate::aspects::{Aspect, ExecuteOn, MsfsAspectBuilder};
@@ -20,6 +28,7 @@ use ::msfs::{
 use failures::Failures;
 use fxhash::FxHashMap;
 use std::fmt::{Display, Formatter};
+use std::ops::Add;
 use std::{error::Error, time::Duration};
 use systems::shared::ElectricalBusType;
 use systems::simulation::{InitContext, StartState};
@@ -121,8 +130,14 @@ impl<'a, 'b> MsfsSimulationBuilder<'a, 'b> {
 
     pub fn with_failures(mut self, failures: Vec<(u64, FailureType)>) -> Self {
         let mut f = Failures::new(
-            NamedVariable::from(&format!("{}{}", &self.key_prefix, "FAILURE_ACTIVATE")),
-            NamedVariable::from(&format!("{}{}", &self.key_prefix, "FAILURE_DEACTIVATE")),
+            NamedVariableApi::from(
+                &format!("{}{}", &self.key_prefix, "FAILURE_ACTIVATE"),
+                &"number",
+            ),
+            NamedVariableApi::from(
+                &format!("{}{}", &self.key_prefix, "FAILURE_DEACTIVATE"),
+                &"number",
+            ),
         );
         for failure in failures {
             f.add(failure.0, failure.1);
@@ -137,7 +152,7 @@ impl<'a, 'b> MsfsSimulationBuilder<'a, 'b> {
         mut self,
         name: &str,
         units: &str,
-        index: usize,
+        index: u32,
     ) -> Result<Self, Box<dyn Error>> {
         if let Some(registry) = &mut self.variable_registry {
             registry.register(&Variable::Aircraft(
@@ -184,21 +199,364 @@ impl MsfsHandler {
     pub fn handle<T: Aircraft>(
         &mut self,
         event: MSFSEvent,
+        delta_time_f: f32,
         simulation: &mut Simulation<T>,
         sim_connect: &mut SimConnect,
     ) -> Result<(), Box<dyn Error>> {
         match event {
-            MSFSEvent::PreDraw(_) => {
+            MSFSEvent::PreUpdate => {
+                //    self.time.increment(0.);
+
                 if !self.time.is_pausing() {
                     let delta_time = self.time.take();
-                    self.pre_tick(sim_connect, delta_time)?;
-                    if let Some(failures) = &self.failures {
+
+                    //   self.pre_tick(sim_connect, delta_time)?;
+
+                    /*    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    } */
+
+                    /*    if let Some(failures) = &self.failures {
                         Self::read_failures_into_simulation(failures, simulation);
+                    } */
+
+                    // simulation.tick(delta_time, self.time.simulation_time(), self);
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
                     }
 
-                    simulation.tick(delta_time, self.time.simulation_time(), self);
-                    self.post_tick(sim_connect)?;
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+                    for i in 1..=11 {
+                        AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    for i in 1..=18 {
+                        AircraftVariableApi::from("PAYLOAD STATION WEIGHT", "POUNDS", i)
+                            .unwrap()
+                            .set(500.);
+                    }
+
+                    //  self.post_tick(sim_connect)?;
                 }
+            }
+            MSFSEvent::PreKill => {
+                println!("SYSTEM WASM KILLING SIMULATION.");
+                sim_connect.drop();
             }
             MSFSEvent::SimConnect(message) => match message {
                 SimConnectRecv::SimObjectData(data) if data.id() == SimulationTime::REQUEST_ID => {
@@ -301,7 +659,7 @@ impl SimulatorReaderWriter for MsfsHandler {
 #[derive(Clone)]
 pub enum Variable {
     /// An aircraft variable accessible within the aspect, simulation and simulator.
-    Aircraft(String, String, usize),
+    Aircraft(String, String, u32),
 
     /// A named variable accessible within the aspect, simulation and simulator.
     Named(String, bool),
@@ -329,7 +687,7 @@ impl Display for Variable {
 }
 
 impl Variable {
-    pub fn aircraft(name: &str, units: &str, index: usize) -> Self {
+    pub fn aircraft(name: &str, units: &str, index: u32) -> Self {
         Self::Aircraft(name.into(), units.into(), index)
     }
 
@@ -362,7 +720,7 @@ impl Variable {
         }
     }
 
-    fn indexed_name(name: &str, index: usize) -> String {
+    fn indexed_name(name: &str, index: u32) -> String {
         if index > 0 {
             format!("{}:{}", name, index)
         } else {
@@ -375,8 +733,13 @@ impl From<&Variable> for VariableValue {
     fn from(value: &Variable) -> Self {
         match value {
             Variable::Aircraft(name, units, index, ..) => {
+                /*  println!(
+                    "Creating aircraft variable named '{}' with index {}",
+                    name, index
+                ); */
                 let index = *index;
-                VariableValue::Aircraft(match AircraftVariable::from(name, units, index) {
+
+                VariableValue::Aircraft(match AircraftVariableApi::from(name, units, index) {
                     Ok(aircraft_variable) => aircraft_variable,
                     Err(error) => panic!(
                         "Error while trying to create aircraft variable named '{}': {}",
@@ -384,7 +747,9 @@ impl From<&Variable> for VariableValue {
                     ),
                 })
             }
-            Variable::Named(name, ..) => VariableValue::Named(NamedVariable::from(name)),
+            Variable::Named(name, ..) => {
+                VariableValue::Named(NamedVariableApi::from(name, &"number"))
+            }
             Variable::Aspect(..) => VariableValue::Aspect(0.),
         }
     }
@@ -431,8 +796,8 @@ impl From<&VariableIdentifier> for VariableType {
 }
 
 pub enum VariableValue {
-    Aircraft(AircraftVariable),
-    Named(NamedVariable),
+    Aircraft(AircraftVariableApi),
+    Named(NamedVariableApi),
     Aspect(f64),
 }
 
@@ -440,15 +805,15 @@ impl VariableValue {
     fn read(&self) -> f64 {
         match self {
             Self::Aircraft(underlying) => underlying.get(),
-            Self::Named(underlying) => underlying.get_value(),
+            Self::Named(underlying) => underlying.get(),
             Self::Aspect(underlying) => *underlying,
         }
     }
 
     fn write(&mut self, value: f64) {
         match self {
-            Self::Aircraft(_) => panic!("Cannot write to an aircraft variable."),
-            Self::Named(underlying) => underlying.set_value(value),
+            Self::Aircraft(underlying) => underlying.set(value),
+            Self::Named(underlying) => underlying.set(value),
             Self::Aspect(underlying) => *underlying = value,
         }
     }

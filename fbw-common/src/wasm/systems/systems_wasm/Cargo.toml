@@ -10,6 +10,6 @@ test = false
 [dependencies]
 uom = "0.36.0"
 systems = { path = "../systems" }
-msfs = { git = "https://github.com/flybywiresim/msfs-rs", branch = "main" }
+msfs = { git = "https://github.com/flybywiresim/msfs-rs", branch = "feat/add_trigger_key_event_ex1" }
 fxhash = "0.2.1"
 enum_dispatch = "0.3.7"

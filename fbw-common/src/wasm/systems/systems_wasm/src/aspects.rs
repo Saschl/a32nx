@@ -1,10 +1,15 @@
+#[cfg(not(target_arch = "wasm32"))]
+use crate::msfs::legacy::trigger_key_event_ex1;
+#[cfg(target_arch = "wasm32")]
+use msfs::legacy::trigger_key_event_ex1;
+
 use crate::{
     f64_to_sim_connect_32k_pos, sim_connect_32k_pos_inv_to_f64, sim_connect_32k_pos_to_f64,
     MsfsVariableRegistry, Variable,
 };
 use enum_dispatch::enum_dispatch;
 use msfs::sim_connect::{SimConnect, SimConnectRecv, SIMCONNECT_OBJECT_ID_USER};
-use msfs::sys;
+use msfs::sys::{self, fsEventsTriggerKeyEvent};
 use std::error::Error;
 use std::time::{Duration, Instant};
 use systems::simulation::VariableIdentifier;
@@ -90,7 +95,7 @@ impl<'a, 'b> MsfsAspectBuilder<'a, 'b> {
 
     /// Initialise the variable with the given value.
     pub fn init_variable(&mut self, variable: Variable, value: f64) {
-        Self::precondition_not_aircraft_variable(&variable);
+        //  Self::precondition_not_aircraft_variable(&variable);
 
         let identifier = self.variables.register(&variable);
         self.variables.write(&identifier, value);
@@ -98,7 +103,7 @@ impl<'a, 'b> MsfsAspectBuilder<'a, 'b> {
 
     /// Copy a variable's value to another variable.
     pub fn copy(&mut self, input: Variable, output: Variable) {
-        Self::precondition_not_aircraft_variable(&output);
+        // Self::precondition_not_aircraft_variable(&output);
 
         let input = self.variables.register(&input);
         let output = self.variables.register(&output);
@@ -117,7 +122,7 @@ impl<'a, 'b> MsfsAspectBuilder<'a, 'b> {
         func: fn(f64) -> f64,
         output: Variable,
     ) {
-        Self::precondition_not_aircraft_variable(&output);
+        // Self::precondition_not_aircraft_variable(&output);
 
         let inputs = self.variables.register(&input);
         let output = self.variables.register(&output);
@@ -134,13 +139,33 @@ impl<'a, 'b> MsfsAspectBuilder<'a, 'b> {
         func: fn(&[f64]) -> f64,
         output: Variable,
     ) {
-        Self::precondition_not_aircraft_variable(&output);
+        //    Self::precondition_not_aircraft_variable(&output);
 
         let inputs = self.variables.register_many(&inputs);
         let output = self.variables.register(&output);
 
         self.actions
             .push((MapMany::new(inputs, func, output).into(), execute_on));
+    }
+
+    /// Map a set of variable values to another variable.
+    pub fn map_many_if(
+        &mut self,
+        execute_on: ExecuteOn,
+        inputs: Vec<Variable>,
+        func: fn(&[f64]) -> f64,
+        condition: fn(&[f64]) -> bool,
+        output: Variable,
+    ) {
+        //    Self::precondition_not_aircraft_variable(&output);
+
+        let inputs = self.variables.register_many(&inputs);
+        let output = self.variables.register(&output);
+
+        self.actions.push((
+            MapManyIf::new(inputs, func, condition, output).into(),
+            execute_on,
+        ));
     }
 
     /// Reduce a set of variable values into one output value and write it to a variable.
@@ -220,6 +245,55 @@ impl<'a, 'b> MsfsAspectBuilder<'a, 'b> {
         Ok(())
     }
 
+    /// Write the variable's value to an event. If you use [Self::event_to_variable] for the same
+    /// event, then you should use [Self::variable_to_event_id] instead.
+    pub fn variable_to_key_event(
+        &mut self,
+        input: Variable,
+        mapping: VariableToEventMapping,
+        write_on: VariableToEventWriteOn,
+        event_id: u32,
+    ) -> Result<(), Box<dyn Error>> {
+        let input = self.variables.register(&input);
+
+        self.actions.push((
+            ToKeyEvent::new(input, mapping, write_on, event_id)?.into(),
+            ExecuteOn::PostTick,
+        ));
+
+        Ok(())
+    }
+
+    /// Write the variable's value to an event. If you use [Self::event_to_variable] for the same
+    /// event, then you should use [Self::variable_to_event_id] instead.
+    pub fn variable_to_event_with_params(
+        &mut self,
+        input: Variable,
+        param1: u32,
+        param2: u32,
+        mapping: VariableToEventMapping,
+        write_on: VariableToEventWriteOn,
+        event_name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let input = self.variables.register(&input);
+
+        self.actions.push((
+            ManyToEvent::new(
+                self.sim_connect,
+                input,
+                param1,
+                param2,
+                mapping,
+                write_on,
+                event_name,
+            )?
+            .into(),
+            ExecuteOn::PostTick,
+        ));
+
+        Ok(())
+    }
+
     /// Write the variable's value to an event with the given event id. This function should be used
     /// when you previously acquired an event id using [Self::event_to_variable].
     pub fn variable_to_event_id(
@@ -281,6 +355,7 @@ impl MsfsAspect {
             .iter_mut()
             .try_for_each(|(action, execute_on)| {
                 if *execute_on == execute_moment {
+                    //println!("Executing action");
                     action.execute(sim_connect, variables)?;
                 }
 
@@ -345,6 +420,9 @@ enum VariableAction {
     ToObject,
     ToEvent,
     OnChange,
+    ManyToEvent,
+    ToKeyEvent,
+    MapManyIf,
 }
 
 #[enum_dispatch(VariableAction)]
@@ -353,6 +431,7 @@ trait ExecutableVariableAction {
         &mut self,
         sim_connect: &mut SimConnect,
         variables: &mut MsfsVariableRegistry,
+        //objectwrite: ObjectWrite,
     ) -> Result<(), Box<dyn Error>>;
 }
 
@@ -436,6 +515,48 @@ impl ExecutableVariableAction for MapMany {
 
         let result = (self.func)(&values);
         variables.write(&self.output_variable_identifier, result);
+
+        Ok(())
+    }
+}
+
+struct MapManyIf {
+    input_variable_identifiers: Vec<VariableIdentifier>,
+    func: fn(&[f64]) -> f64,
+    condition: fn(&[f64]) -> bool,
+    output_variable_identifier: VariableIdentifier,
+}
+
+impl MapManyIf {
+    fn new(
+        input_variable_identifiers: Vec<VariableIdentifier>,
+        func: fn(&[f64]) -> f64,
+        condition: fn(&[f64]) -> bool,
+        output_variable_identifier: VariableIdentifier,
+    ) -> Self {
+        //precondition_multiple_identifiers("MapMany", &input_variable_identifiers);
+
+        Self {
+            input_variable_identifiers,
+            func,
+            condition,
+            output_variable_identifier,
+        }
+    }
+}
+
+impl ExecutableVariableAction for MapManyIf {
+    fn execute(
+        &mut self,
+        _: &mut SimConnect,
+        variables: &mut MsfsVariableRegistry,
+    ) -> Result<(), Box<dyn Error>> {
+        let values: Vec<f64> = variables.read_many(&self.input_variable_identifiers);
+
+        if (self.condition)(&values) {
+            let result = (self.func)(&values);
+            variables.write(&self.output_variable_identifier, result);
+        }
 
         Ok(())
     }
@@ -910,7 +1031,7 @@ impl ExecutableVariableAction for ToEvent {
         };
 
         if should_write {
-            sim_connect.transmit_client_event(
+            /*    sim_connect.transmit_client_event(
                 SIMCONNECT_OBJECT_ID_USER,
                 self.event_id,
                 match self.mapping {
@@ -919,7 +1040,158 @@ impl ExecutableVariableAction for ToEvent {
                         f64_to_sim_connect_32k_pos(value)
                     }
                 },
-            )?;
+            )?; */
+            println!("Transmitting simconnect event with data: {}", value);
+
+            self.last_written_value = Some(value);
+        }
+
+        Ok(())
+    }
+}
+
+struct ToKeyEvent {
+    input: VariableIdentifier,
+    mapping: VariableToEventMapping,
+    write_on: VariableToEventWriteOn,
+    event_id: u32,
+    last_written_value: Option<f64>,
+}
+
+impl ToKeyEvent {
+    fn new(
+        input: VariableIdentifier,
+        mapping: VariableToEventMapping,
+        write_on: VariableToEventWriteOn,
+        event_id: u32,
+    ) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            input,
+            mapping,
+            write_on,
+            last_written_value: None,
+            event_id,
+        })
+    }
+}
+
+impl ExecutableVariableAction for ToKeyEvent {
+    fn execute(
+        &mut self,
+        sim_connect: &mut SimConnect,
+        variables: &mut MsfsVariableRegistry,
+    ) -> Result<(), Box<dyn Error>> {
+        let value = variables.read(&self.input);
+        let should_write = match self.write_on {
+            VariableToEventWriteOn::EveryTick => true,
+            VariableToEventWriteOn::Change => match self.last_written_value {
+                // Allow floating point equality comparison, because we really care about the
+                // value being exactly equal and assume that the code that changes this value
+                // is equal for every simulation tick.
+                #[allow(clippy::float_cmp)]
+                Some(last_written_value) => value != last_written_value,
+                None => true,
+            },
+        };
+
+        if should_write {
+            let value = variables.read(&self.input);
+            let data = match self.mapping {
+                VariableToEventMapping::EventDataRaw => value as sys::DWORD,
+                VariableToEventMapping::EventData32kPosition => f64_to_sim_connect_32k_pos(value),
+            };
+            trigger_key_event_ex1(self.event_id, data, 0, 0, 0, 0);
+            self.last_written_value = Some(value);
+        }
+
+        Ok(())
+    }
+}
+
+struct ManyToEvent {
+    input: VariableIdentifier,
+    param1: u32,
+    param2: u32,
+    mapping: VariableToEventMapping,
+    write_on: VariableToEventWriteOn,
+    event_id: sys::DWORD,
+    last_written_value: Option<f64>,
+}
+
+impl ManyToEvent {
+    fn new(
+        sim_connect: &mut SimConnect,
+        input: VariableIdentifier,
+        param1: u32,
+        param2: u32,
+        mapping: VariableToEventMapping,
+        write_on: VariableToEventWriteOn,
+        event_name: &str,
+    ) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            input,
+            param1,
+            param2,
+            mapping,
+            write_on,
+            event_id: sim_connect.map_client_event_to_sim_event(event_name, false)?,
+            last_written_value: None,
+        })
+    }
+
+    fn new_with_event_id(
+        input: VariableIdentifier,
+        param1: u32,
+        param2: u32,
+        mapping: VariableToEventMapping,
+        write_on: VariableToEventWriteOn,
+        event_id: sys::DWORD,
+    ) -> Self {
+        Self {
+            input,
+            param1,
+            param2,
+            mapping,
+            write_on,
+            event_id,
+            last_written_value: None,
+        }
+    }
+}
+
+impl ExecutableVariableAction for ManyToEvent {
+    fn execute(
+        &mut self,
+        sim_connect: &mut SimConnect,
+        variables: &mut MsfsVariableRegistry,
+    ) -> Result<(), Box<dyn Error>> {
+        let value = variables.read(&self.input);
+        let should_write = match self.write_on {
+            VariableToEventWriteOn::EveryTick => true,
+            VariableToEventWriteOn::Change => match self.last_written_value {
+                // Allow floating point equality comparison, because we really care about the
+                // value being exactly equal and assume that the code that changes this value
+                // is equal for every simulation tick.
+                #[allow(clippy::float_cmp)]
+                Some(last_written_value) => value != last_written_value,
+                None => true,
+            },
+        };
+
+        if should_write {
+            /*    let data = match self.mapping {
+                VariableToEventMapping::EventDataRaw => value as sys::DWORD,
+                VariableToEventMapping::EventData32kPosition => f64_to_sim_connect_32k_pos(value),
+            }; */
+            println!(
+                "Transmitting simconnect event with data: {} {} {}",
+                value, self.param1, self.param2
+            );
+            /*    sim_connect.transmit_client_event_ex1(
+                SIMCONNECT_OBJECT_ID_USER,
+                self.event_id,
+                [self.param1, self.param2, 0, 0, 0],
+            )?; */
             self.last_written_value = Some(value);
         }
 

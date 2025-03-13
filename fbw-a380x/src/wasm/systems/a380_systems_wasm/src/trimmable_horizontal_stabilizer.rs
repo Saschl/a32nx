@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use systems_wasm::aspects::{MsfsAspectBuilder, ObjectWrite, VariablesToObject};
+use systems_wasm::aspects::{ExecuteOn, MsfsAspectBuilder, ObjectWrite, VariablesToObject};
 use systems_wasm::{set_data_on_sim_object, Variable};
 
 use systems::shared::to_bool;
@@ -11,12 +11,18 @@ use msfs::{sim_connect::SimConnect, sim_connect::SIMCONNECT_OBJECT_ID_USER};
 pub(super) fn trimmable_horizontal_stabilizer(
     builder: &mut MsfsAspectBuilder,
 ) -> Result<(), Box<dyn Error>> {
-    builder.variables_to_object(Box::new(PitchTrimSimOutput { elevator_trim: 0. }));
+    //  builder.variables_to_object(Box::new(PitchTrimSimOutput { elevator_trim: 0. }));
+    builder.map(
+        ExecuteOn::PostTick,
+        Variable::aspect("HYD_FINAL_THS_DEFLECTION"),
+        |value| value.clamp(0.0, 359.9),
+        Variable::aircraft("ELEVATOR TRIM POSITION", "DEGREE", 0),
+    );
 
     Ok(())
 }
 
-#[sim_connect::data_definition]
+/* #[sim_connect::data_definition]
 struct PitchTrimSimOutput {
     #[name = "ELEVATOR TRIM POSITION"]
     #[unit = "DEGREE"]
@@ -39,3 +45,4 @@ impl VariablesToObject for PitchTrimSimOutput {
 
     set_data_on_sim_object!();
 }
+ */

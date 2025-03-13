@@ -18,12 +18,16 @@ use brakes::brakes;
 use elevators::elevators;
 use flaps::flaps;
 use gear::gear;
+use msfs::sim_connect::{data_definition, SimConnectRecv};
+use msfs::MSFSEvent;
 use nose_wheel_steering::nose_wheel_steering;
 use payload::payload;
 use reversers::reversers;
 use rudder::rudder;
 use spoilers::spoilers;
 use std::error::Error;
+use std::thread::sleep;
+use std::time::Duration;
 use systems::air_conditioning::{
     acs_controller::AcscId, cabin_pressure_controller::CpcId, Channel, ZoneType,
 };
@@ -36,10 +40,28 @@ use systems_wasm::aspects::ExecuteOn;
 use systems_wasm::{MsfsSimulationBuilder, Variable};
 use trimmable_horizontal_stabilizer::trimmable_horizontal_stabilizer;
 
-#[msfs::gauge(name=systems)]
-async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
+#[cfg(not(target_arch = "wasm32"))]
+use crate::msfs::legacy::{AircraftVariable, NamedVariableApi};
+#[cfg(target_arch = "wasm32")]
+use ::msfs::legacy::{AircraftVariable, NamedVariable, NamedVariableApi};
+
+#[msfs::system(name=systems)]
+async fn systems(mut gauge: msfs::System) -> Result<(), Box<dyn Error>> {
     let mut sim_connect = gauge.open_simconnect("systems")?;
 
+    let mut delta_time = 0.;
+    /*     while let Some(event) = gauge.next_event().await {
+        let camera_state: f64 = AircraftVariable::from("CAMERA STATE", "enum", 0)
+            .unwrap()
+            .get();
+
+        if camera_state == 2. || camera_state == 3. {
+            delta_time += event.delta_time;
+            if (delta_time > 10.) {
+                break;
+            }
+        }
+    } */
     let key_prefix = "A32NX_";
     let (mut simulation, mut handler) = MsfsSimulationBuilder::new(
         key_prefix,
@@ -351,17 +373,17 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .provides_aircraft_variable("TOTAL AIR TEMPERATURE", "celsius", 0)?
     .provides_aircraft_variable("TRAILING EDGE FLAPS LEFT PERCENT", "Percent", 0)?
     .provides_aircraft_variable("TRAILING EDGE FLAPS RIGHT PERCENT", "Percent", 0)?
-    .provides_aircraft_variable("TURB ENG CORRECTED N1", "Percent", 1)?
-    .provides_aircraft_variable("TURB ENG CORRECTED N1", "Percent", 2)?
-    .provides_aircraft_variable("TURB ENG CORRECTED N2", "Percent", 1)?
-    .provides_aircraft_variable("TURB ENG CORRECTED N2", "Percent", 2)?
-    .provides_aircraft_variable("TURB ENG JET THRUST", "Pounds", 1)?
-    .provides_aircraft_variable("TURB ENG JET THRUST", "Pounds", 2)?
+    .provides_aircraft_variable("TURB ENG CORRECTED N1", "percent", 1)?
+    .provides_aircraft_variable("TURB ENG CORRECTED N1", "percent", 2)?
+    .provides_aircraft_variable("TURB ENG CORRECTED N2", "percent", 1)?
+    .provides_aircraft_variable("TURB ENG CORRECTED N2", "percent", 2)?
+    .provides_aircraft_variable("TURB ENG JET THRUST", "lbs", 1)?
+    .provides_aircraft_variable("TURB ENG JET THRUST", "lbs", 2)?
     .provides_aircraft_variable("TURB ENG IGNITION SWITCH EX1", "Enum", 1)?
     .provides_aircraft_variable("UNLIMITED FUEL", "Bool", 0)?
-    .provides_aircraft_variable("VELOCITY BODY X", "feet per second", 0)?
-    .provides_aircraft_variable("VELOCITY BODY Y", "feet per second", 0)?
-    .provides_aircraft_variable("VELOCITY BODY Z", "feet per second", 0)?
+    .provides_aircraft_variable("VELOCITY BODY X", "feet/second", 0)?
+    .provides_aircraft_variable("VELOCITY BODY Y", "feet/second", 0)?
+    .provides_aircraft_variable("VELOCITY BODY Z", "feet/second", 0)?
     .provides_aircraft_variable("VELOCITY WORLD Y", "feet per minute", 0)?
     .provides_aircraft_variable("WHEEL RPM", "RPM", 1)?
     .provides_aircraft_variable("WHEEL RPM", "RPM", 2)?
@@ -451,7 +473,12 @@ async fn systems(mut gauge: msfs::Gauge) -> Result<(), Box<dyn Error>> {
     .build(A320::new)?;
 
     while let Some(event) = gauge.next_event().await {
-        handler.handle(event, &mut simulation, sim_connect.as_mut().get_mut())?;
+        handler.handle(
+            event.event,
+            event.delta_time,
+            &mut simulation,
+            sim_connect.as_mut().get_mut(),
+        )?;
     }
 
     Ok(())

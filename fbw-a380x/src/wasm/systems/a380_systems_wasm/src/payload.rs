@@ -3,89 +3,109 @@ use std::error::Error;
 use msfs::sim_connect;
 use msfs::{sim_connect::SimConnect, sim_connect::SIMCONNECT_OBJECT_ID_USER};
 
-use systems_wasm::aspects::{MsfsAspectBuilder, ObjectWrite, VariablesToObject};
+use systems_wasm::aspects::{ExecuteOn, MsfsAspectBuilder, ObjectWrite, VariablesToObject};
 use systems_wasm::{set_data_on_sim_object, Variable};
 
 pub(super) fn payload(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Error>> {
-    builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 1),
+    /*     builder.copy(
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 1),
         Variable::aspect("PAYLOAD_STATION_1_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 2),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 2),
         Variable::aspect("PAYLOAD_STATION_2_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 3),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 3),
         Variable::aspect("PAYLOAD_STATION_3_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 4),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 4),
         Variable::aspect("PAYLOAD_STATION_4_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 5),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 5),
         Variable::aspect("PAYLOAD_STATION_5_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 6),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 6),
         Variable::aspect("PAYLOAD_STATION_6_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 7),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 7),
         Variable::aspect("PAYLOAD_STATION_7_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 8),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 8),
         Variable::aspect("PAYLOAD_STATION_8_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 9),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 9),
         Variable::aspect("PAYLOAD_STATION_9_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 10),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 10),
         Variable::aspect("PAYLOAD_STATION_10_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 11),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 11),
         Variable::aspect("PAYLOAD_STATION_11_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 12),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 12),
         Variable::aspect("PAYLOAD_STATION_12_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 13),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 13),
         Variable::aspect("PAYLOAD_STATION_13_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 14),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 14),
         Variable::aspect("PAYLOAD_STATION_14_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 15),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 15),
         Variable::aspect("PAYLOAD_STATION_15_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 16),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 16),
         Variable::aspect("PAYLOAD_STATION_16_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 17),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 17),
         Variable::aspect("PAYLOAD_STATION_17_REQ"),
     );
     builder.copy(
-        Variable::aircraft("PAYLOAD STATION WEIGHT", "Pounds", 18),
+        Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", 18),
         Variable::aspect("PAYLOAD_STATION_18_REQ"),
     );
+    */
 
-    builder.variables_to_object(Box::<Payload>::default());
+    for i in 1..=18 {
+        builder.copy(
+            Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", i),
+            Variable::aspect(&format!("PAYLOAD_STATION_{i}_REQ")),
+        );
+
+        builder.map_many_if(
+            ExecuteOn::PostTick,
+            vec![
+                Variable::aspect(&format!("PAYLOAD_STATION_{i}_REQ")),
+                Variable::named("BOARDING_STARTED_BY_USR"),
+                Variable::named("FSDT_GSX_BOARDING_STATE"),
+            ],
+            |values| values[0],
+            |values| values[1] > 0. || values[2] >= 4. && values[2] < 6.,
+            Variable::aircraft("PAYLOAD STATION WEIGHT", "POUNDS", i),
+        );
+    }
+
+    //builder.variables_to_object(Box::<Payload>::default());
 
     Ok(())
 }
 
-#[sim_connect::data_definition]
+/* #[sim_connect::data_definition]
 #[derive(Default)]
 struct Payload {
     #[name = "PAYLOAD STATION WEIGHT:1"]
@@ -192,3 +212,4 @@ impl VariablesToObject for Payload {
 
     set_data_on_sim_object!();
 }
+ */

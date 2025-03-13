@@ -1,3 +1,4 @@
+use msfs::sys::{KEY_STEERING_DEC, KEY_STEERING_SET};
 use std::error::Error;
 use systems::shared::{normalise_angle, to_bool};
 use systems_wasm::aspects::{
@@ -5,6 +6,8 @@ use systems_wasm::aspects::{
     VariableToEventWriteOn,
 };
 use systems_wasm::Variable;
+use uom::si::angle::{degree, radian};
+use uom::si::quantities::Angle;
 
 pub(super) fn nose_wheel_steering(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Error>> {
     // The rudder pedals should start in a centered position.
@@ -142,20 +145,42 @@ pub(super) fn nose_wheel_steering(builder: &mut MsfsAspectBuilder) -> Result<(),
         Variable::aspect("STEERING_ANGLE_MAX_COMMAND"),
     );
 
-    builder.variable_to_event(
+    /*     builder.variable_to_event(
         Variable::aspect("STEERING_ANGLE_COMMAND"),
         VariableToEventMapping::EventData32kPosition,
         VariableToEventWriteOn::EveryTick,
         "STEERING_SET",
-    )?;
+    )?; */
 
-    builder.variable_to_event(
-        Variable::aspect("STEERING_ANGLE_MAX_COMMAND"),
+    builder.variable_to_key_event(
+        Variable::aspect("STEERING_ANGLE_COMMAND"),
         VariableToEventMapping::EventData32kPosition,
         VariableToEventWriteOn::EveryTick,
-        "NOSE_WHEEL_STEERING_LIMIT_SET",
+        KEY_STEERING_SET,
     )?;
 
+    builder.map(
+        ExecuteOn::PostTick,
+        Variable::aspect("STEERING_ANGLE_MAX_COMMAND"),
+        |value: f64| {
+            //  let angle = Angle::new::<degree>((value - 0.5).abs() * 360.0);
+            /*   let radians = angle.get::<radian>() as f64;
+            println!("rad {}", radians); */
+            // angle.value
+            let indegree = (value - 0.5).abs() * 360.0;
+            indegree.clamp(0., 359.)
+        },
+        // degree desn't work
+        Variable::aircraft("NOSEWHEEL MAX STEERING ANGLE", "degree", 0),
+    );
+
+    /*    builder.variable_to_event(
+           Variable::aspect("STEERING_ANGLE_MAX_COMMAND"),
+           VariableToEventMapping::EventData32kPosition,
+           VariableToEventWriteOn::EveryTick,
+           "NOSE_WHEEL_STEERING_LIMIT_SET",
+       )?;
+    */
     // Adds rotational speed to nose wheel based on steering angle
     const STEERING_RATIO_TO_WHEEL_ANGLE_GAIN: f64 = 80.;
     builder.map_many(
@@ -225,8 +250,10 @@ fn steering_max_demand_to_msfs_from_steering_angle(nose_wheel_position: f64) -> 
     const MAX_MSFS_STEERING_ANGLE_DEGREES: f64 = 180.;
 
     // Steering in msfs is the max we want rescaled to the max in msfs
-    nose_wheel_position.abs() * MAX_CONTROLLABLE_STEERING_ANGLE_DEGREES
+    let val = nose_wheel_position.abs() * MAX_CONTROLLABLE_STEERING_ANGLE_DEGREES
         / MAX_MSFS_STEERING_ANGLE_DEGREES
         / 2.
-        + 0.5
+        + 0.5;
+    //  println!("STEERING_ANGLE_MAX_COMMAND {}", val);
+    val
 }

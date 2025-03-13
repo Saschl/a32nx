@@ -69,16 +69,16 @@ pub(super) fn elevators(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn E
             Variable::named("HYD_ELEVATOR_RIGHT_OUTWARD_DEFLECTION"),
             Variable::named("HYD_ELEVATOR_RIGHT_INWARD_DEFLECTION"),
         ],
-        |values| (values[3] + values[2] + values[1] + values[0]) / 4.,
-        Variable::aspect("HYD_FINAL_ELEVATOR_FEEDBACK"),
+        |values| ((values[3] + values[2] + values[1] + values[0]) / 4.),
+        Variable::aircraft("ELEVATOR POSITION", "Position", 0),
     );
 
-    builder.variables_to_object(Box::new(PitchSimOutput { elevator: 0. }));
+    // builder.variables_to_object(Box::new(PitchSimOutput { elevator: 0. }));
 
     Ok(())
 }
 
-#[sim_connect::data_definition]
+/* #[sim_connect::data_definition]
 struct PitchSimOutput {
     #[name = "ELEVATOR POSITION"]
     #[unit = "Position"]
@@ -100,7 +100,7 @@ impl VariablesToObject for PitchSimOutput {
     }
 
     set_data_on_sim_object!();
-}
+} */
 
 fn hyd_deflection_to_msfs_deflection(
     hyd_deflection: f64,

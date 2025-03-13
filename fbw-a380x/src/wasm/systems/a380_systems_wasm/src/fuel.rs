@@ -4,7 +4,7 @@ use msfs::sim_connect;
 use msfs::{sim_connect::SimConnect, sim_connect::SIMCONNECT_OBJECT_ID_USER};
 use systems::shared::to_bool;
 
-use systems_wasm::aspects::{MsfsAspectBuilder, ObjectWrite, VariablesToObject};
+use systems_wasm::aspects::{ExecuteOn, MsfsAspectBuilder, ObjectWrite, VariablesToObject};
 use systems_wasm::{set_data_on_sim_object, Variable};
 
 pub(super) fn fuel(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Error>> {
@@ -13,14 +13,24 @@ pub(super) fn fuel(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Error>
             Variable::aircraft("FUELSYSTEM TANK QUANTITY", "gallons", i),
             Variable::aspect(&format!("FUEL_TANK_QUANTITY_{i}")),
         );
+        builder.map_many_if(
+            ExecuteOn::PostTick,
+            vec![
+                Variable::aspect(&format!("FUEL_TANK_QUANTITY_{i}")),
+                Variable::named("REFUEL_STARTED_BY_USR"),
+            ],
+            |values| values[0],
+            |values| to_bool(values[1]),
+            Variable::aircraft("FUELSYSTEM TANK QUANTITY", "gallons", i),
+        );
     }
 
-    builder.variables_to_object(Box::<Fuel>::default());
+    //builder.variables_to_object(Box::<Fuel>::default());
 
     Ok(())
 }
 
-#[sim_connect::data_definition]
+/* #[sim_connect::data_definition]
 #[derive(Default)]
 struct Fuel {
     #[name = "FUELSYSTEM TANK QUANTITY:1"]
@@ -108,3 +118,4 @@ impl VariablesToObject for Fuel {
 
     set_data_on_sim_object!();
 }
+ */

@@ -29,23 +29,23 @@ pub(super) fn rudder(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Erro
         Variable::named("HYD_LOWER_RUDDER_DEFLECTION"),
     );
 
-    // AILERON POSITION FEEDBACK TO SIM
+    // RUDDER POSITION FEEDBACK TO SIM
     builder.map_many(
         ExecuteOn::PostTick,
         vec![
             Variable::named("HYD_UPPER_RUDDER_DEFLECTION"),
             Variable::named("HYD_LOWER_RUDDER_DEFLECTION"),
         ],
-        |values| (values[1] + values[0]) / 2.,
-        Variable::aspect("HYD_FINAL_RUDDER_FEEDBACK"),
+        |values| ((values[1] + values[0]) / 2.),
+        Variable::aircraft("RUDDER POSITION", "Position", 0),
     );
 
-    builder.variables_to_object(Box::new(YawSimOutput { rudder: 0. }));
+    // builder.variables_to_object(Box::new(YawSimOutput { rudder: 0. }));
 
     Ok(())
 }
 
-#[sim_connect::data_definition]
+/* #[sim_connect::data_definition]
 struct YawSimOutput {
     #[name = "RUDDER POSITION"]
     #[unit = "Position"]
@@ -67,4 +67,4 @@ impl VariablesToObject for YawSimOutput {
     }
 
     set_data_on_sim_object!();
-}
+} */

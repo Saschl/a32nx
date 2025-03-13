@@ -1,11 +1,16 @@
 #[cfg(not(target_arch = "wasm32"))]
-use crate::msfs::legacy::execute_calculator_code;
+use crate::msfs::legacy::trigger_key_event_ex1;
 #[cfg(target_arch = "wasm32")]
-use msfs::legacy::execute_calculator_code;
+use msfs::legacy::trigger_key_event_ex1;
 use systems::shared::to_bool;
 
 use crate::{ExecuteOn, MsfsAspectBuilder, Variable};
 use std::error::Error;
+
+use msfs::sys::{
+    KEY_ANTI_ICE_TOGGLE_ENG1, KEY_ANTI_ICE_TOGGLE_ENG2, KEY_ANTI_ICE_TOGGLE_ENG3,
+    KEY_ANTI_ICE_TOGGLE_ENG4, KEY_TOGGLE_STRUCTURAL_DEICE,
+};
 
 pub(super) fn engine_anti_ice(
     engine_count: usize,
@@ -19,7 +24,7 @@ pub(super) fn engine_anti_ice(
                         "BUTTON_OVHD_ANTI_ICE_ENG_{}_POSITION",
                         engine_number
                     )),
-                    Variable::aircraft("ENG ANTI ICE", "bool", engine_number),
+                    Variable::aircraft("ENG ANTI ICE", "bool", engine_number.try_into().unwrap()),
                 ],
                 Box::new(move |prev_values, new_values| {
                     let was_eng_anti_ice_push_button_on = to_bool(prev_values[0]);
@@ -32,14 +37,19 @@ pub(super) fn engine_anti_ice(
                         is_eng_anti_ice_on != is_eng_anti_ice_push_button_on;
 
                     if has_eng_anti_ice_button_changed && eng_anti_ice_disagrees {
-                        execute_calculator_code::<()>(&format!(
-                            "{} (>K:ANTI_ICE_SET_ENG{})",
-                            match is_eng_anti_ice_push_button_on {
-                                true => 1,
-                                false => 0,
-                            },
-                            engine_number
-                        ));
+                        let state = match is_eng_anti_ice_push_button_on {
+                            true => 1,
+                            false => 0,
+                        };
+
+                        match engine_number {
+                            1 => trigger_key_event_ex1(KEY_ANTI_ICE_TOGGLE_ENG1, state, 0, 0, 0, 0),
+                            2 => trigger_key_event_ex1(KEY_ANTI_ICE_TOGGLE_ENG2, state, 0, 0, 0, 0),
+
+                            3 => trigger_key_event_ex1(KEY_ANTI_ICE_TOGGLE_ENG3, state, 0, 0, 0, 0),
+                            4 => trigger_key_event_ex1(KEY_ANTI_ICE_TOGGLE_ENG4, state, 0, 0, 0, 0),
+                            _ => (),
+                        }
                     }
                 }),
             );
@@ -68,7 +78,7 @@ pub(super) fn wing_anti_ice() -> impl FnOnce(&mut MsfsAspectBuilder) -> Result<(
                 let structural_anti_ice_disagrees = is_deicing != is_wing_anti_ice_on;
 
                 if has_wing_anti_ice_changed && structural_anti_ice_disagrees {
-                    execute_calculator_code::<()>("(>K:TOGGLE_STRUCTURAL_DEICE)");
+                    trigger_key_event_ex1(KEY_TOGGLE_STRUCTURAL_DEICE, 0, 0, 0, 0, 0)
                 }
             }),
         );

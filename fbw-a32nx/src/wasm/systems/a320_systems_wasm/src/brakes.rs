@@ -1,3 +1,9 @@
+#[cfg(not(target_arch = "wasm32"))]
+use crate::msfs::legacy::trigger_key_event_ex1;
+#[cfg(target_arch = "wasm32")]
+use msfs::legacy::trigger_key_event_ex1;
+use msfs::sys::{KEY_AXIS_LEFT_BRAKE_SET, KEY_AXIS_RIGHT_BRAKE_SET};
+
 use std::error::Error;
 use systems::shared::{from_bool, to_bool};
 use systems_wasm::aspects::{
