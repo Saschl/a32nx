@@ -98,21 +98,26 @@ pub(super) fn ailerons(builder: &mut MsfsAspectBuilder) -> Result<(), Box<dyn Er
             Variable::aspect("HYD_AIL_RIGHT_OUTWARD_DEFLECTION"),
             Variable::aspect("HYD_AIL_RIGHT_MIDDLE_DEFLECTION"),
             Variable::aspect("HYD_AIL_RIGHT_INWARD_DEFLECTION"),
-            Variable::aspect("HYD_ELEV_LEFT_DEFLECTION"),
-            Variable::aspect("HYD_ELEV_RIGHT_DEFLECTION"),
+            Variable::named("HYD_ELEVATOR_LEFT_OUTWARD_DEFLECTION"),
+            Variable::named("HYD_ELEVATOR_LEFT_INWARD_DEFLECTION"),
+            Variable::named("HYD_ELEVATOR_RIGHT_OUTWARD_DEFLECTION"),
+            Variable::named("HYD_ELEVATOR_RIGHT_INWARD_DEFLECTION"),
             Variable::named("HYD_SPOILERS_LEFT_DEFLECTION"),
             Variable::named("HYD_SPOILERS_RIGHT_DEFLECTION"),
+            // Variable::aspect("HYD_ELEV_RIGHT_DEFLECTION"),
         ],
         |values| {
             const SPOILER_ROLL_COEFF: f64 = 0.5;
             const AILERON_ROLL_COEFF: f64 = 1.;
             const ELEVATOR_ROLL_COEFF: f64 = 0.2;
 
-            let elevator_roll_component = ELEVATOR_ROLL_COEFF * (values[7] - values[6]);
+            let elevator_roll_component =
+                ELEVATOR_ROLL_COEFF * ((values[8] + values[9]) - (values[6] + values[7])) / 2.;
             let aileron_roll_asymetry = AILERON_ROLL_COEFF
                 * ((values[3] + values[4] + values[5]) - (values[0] + values[1] + values[2]))
                 / 3.;
-            let spoiler_roll_asymetry = SPOILER_ROLL_COEFF * (values[8] - values[9]);
+            let spoiler_roll_asymetry = SPOILER_ROLL_COEFF * (values[11] - values[10]);
+            //println!("Right elevator: {}", values[8]);
 
             aileron_roll_asymetry + spoiler_roll_asymetry + elevator_roll_component
         },
