@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 FlyByWire Simulations
+// Copyright (c) 2023-2025 FlyByWire Simulations
 // SPDX-License-Identifier: GPL-3.0
 
 import { FlightPlanService } from '@fmgc/flightplanning/FlightPlanService';
@@ -27,6 +27,7 @@ import {
   NXDataStore,
   Units,
   UpdateThrottler,
+  VerticalPathCheckpoint,
   Waypoint,
   a380EfisRangeSettings,
 } from '@flybywiresim/fbw-sdk';
@@ -38,7 +39,7 @@ import {
   TypeIMessage,
 } from 'instruments/src/MFD/shared/NXSystemMessages';
 import { DataManager, LatLonFormatType, PilotWaypoint } from '@fmgc/flightplanning/DataManager';
-import { distanceTo, Coordinates } from 'msfs-geo';
+import { Coordinates, bearingTo } from 'msfs-geo';
 import { FmsDisplayInterface } from '@fmgc/flightplanning/interface/FmsDisplayInterface';
 import { MfdDisplayInterface } from 'instruments/src/MFD/MFD';
 import { FmcIndex } from 'instruments/src/MFD/FMC/FmcServiceInterface';
@@ -55,6 +56,8 @@ import { EfisSymbols } from '@fmgc/efis/EfisSymbols';
 import { FlightPlanIndex } from '@fmgc/flightplanning/FlightPlanManager';
 import { NavigationDatabase, NavigationDatabaseBackend } from '@fmgc/NavigationDatabase';
 import { NavigationDatabaseService } from '@fmgc/flightplanning/NavigationDatabaseService';
+import { ReadonlyFlightPlan } from '@fmgc/flightplanning/plans/ReadonlyFlightPlan';
+import { VdAltitudeConstraint } from 'instruments/src/MsfsAvionicsCommon/providers/MfdSurvPublisher';
 
 export interface FmsErrorMessage {
   message: McduMessage;
@@ -124,7 +127,7 @@ export class FlightManagementComputer implements FmcInterface {
     return this.#guidanceController;
   }
 
-  #navigation = new Navigation(this.bus, this.flightPlanService);
+  #navigation: Navigation;
 
   get navigation() {
     if (this.instance !== FmcIndex.FmcA) {
@@ -140,7 +143,8 @@ export class FlightManagementComputer implements FmcInterface {
     return this.#navigation.getNavaidTuner();
   }
 
-  private efisSymbols!: EfisSymbols<number>;
+  private efisSymbolsLeft!: EfisSymbols<number>;
+  private efisSymbolsRight!: EfisSymbols<number>;
 
   private readonly flightPhaseManager = new FlightPhaseManager(this.bus);
 
@@ -211,6 +215,15 @@ export class FlightManagementComputer implements FmcInterface {
     this.fmgc.data.zeroFuelWeightCenterOfGravity,
   );
 
+  private readonly destDataEntered = MappedSubject.create(
+    ([qnh, temperature, wind]) => qnh !== null && temperature !== null && wind !== null,
+    this.fmgc.data.approachQnh,
+    this.fmgc.data.approachTemperature,
+    this.fmgc.data.approachWind,
+  );
+
+  private destDataCheckedInCruise = false;
+
   constructor(
     private instance: FmcIndex,
     operatingMode: FmcOperatingModes,
@@ -223,6 +236,8 @@ export class FlightManagementComputer implements FmcInterface {
 
     const db = new NavigationDatabase(NavigationDatabaseBackend.Msfs);
     NavigationDatabaseService.activeDatabase = db;
+
+    this.#navigation = new Navigation(this.bus, this.flightPlanService);
 
     this.flightPlanService.createFlightPlans();
 
@@ -238,17 +253,30 @@ export class FlightManagementComputer implements FmcInterface {
         a380EfisRangeSettings,
         A380AircraftConfig,
       );
-      this.efisSymbols = new EfisSymbols(
+      this.efisSymbolsLeft = new EfisSymbols(
         this.bus,
+        'L',
         this.#guidanceController,
         this.flightPlanService,
         this.navaidTuner,
-        this.efisInterfaces,
+        this.efisInterfaces.L,
         a380EfisRangeSettings,
+        true,
+      );
+      this.efisSymbolsRight = new EfisSymbols(
+        this.bus,
+        'R',
+        this.#guidanceController,
+        this.flightPlanService,
+        this.navaidTuner,
+        this.efisInterfaces.R,
+        a380EfisRangeSettings,
+        true,
       );
 
       this.#navigation.init();
-      this.efisSymbols.init();
+      this.efisSymbolsLeft.init();
+      this.efisSymbolsRight.init();
       this.flightPhaseManager.init();
       this.#guidanceController.init();
       this.fmgc.guidanceController = this.#guidanceController;
@@ -270,7 +298,7 @@ export class FlightManagementComputer implements FmcInterface {
             !Number.isFinite(this.flightPlanService.active.performanceData.costIndex)
           ) {
             this.flightPlanService.active.setPerformanceData('costIndex', 0);
-            this.addMessageToQueue(NXSystemMessages.costIndexInUse.getModifiedMessage('0'));
+            this.addMessageToQueue(NXSystemMessages.costIndexInUse.getModifiedMessage('000'));
           }
         }),
         this.legacyFmsIsHealthy.sub((v) => {
@@ -291,6 +319,12 @@ export class FlightManagementComputer implements FmcInterface {
             this.addMessageToQueue(NXSystemMessages.comFplnRecievedPendingInsertion);
           } else {
             this.removeMessageFromQueue(NXSystemMessages.comFplnRecievedPendingInsertion.text);
+          }
+        }),
+        this.destDataEntered,
+        this.destDataEntered.sub((v) => {
+          if (v) {
+            this.removeMessageFromQueue(NXSystemMessages.enterDestData.text);
           }
         }),
       );
@@ -494,19 +528,11 @@ export class FlightManagementComputer implements FmcInterface {
 
     // Start the check routine for system health and status
     setInterval(() => {
-      if (
-        this.flightPhaseManager.phase === FmgcFlightPhase.Cruise &&
-        !this.destDataChecked &&
-        this.navigation.getPpos()
-      ) {
-        const dest = this.flightPlanService.active.destinationAirport;
-        const ppos = this.navigation.getPpos();
-        if (dest?.location && ppos) {
-          const distanceFromPpos = distanceTo(ppos, dest.location);
-          if (dest && distanceFromPpos < 180) {
-            this.destDataChecked = true;
-            this.checkDestData();
-          }
+      if (this.flightPhaseManager.phase === FmgcFlightPhase.Cruise && !this.destDataCheckedInCruise) {
+        const destPred = this.guidanceController.vnavDriver.getDestinationPrediction();
+        if (destPred && Number.isFinite(destPred.distanceFromAircraft) && destPred.distanceFromAircraft < 180) {
+          this.destDataCheckedInCruise = true;
+          this.checkDestData();
         }
       }
     }, 15000);
@@ -641,7 +667,7 @@ export class FlightManagementComputer implements FmcInterface {
     this.mfdReference?.openMessageList();
   }
 
-  createLatLonWaypoint(coordinates: Coordinates, stored: boolean, ident?: string): PilotWaypoint {
+  createLatLonWaypoint(coordinates: Coordinates, stored: boolean, ident?: string): PilotWaypoint | null {
     return this.dataManager?.createLatLonWaypoint(coordinates, stored, ident) ?? null;
   }
 
@@ -652,7 +678,7 @@ export class FlightManagementComputer implements FmcInterface {
     bearing2: DegreesTrue,
     stored?: boolean,
     ident?: string,
-  ): PilotWaypoint {
+  ): PilotWaypoint | null {
     return (
       this.dataManager?.createPlaceBearingPlaceBearingWaypoint(place1, bearing1, place2, bearing2, stored, ident) ??
       null
@@ -665,15 +691,13 @@ export class FlightManagementComputer implements FmcInterface {
     distance: NauticalMiles,
     stored?: boolean,
     ident?: string,
-  ): PilotWaypoint {
+  ): PilotWaypoint | null {
     return this.dataManager?.createPlaceBearingDistWaypoint(place, bearing, distance, stored, ident) ?? null;
   }
 
   getStoredWaypointsByIdent(ident: string): PilotWaypoint[] {
     return this.dataManager?.getStoredWaypointsByIdent(ident) ?? [];
   }
-
-  private destDataChecked = false;
 
   /**
    * This method is called by the FlightPhaseManager after a flight phase change
@@ -690,7 +714,7 @@ export class FlightManagementComputer implements FmcInterface {
 
     switch (nextPhase) {
       case FmgcFlightPhase.Takeoff: {
-        this.destDataChecked = false;
+        this.destDataCheckedInCruise = false;
 
         const plan = this.flightPlanService.active;
         const pd = this.fmgc.data;
@@ -732,7 +756,7 @@ export class FlightManagementComputer implements FmcInterface {
       }
 
       case FmgcFlightPhase.Climb: {
-        this.destDataChecked = false;
+        this.destDataCheckedInCruise = false;
 
         /** Activate pre selected speed/mach */
         if (prevPhase === FmgcFlightPhase.Takeoff) {
@@ -763,10 +787,8 @@ export class FlightManagementComputer implements FmcInterface {
       }
 
       case FmgcFlightPhase.Cruise: {
+        this.destDataCheckedInCruise = false;
         SimVar.SetSimVarValue('L:A32NX_GOAROUND_PASSED', 'bool', 0);
-        Coherent.call('GENERAL_ENG_THROTTLE_MANAGED_MODE_SET', ThrottleMode.AUTO)
-          .catch(console.error)
-          .catch(console.error);
 
         const cruisePreSel = this.fmgc.data.cruisePreSelSpeed.get();
         const cruisePreSelMach = this.fmgc.data.cruisePreSelMach.get();
@@ -790,10 +812,6 @@ export class FlightManagementComputer implements FmcInterface {
       case FmgcFlightPhase.Descent: {
         this.checkDestData();
 
-        Coherent.call('GENERAL_ENG_THROTTLE_MANAGED_MODE_SET', ThrottleMode.AUTO)
-          .catch(console.error)
-          .catch(console.error);
-
         /** Activate pre selected speed/mach */
         const desPreSel = this.fmgc.data.descentPreSelSpeed.get();
         if (prevPhase === FmgcFlightPhase.Cruise && desPreSel) {
@@ -810,7 +828,6 @@ export class FlightManagementComputer implements FmcInterface {
       }
 
       case FmgcFlightPhase.Approach: {
-        Coherent.call('GENERAL_ENG_THROTTLE_MANAGED_MODE_SET', ThrottleMode.AUTO).catch(console.error);
         SimVar.SetSimVarValue('L:A32NX_GOAROUND_PASSED', 'bool', 0);
 
         this.checkDestData();
@@ -899,27 +916,8 @@ export class FlightManagementComputer implements FmcInterface {
   }
 
   private checkDestData(): void {
-    const destPred = this.guidanceController.vnavDriver.getDestinationPrediction();
-    if (
-      this.flightPhaseManager.phase >= FmgcFlightPhase.Descent ||
-      (this.flightPhaseManager.phase === FmgcFlightPhase.Cruise && destPred && destPred.distanceFromAircraft < 180)
-    ) {
-      if (
-        !Number.isFinite(this.fmgc.data.approachQnh.get()) ||
-        !Number.isFinite(this.fmgc.data.approachTemperature.get()) ||
-        !Number.isFinite(this.fmgc.data.approachWind.get()?.direction) ||
-        !Number.isFinite(this.fmgc.data.approachWind.get()?.speed)
-      ) {
-        this.addMessageToQueue(
-          NXSystemMessages.enterDestData,
-          () =>
-            Number.isFinite(this.fmgc.data.approachQnh.get()) &&
-            Number.isFinite(this.fmgc.data.approachTemperature.get()) &&
-            Number.isFinite(this.fmgc.data.approachWind.get()?.direction) &&
-            Number.isFinite(this.fmgc.data.approachWind.get()?.speed),
-          () => {},
-        );
-      }
+    if (!this.destDataEntered.get()) {
+      this.addMessageToQueue(NXSystemMessages.enterDestData);
     }
   }
 
@@ -1016,6 +1014,7 @@ export class FlightManagementComputer implements FmcInterface {
       }
       this.checkZfwParams();
       this.updateMessageQueue();
+      this.updateVerticalPath();
 
       this.acInterface.checkSpeedLimit();
       this.acInterface.thrustReductionAccelerationChecks();
@@ -1046,7 +1045,8 @@ export class FlightManagementComputer implements FmcInterface {
 
     this.guidanceController.update(dt);
 
-    this.efisSymbols.update(dt);
+    this.efisSymbolsLeft.update();
+    this.efisSymbolsRight.update();
 
     this.acInterface.arincBusOutputs.forEach((word) => word.writeToSimVarIfDirty());
   }
@@ -1080,6 +1080,106 @@ export class FlightManagementComputer implements FmcInterface {
 
   tryGoInApproachPhase(): void {
     this.flightPhaseManager.tryGoInApproachPhase();
+  }
+
+  private updateVerticalPath() {
+    // Transmit active vertical geometry
+    const predictions = this.guidanceController.vnavDriver.mcduProfile?.waypointPredictions;
+    const plan: ReadonlyFlightPlan = this.flightPlanService.active;
+
+    if (!predictions || !this.flightPlanService.hasActive) {
+      this.acInterface.transmitVerticalPath([], [], [], [], null);
+      return;
+    }
+
+    const targetProfile = this.guidanceController.vnavDriver.mcduProfile;
+    const descentProfile = this.guidanceController.vnavDriver.descentProfile;
+    const actualProfile = this.guidanceController.vnavDriver.ndProfile;
+
+    const targetProfileVd: VerticalPathCheckpoint[] = [];
+    const showFromLegIndex = Math.max(0, plan.activeLegIndex - 1);
+
+    if (targetProfile) {
+      targetProfile.checkpoints.forEach((c) => {
+        const currentDistance = targetProfile.distanceToPresentPosition;
+
+        targetProfileVd.push({
+          distanceFromAircraft: c.distanceFromStart - currentDistance,
+          altitude: c.altitude,
+        });
+      });
+    }
+
+    // Separately extract all altitude constraints
+    const vdAltitudeConstraints: VdAltitudeConstraint[] = plan.allLegs
+      .slice(showFromLegIndex)
+      .filter((leg, legIndex) => leg.isDiscontinuity === false && predictions.get(legIndex + showFromLegIndex))
+      .map((_, legIndex) => {
+        const legPrediction = predictions.get(legIndex + showFromLegIndex);
+
+        return {
+          altitudeConstraint: legPrediction?.altitudeConstraint,
+          isAltitudeConstraintMet: legPrediction?.isAltitudeConstraintMet,
+        };
+      });
+
+    const descentProfileVd: VerticalPathCheckpoint[] = descentProfile
+      ? descentProfile.checkpoints.map((c) => {
+          return {
+            distanceFromAircraft:
+              c.distanceFromStart +
+              this.guidanceController.vnavDriver.computeTacticalToGuidanceProfileOffset() -
+              descentProfile.distanceToPresentPosition,
+            altitude: c.altitude,
+            altitudeConstraint: undefined,
+            isAltitudeConstraintMet: undefined,
+          };
+        })
+      : [];
+
+    const actualProfileVd: VerticalPathCheckpoint[] = actualProfile
+      ? actualProfile.checkpoints.map((c) => {
+          return {
+            distanceFromAircraft: c.distanceFromStart - actualProfile.distanceToPresentPosition,
+            altitude: c.altitude,
+            altitudeConstraint: undefined,
+            isAltitudeConstraintMet: undefined,
+          };
+        })
+      : [];
+
+    // Start of grey area
+    // FIXME improve, currently only works on a per-leg-basis
+    let lastBearing: number | null = null;
+    let trackChangesSignificantlyAtDistance: number | null = null;
+    const previousLeg = plan.allLegs[showFromLegIndex - 1];
+    let lastLegLatLong: Coordinates =
+      showFromLegIndex > 0 && previousLeg.isDiscontinuity === false && previousLeg.definition.waypoint
+        ? previousLeg.definition.waypoint.location
+        : this.guidanceController.lnavDriver.ppos;
+
+    plan.allLegs.slice(showFromLegIndex).forEach((leg, legIndex) => {
+      const legPrediction = predictions.get(legIndex + showFromLegIndex);
+      if (leg.isDiscontinuity === false && legPrediction) {
+        if (leg.definition.waypoint && trackChangesSignificantlyAtDistance === null) {
+          const bearing = bearingTo(lastLegLatLong, leg.definition.waypoint.location);
+          if (lastBearing !== null && Math.abs(lastBearing - bearing) > 3) {
+            trackChangesSignificantlyAtDistance = legPrediction.distanceFromAircraft;
+          }
+          lastBearing = bearing;
+        }
+
+        lastLegLatLong = leg.definition.waypoint?.location ?? lastLegLatLong;
+      }
+    });
+
+    this.acInterface.transmitVerticalPath(
+      targetProfileVd,
+      vdAltitudeConstraints,
+      actualProfileVd,
+      descentProfileVd,
+      trackChangesSignificantlyAtDistance,
+    );
   }
 
   async swapNavDatabase(): Promise<void> {

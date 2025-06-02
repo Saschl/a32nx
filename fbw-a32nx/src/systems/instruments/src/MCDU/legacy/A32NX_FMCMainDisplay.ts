@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import {
+  A320EfisNdRangeValue,
   a320EfisRangeSettings,
   Arinc429OutputWord,
   Arinc429SignStatusMatrix,
@@ -48,7 +49,7 @@ import { FmsClient } from '@atsu/fmsclient';
 import { AtsuStatusCodes } from '@datalink/common';
 import { A320_Neo_CDU_MainDisplay } from './A320_Neo_CDU_MainDisplay';
 import { FmsDisplayInterface } from '@fmgc/flightplanning/interface/FmsDisplayInterface';
-import { FmsErrorType } from '@fmgc/FmsError';
+import { FmsError, FmsErrorType } from '@fmgc/FmsError';
 import { FmsDataInterface } from '@fmgc/flightplanning/interface/FmsDataInterface';
 import { EventBus } from '@microsoft/msfs-sdk';
 import { AdfRadioTuningStatus, MmrRadioTuningStatus, VorRadioTuningStatus } from '@fmgc/navigation/NavaidTuner';
@@ -63,6 +64,7 @@ import { FlightPlanIndex } from '@fmgc/flightplanning/FlightPlanManager';
 import { initComponents, updateComponents } from '@fmgc/components';
 import { CoRouteUplinkAdapter } from '@fmgc/flightplanning/uplink/CoRouteUplinkAdapter';
 import { WaypointEntryUtils } from '@fmgc/flightplanning/WaypointEntryUtils';
+import { FmcWindVector } from '@fmgc/guidance/vnav/wind/types';
 
 export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInterface, Fmgc {
   private static DEBUG_INSTANCE: FMCMainDisplay;
@@ -102,8 +104,8 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
   public averageWind = 0;
   public perfApprQNH = NaN;
   public perfApprTemp = NaN;
-  public perfApprWindHeading = NaN;
-  public perfApprWindSpeed = NaN;
+  public perfApprWindHeading: number | null = null;
+  public perfApprWindSpeed: number | null = null;
   public unconfirmedV1Speed = undefined;
   public unconfirmedVRSpeed = undefined;
   public unconfirmedV2Speed = undefined;
@@ -203,7 +205,8 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
   public zeroFuelWeight?: number;
   public zeroFuelWeightMassCenter?: number;
   private activeWpIdx = undefined;
-  private efisSymbols = undefined;
+  private efisSymbolsLeft?: EfisSymbols<A320EfisNdRangeValue>;
+  private efisSymbolsRight?: EfisSymbols<A320EfisNdRangeValue>;
   public groundTempAuto?: number = undefined;
   public groundTempPilot?: number = undefined;
   /**
@@ -357,19 +360,30 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
       A320AircraftConfig,
     );
     this.navigation = new Navigation(this.bus, this.currFlightPlanService);
-    this.efisSymbols = new EfisSymbols(
+    this.efisSymbolsLeft = new EfisSymbols(
       this.bus,
+      'L',
       this.guidanceController,
       this.currFlightPlanService,
       this.navigation.getNavaidTuner(),
-      this.efisInterfaces,
+      this.efisInterfaces.L,
+      a320EfisRangeSettings,
+    );
+    this.efisSymbolsRight = new EfisSymbols(
+      this.bus,
+      'R',
+      this.guidanceController,
+      this.currFlightPlanService,
+      this.navigation.getNavaidTuner(),
+      this.efisInterfaces.R,
       a320EfisRangeSettings,
     );
 
     initComponents(this.navigation, this.guidanceController, this.flightPlanService);
 
     this.guidanceController.init();
-    this.efisSymbols.init();
+    this.efisSymbolsLeft.init();
+    this.efisSymbolsRight.init();
     this.navigation.init();
 
     this.tempCurve = new Avionics.Curve();
@@ -457,8 +471,8 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
     this.averageWind = 0;
     this.perfApprQNH = NaN;
     this.perfApprTemp = NaN;
-    this.perfApprWindHeading = NaN;
-    this.perfApprWindSpeed = NaN;
+    this.perfApprWindHeading = null;
+    this.perfApprWindSpeed = null;
     this.unconfirmedV1Speed = undefined;
     this.unconfirmedVRSpeed = undefined;
     this.unconfirmedV2Speed = undefined;
@@ -699,9 +713,9 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
       this.guidanceController.update(_deltaTime);
     }
 
-    if (this.efisSymbols) {
-      this.efisSymbols.update(_deltaTime);
-    }
+    this.efisSymbolsLeft?.update();
+    this.efisSymbolsRight.update();
+
     this.arincBusOutputs.forEach((word) => word.writeToSimVarIfDirty());
   }
 
@@ -813,9 +827,6 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
         }
 
         SimVar.SetSimVarValue('L:A32NX_GOAROUND_PASSED', 'bool', 0);
-        Coherent.call('GENERAL_ENG_THROTTLE_MANAGED_MODE_SET', ThrottleMode.AUTO)
-          .catch(console.error)
-          .catch(console.error);
 
         /** Activate pre selected speed/mach */
         if (prevPhase === FmgcFlightPhase.Climb) {
@@ -823,9 +834,8 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
           this.activatePreSelSpeedMach(this.preSelectedCrzSpeed);
         }
 
-        /** Arm preselected speed/mach for next flight phase */
-        // FIXME implement pre-selected descent speed!
-        //this.updatePreSelSpeedMach(this.preSelectedDesSpeed);
+        /** Disarm preselected speed/mach for next flight phase */
+        this.updatePreSelSpeedMach(undefined);
 
         break;
       }
@@ -838,10 +848,6 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
         }
 
         this.checkDestData();
-
-        Coherent.call('GENERAL_ENG_THROTTLE_MANAGED_MODE_SET', ThrottleMode.AUTO)
-          .catch(console.error)
-          .catch(console.error);
 
         this.triggerCheckSpeedModeMessage(undefined);
 
@@ -857,10 +863,6 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
           this.tryUpdatePerfPage(prevPhase, nextPhase);
         }
 
-        // I think this is not necessary to port, as it only calls fs9gps stuff (fms-v2)
-        // this.flightPlanManager.activateApproach().catch(console.error);
-
-        Coherent.call('GENERAL_ENG_THROTTLE_MANAGED_MODE_SET', ThrottleMode.AUTO).catch(console.error);
         SimVar.SetSimVarValue('L:A32NX_GOAROUND_PASSED', 'bool', 0);
 
         this.checkDestData();
@@ -1321,7 +1323,7 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
     }
   }
 
-  private updatePreSelSpeedMach(preSel) {
+  private updatePreSelSpeedMach(preSel: number | undefined) {
     // The timeout is required to create a delay for the current value to be read and the new one to be set
     setTimeout(() => {
       if (preSel) {
@@ -1515,7 +1517,7 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
       weight = this.zeroFuelWeight + Math.max(0, (vnavPrediction.estimatedFuelOnBoard * 0.4535934) / 1000);
     }
     // if pilot has set approach wind in MCDU we use it, otherwise fall back to current measured wind
-    if (isFinite(this.perfApprWindSpeed) && isFinite(this.perfApprWindHeading)) {
+    if (this.perfApprWindSpeed !== null && this.perfApprWindHeading !== null) {
       this.approachSpeeds = new NXSpeedsApp(weight, this.perfApprFlaps3, this._towerHeadwind);
     } else {
       this.approachSpeeds = new NXSpeedsApp(weight, this.perfApprFlaps3);
@@ -2033,8 +2035,8 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
       return (
         isFinite(this.perfApprQNH) &&
         isFinite(this.perfApprTemp) &&
-        isFinite(this.perfApprWindHeading) &&
-        isFinite(this.perfApprWindSpeed)
+        this.perfApprWindHeading !== null &&
+        this.perfApprWindSpeed !== null
       );
     });
   }
@@ -2753,7 +2755,7 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
           },
         )
         .catch((err) => {
-          if (err.type !== undefined) {
+          if (err instanceof FmsError && err.type !== undefined) {
             this.showFmsErrorMessage(err.type);
           } else if (err instanceof McduMessage) {
             this.setScratchpadMessage(err);
@@ -3983,8 +3985,8 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
 
   public setPerfApprWind(s: string): boolean {
     if (s === Keypad.clrValue) {
-      this.perfApprWindHeading = NaN;
-      this.perfApprWindSpeed = NaN;
+      this.perfApprWindHeading = null;
+      this.perfApprWindSpeed = null;
       return true;
     }
 
@@ -4040,7 +4042,7 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
    */
   private getVAppGsMini() {
     let vAppTarget = this.getVApp();
-    if (isFinite(this.perfApprWindSpeed) && isFinite(this.perfApprWindHeading)) {
+    if (this.perfApprWindSpeed !== null && this.perfApprWindHeading !== null) {
       vAppTarget = NXSpeedsUtils.getVtargetGSMini(vAppTarget, NXSpeedsUtils.getHeadWindDiff(this._towerHeadwind));
     }
     return vAppTarget;
@@ -4391,7 +4393,7 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
   }
 
   public updateTowerHeadwind() {
-    if (isFinite(this.perfApprWindSpeed) && isFinite(this.perfApprWindHeading)) {
+    if (this.perfApprWindHeading !== null && this.perfApprWindSpeed !== null) {
       const activePlan = this.flightPlanService.active;
 
       if (activePlan.destinationRunway) {
@@ -5100,12 +5102,12 @@ export abstract class FMCMainDisplay implements FmsDataInterface, FmsDisplayInte
     return this.winds;
   }
 
-  public getApproachWind() {
+  public getApproachWind(): FmcWindVector | null {
     const activePlan = this.currFlightPlanService.active;
     const destination = activePlan.destinationAirport;
 
-    if (!destination || !destination.location || !isFinite(this.perfApprWindHeading)) {
-      return { direction: 0, speed: 0 };
+    if (!destination || !destination.location || this.perfApprWindHeading === null || this.perfApprWindSpeed === null) {
+      return null;
     }
 
     const magVar = Facilities.getMagVar(destination.location.lat, destination.location.long);

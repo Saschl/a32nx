@@ -644,7 +644,7 @@ version = "0.2.0"
 source = "git+https://github.com/flybywiresim/msfs-rs?branch=feat%2Fadd_trigger_key_event_ex1#858b3501abebdd3e9359f45196163c8859013ad3"
 dependencies = [
  "quote",
- "syn 1.0.109",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -1198,6 +1198,8 @@ dependencies = [
  "enum_dispatch",
  "fxhash",
  "msfs",
+ "serde",
+ "serde_json",
  "systems",
  "uom",
 ]

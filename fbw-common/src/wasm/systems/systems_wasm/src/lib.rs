@@ -18,6 +18,11 @@ use ::msfs::{
     sys::FsVarParamVariant__bindgen_ty_1,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::msfs::commbus::{CommBus, CommBusBroadcastFlags};
+#[cfg(target_arch = "wasm32")]
+use ::msfs::commbus::{CommBus, CommBusBroadcastFlags};
+
 use crate::anti_ice::{engine_anti_ice, wing_anti_ice};
 use crate::aspects::{Aspect, ExecuteOn, MsfsAspectBuilder};
 use crate::electrical::{auxiliary_power_unit, electrical_buses};
@@ -27,8 +32,10 @@ use ::msfs::{
 };
 use failures::Failures;
 use fxhash::FxHashMap;
+use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
+use std::rc::Rc;
 use std::{error::Error, time::Duration};
 use systems::shared::ElectricalBusType;
 use systems::simulation::{InitContext, StartState};
@@ -43,10 +50,9 @@ use systems::{
 /// between the simulation and Microsoft Flight Simulator.
 pub struct MsfsSimulationBuilder<'a, 'b> {
     variable_registry: Option<MsfsVariableRegistry>,
-    key_prefix: String,
     start_state: StartState,
     sim_connect: &'a mut SimConnect<'b>,
-    failures: Option<Failures>,
+    failures: Failures,
     aspects: Vec<Box<dyn Aspect>>,
 }
 
@@ -61,9 +67,8 @@ impl<'a, 'b> MsfsSimulationBuilder<'a, 'b> {
         Self {
             variable_registry: Some(MsfsVariableRegistry::new(key_prefix.into())),
             start_state: start_state_variable_value.read().into(),
-            key_prefix: key_prefix.into(),
             sim_connect,
-            failures: None,
+            failures: Failures::default(),
             aspects: vec![],
         }
     }
@@ -128,23 +133,8 @@ impl<'a, 'b> MsfsSimulationBuilder<'a, 'b> {
         self.with_aspect(wing_anti_ice())
     }
 
-    pub fn with_failures(mut self, failures: Vec<(u64, FailureType)>) -> Self {
-        let mut f = Failures::new(
-            NamedVariableApi::from(
-                &format!("{}{}", &self.key_prefix, "FAILURE_ACTIVATE"),
-                &"number",
-            ),
-            NamedVariableApi::from(
-                &format!("{}{}", &self.key_prefix, "FAILURE_DEACTIVATE"),
-                &"number",
-            ),
-        );
-        for failure in failures {
-            f.add(failure.0, failure.1);
-        }
-
-        self.failures = Some(f);
-
+    pub fn with_failures(mut self, failures: impl IntoIterator<Item = (u64, FailureType)>) -> Self {
+        self.failures.add_failures(failures);
         self
     }
 
@@ -165,6 +155,25 @@ impl<'a, 'b> MsfsSimulationBuilder<'a, 'b> {
         Ok(self)
     }
 
+    pub fn provides_aircraft_variable_range(
+        mut self,
+        name: &str,
+        units: &str,
+        indexes: impl IntoIterator<Item = usize>,
+    ) -> Result<Self, Box<dyn Error>> {
+        if let Some(registry) = &mut self.variable_registry {
+            for index in indexes {
+                registry.register(&Variable::Aircraft(
+                    name.to_owned(),
+                    units.to_owned(),
+                    index,
+                ));
+            }
+        }
+
+        Ok(self)
+    }
+
     pub fn provides_named_variable(mut self, name: &str) -> Result<Self, Box<dyn Error>> {
         if let Some(registry) = &mut self.variable_registry {
             registry.register(&Variable::Named(name.to_owned(), false));
@@ -178,20 +187,31 @@ impl<'a, 'b> MsfsSimulationBuilder<'a, 'b> {
 pub struct MsfsHandler {
     variables: Option<MsfsVariableRegistry>,
     aspects: Vec<Box<dyn Aspect>>,
-    failures: Option<Failures>,
+    failures: Rc<RefCell<Failures>>,
+    _commbus: CommBus<'static>,
     time: Time,
 }
 impl MsfsHandler {
     fn new(
         variables: MsfsVariableRegistry,
         aspects: Vec<Box<dyn Aspect>>,
-        failures: Option<Failures>,
+        failures: Failures,
         sim_connect: &mut SimConnect,
     ) -> Result<Self, Box<dyn Error>> {
+        let failures = Rc::new(RefCell::new(failures));
+        let mut commbus = CommBus::default();
+        {
+            let failures = failures.clone();
+            commbus.register("FBW_FAILURE_UPDATE", move |data| {
+                failures.borrow_mut().handle_failure_update(data);
+            });
+        }
+        CommBus::call("FBW_FAILURE_REQUEST", "", CommBusBroadcastFlags::JS);
         Ok(Self {
             variables: Some(variables),
             aspects,
             failures,
+            _commbus: commbus,
             time: Time::new(sim_connect)?,
         })
     }
@@ -229,6 +249,8 @@ impl MsfsHandler {
                             .unwrap()
                             .set(500.);
                     }
+                    self.pre_tick(sim_connect, delta_time)?;
+                    self.read_failures_into_simulation(simulation);
 
                     for i in 1..=11 {
                         AircraftVariableApi::from("FUELSYSTEM TANK QUANTITY", "gallons", i)
@@ -616,16 +638,9 @@ impl MsfsHandler {
         Ok(())
     }
 
-    fn read_failures_into_simulation<T: Aircraft>(
-        failures: &Failures,
-        simulation: &mut Simulation<T>,
-    ) {
-        if let Some(failure_type) = failures.read_failure_activate() {
-            simulation.activate_failure(failure_type);
-        }
-
-        if let Some(failure_type) = failures.read_failure_deactivate() {
-            simulation.deactivate_failure(failure_type);
+    fn read_failures_into_simulation<T: Aircraft>(&mut self, simulation: &mut Simulation<T>) {
+        if let Some(active_failures) = self.failures.borrow_mut().get_updated_active_failures() {
+            simulation.update_active_failures(active_failures);
         }
     }
 }
