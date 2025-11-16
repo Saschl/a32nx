@@ -4,8 +4,7 @@
 
 import { AtaChapterNumber, AtaChaptersTitle, AtaChaptersDescription, Failure } from '@flybywiresim/fbw-sdk';
 import React from 'react';
-import { Route } from 'react-router';
-import { Link } from 'react-router-dom';
+import { Link, Route } from 'react-router-dom';
 import { ScrollableContainer } from '../../../UtilComponents/ScrollableContainer';
 import { t } from '../../../Localization/translation';
 import { pathify } from '../../../Utils/routing';

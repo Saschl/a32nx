@@ -20,12 +20,11 @@ import {
 
 import { Provider } from 'react-redux';
 import { customAlphabet } from 'nanoid';
-import { Redirect, Route, Switch, useHistory } from 'react-router-dom';
+import { Redirect, Route, Switch, useHistory, MemoryRouter as Router } from 'react-router-dom';
 import { Battery } from 'react-bootstrap-icons';
 import { ToastContainer } from 'react-toastify';
 import { distanceTo } from 'msfs-geo';
 import { ErrorBoundary } from 'react-error-boundary';
-import { MemoryRouter as Router } from 'react-router';
 import {
   globalSyncedSettings,
   migrateSettings,
@@ -105,6 +104,11 @@ export const EfbWrapper: React.FC<EfbWrapperProps> = ({ failures, aircraftSetup,
       .catch((error) => {
         console.error('Failed to load checklists', error);
       });
+    if (process.env.VITE_BUILD) {
+      window.addEventListener('AceInitialized', setup);
+    } else {
+      setup();
+    }
   }, []);
 
   const setup = () => {
@@ -122,13 +126,6 @@ export const EfbWrapper: React.FC<EfbWrapperProps> = ({ failures, aircraftSetup,
       },
       true,
     );
-  };
-
-  if (process.env.VITE_BUILD) {
-    window.addEventListener('AceInitialized', setup);
-  } else {
-    setup();
-  }
 
   return (
     <Provider store={store}>

@@ -5,7 +5,7 @@
 import { AtaChapterNumber } from '@flybywiresim/fbw-sdk';
 import React, { FC } from 'react';
 import { ArrowRight } from 'react-bootstrap-icons';
-import { useHistory } from 'react-router';
+import { useHistory } from 'react-router-dom';
 import { t } from '../../../Localization/translation';
 import { RemindersSection } from './RemindersSection';
 import { useFailuresOrchestrator } from '../../../failures-orchestrator-provider';

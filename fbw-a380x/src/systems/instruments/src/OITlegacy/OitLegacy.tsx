@@ -27,7 +27,7 @@ import {
 import { EventBus, Subscription } from '@microsoft/msfs-sdk';
 import { Provider } from 'react-redux';
 import { ErrorBoundary } from 'react-error-boundary';
-import { MemoryRouter as Router } from 'react-router';
+import { MemoryRouter as Router } from 'react-router-dom';
 import {
   FmsData,
   NavigraphAuthProvider,
