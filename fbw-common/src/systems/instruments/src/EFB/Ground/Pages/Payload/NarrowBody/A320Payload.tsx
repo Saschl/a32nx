@@ -8,7 +8,6 @@ import { CloudArrowDown } from 'react-bootstrap-icons';
 import {
   CargoStationInfo,
   PaxStationInfo,
-  SeatFlags,
   Units,
   usePersistentNumberProperty,
   usePersistentSetting,
@@ -124,18 +123,10 @@ export const A320Payload: React.FC<PayloadProps> = ({
     return p;
   }, [...activeFlags]);
 
-  const totalPaxDesired = useMemo(() => {
-    let p = 0;
-    desiredFlags.forEach((flag) => {
-      p += flag.getTotalFilledSeats();
-    });
-    return p;
-  }, [...desiredFlags]);
-
-  const totalCargoDesired = useMemo(
+  /*   const totalCargoDesired = useMemo(
     () => (cargoDesired && cargoDesired.length > 0 ? cargoDesired.reduce((a, b) => a + b) : -1),
     [...cargoDesired],
-  );
+  ); */
   const totalCargo = useMemo(() => (cargo && cargo.length > 0 ? cargo.reduce((a, b) => a + b) : -1), [...cargo]);
 
   // Units
@@ -153,10 +144,14 @@ export const A320Payload: React.FC<PayloadProps> = ({
 
   const [showSimbriefButton, setShowSimbriefButton] = useState(false);
   const [displayZfw, setDisplayZfw] = useState(true);
+  const [totalPaxDesired, setTargetPaxCmd] = useSimVar('L:A32NX_WB_TARGET_PAX', 'Number', 1_903);
+  const [totalCargoDesired, setTargetCargoCmd] = useSimVar('L:A32NX_WB_TARGET_CARGO_KG', 'Number', 1_907);
+  const [, setTargetZfwCmd] = useSimVar('L:A32NX_WB_TARGET_ZFW_KG', 'Number', 1_909);
+  const [, setTargetGwCmd] = useSimVar('L:A32NX_WB_TARGET_GW_KG', 'Number', 1_911);
 
   // GSX
   const [gsxPayloadSyncEnabled] = usePersistentNumberProperty('GSX_PAYLOAD_SYNC', 0);
-  const [_, setGsxNumPassengers] = useSimVar('L:FSDT_GSX_NUMPASSENGERS', 'Number', 223);
+  const [, setGsxNumPassengers] = useSimVar('L:FSDT_GSX_NUMPASSENGERS', 'Number', 223);
   const [gsxBoardingState] = useSimVar('L:FSDT_GSX_BOARDING_STATE', 'Number', 227);
   const [gsxDeBoardingState] = useSimVar('L:FSDT_GSX_DEBOARDING_STATE', 'Number', 229);
   const gsxInProgress = () =>
@@ -184,12 +179,12 @@ export const A320Payload: React.FC<PayloadProps> = ({
       setPaxBagWeight(simbriefBagWeight);
       setPaxWeight(simbriefPaxWeight);
       setTargetPax(simbriefPax > maxPax ? maxPax : simbriefPax);
-      setTargetCargo(simbriefBag, simbriefFreight, simbriefBagWeight);
+      setTargetCargo(simbriefBag * simbriefBagWeight + simbriefFreight);
     } else {
       setPaxBagWeight(Units.poundToKilogram(simbriefBagWeight));
       setPaxWeight(Units.poundToKilogram(simbriefPaxWeight));
       setTargetPax(simbriefPax);
-      setTargetCargo(simbriefBag, Units.poundToKilogram(simbriefFreight), Units.poundToKilogram(simbriefBagWeight));
+      setTargetCargo(Units.poundToKilogram(simbriefBag * simbriefBagWeight + simbriefFreight));
     }
   };
 
@@ -197,104 +192,31 @@ export const A320Payload: React.FC<PayloadProps> = ({
   const [eng2Running] = useSimVar('ENG COMBUSTION:2', 'Bool', 6_397);
   const [coldAndDark, setColdAndDark] = useState<boolean>(true);
 
-  const chooseDesiredSeats = useCallback(
-    (stationIndex: number, fillSeats: boolean = true, numChoose: number) => {
-      const seatFlags: SeatFlags = desiredFlags[stationIndex];
-      if (fillSeats) {
-        seatFlags.fillEmptySeats(numChoose);
-      } else {
-        seatFlags.emptyFilledSeats(numChoose);
-      }
-
-      setDesiredFlags[stationIndex](seatFlags);
-    },
-    [...desiredFlags],
-  );
-
   const setTargetPax = useCallback(
     (numOfPax: number) => {
       setGsxNumPassengers(numOfPax);
 
-      if (numOfPax === totalPaxDesired || numOfPax > maxPax || numOfPax < 0) return;
-
-      let paxRemaining = numOfPax;
-
-      const fillStation = (stationIndex: number, percent: number, paxToFill: number) => {
-        const sFlags: SeatFlags = desiredFlags[stationIndex];
-        const toBeFilled = Math.min(Math.trunc(percent * paxToFill), seatMap[stationIndex].capacity);
-
-        paxRemaining -= toBeFilled;
-
-        const planSeatedPax = sFlags.getTotalFilledSeats();
-        chooseDesiredSeats(stationIndex, toBeFilled > planSeatedPax, Math.abs(toBeFilled - planSeatedPax));
-      };
-
-      for (let i = seatMap.length - 1; i > 0; i--) {
-        fillStation(
-          i,
-          parseFloat(Number((Math.ceil((seatMap[i].capacity / maxPax) * 1e2) / 1e2).toExponential(2)).toPrecision(3)),
-          numOfPax,
-        );
-      }
-      fillStation(0, 1, paxRemaining);
+      const clampedPax = Math.max(Math.min(Math.round(numOfPax), maxPax), 0);
+      setTargetPaxCmd(clampedPax);
     },
-    [maxPax, seatMap, totalPaxDesired],
+    [maxPax],
   );
 
   const setTargetCargo = useCallback(
-    (numberOfPax: number, freight: number, perBagWeight: number = paxBagWeight) => {
-      const bagWeight = numberOfPax * perBagWeight;
-      const loadableCargoWeight = Math.min(bagWeight + Math.round(freight), maxCargo);
-
-      let remainingWeight = loadableCargoWeight;
-
-      function fillCargo(station: number, percent: number, loadableCargoWeight: number) {
-        const c = Math.round(percent * loadableCargoWeight);
-        remainingWeight -= c;
-        setCargoDesired[station](c);
-      }
-
-      for (let i = cargoDesired.length - 1; i > 0; i--) {
-        fillCargo(i, cargoMap[i].weight / maxCargo, loadableCargoWeight);
-      }
-      fillCargo(0, 1, remainingWeight);
+    (targetCargoKg: number) => {
+      const clampedCargo = Math.max(Math.min(targetCargoKg, maxCargo), 0);
+      setTargetCargoCmd(clampedCargo);
     },
-    [maxCargo, cargoMap, ...cargoDesired, paxBagWeight],
+    [maxCargo],
   );
 
-  const processZfw = useCallback(
-    (newZfw) => {
-      let paxCargoWeight = newZfw - emptyWeight;
+  const processZfw = useCallback((newZfw) => {
+    setTargetZfwCmd(Math.max(newZfw, 0));
+  }, []);
 
-      // Load pax first
-      const pWeight = paxWeight + paxBagWeight;
-      const newPax = Math.max(Math.min(Math.round(paxCargoWeight / pWeight), maxPax), 0);
-
-      paxCargoWeight -= newPax * pWeight;
-      const newCargo = Math.max(Math.min(paxCargoWeight, maxCargo), 0);
-
-      setTargetPax(newPax);
-      setTargetCargo(newPax, newCargo);
-    },
-    [emptyWeight, paxWeight, paxBagWeight, maxPax, maxCargo],
-  );
-
-  const processGw = useCallback(
-    (newGw) => {
-      let paxCargoWeight = newGw - emptyWeight - (gw - zfw); // new gw - empty - total fuel
-
-      // Load pax first
-      const pWeight = paxWeight + paxBagWeight;
-      const newPax = Math.max(Math.min(Math.round(paxCargoWeight / pWeight), maxPax), 0);
-
-      paxCargoWeight -= newPax * pWeight;
-      const newCargo = Math.max(Math.min(paxCargoWeight, maxCargo), 0);
-
-      setTargetPax(newPax);
-      setTargetCargo(newPax, newCargo);
-    },
-    [emptyWeight, paxWeight, paxBagWeight, maxPax, maxCargo, gw, zfw],
-  );
+  const processGw = useCallback((newGw) => {
+    setTargetGwCmd(Math.max(newGw, 0));
+  }, []);
 
   const onClickCargo = useCallback(
     (cargoStation, e) => {
@@ -313,32 +235,11 @@ export const A320Payload: React.FC<PayloadProps> = ({
         return;
       }
 
-      // TODO FIXME: This calculation does not work correctly if user clicks on many seats in rapid succession
-      const oldPaxBag = totalPaxDesired * paxBagWeight;
-      const freight = Math.max(totalCargoDesired - oldPaxBag, 0);
-
-      const seatFlags: SeatFlags = desiredFlags[stationIndex];
+      const seatFlags = desiredFlags[stationIndex];
       seatFlags.toggleSeatId(seatId);
       setDesiredFlags[stationIndex](seatFlags);
-
-      let newPaxDesired = 0;
-      desiredFlags.forEach((flag) => {
-        newPaxDesired += flag.getTotalFilledSeats();
-      });
-
-      setTargetCargo(newPaxDesired, freight);
     },
-    [
-      paxBagWeight,
-      totalCargoDesired,
-      ...cargoDesired,
-      ...desiredFlags,
-      totalPaxDesired,
-      boardingStarted,
-      gsxBoardingState,
-      gsxDeBoardingState,
-      gsxPayloadSyncEnabled,
-    ],
+    [...desiredFlags, boardingStarted, gsxBoardingState, gsxDeBoardingState, gsxPayloadSyncEnabled],
   );
 
   const handleDeboarding = useCallback(() => {
@@ -351,7 +252,7 @@ export const A320Payload: React.FC<PayloadProps> = ({
           cancelText={`${t('Ground.Payload.DeboardConfirmationCancel')}`}
           onConfirm={() => {
             setTargetPax(0);
-            setTargetCargo(0, 0);
+            setTargetCargo(0);
             setTimeout(() => {
               setBoardingStarted(true);
             }, 500);
@@ -453,7 +354,7 @@ export const A320Payload: React.FC<PayloadProps> = ({
         case gsxStates.REQUESTED:
           // If Deboarding has been requested, set target pax to 0 for boarding backend
           setTargetPax(0);
-          setTargetCargo(0, 0);
+          setTargetCargo(0);
           break;
         case gsxStates.PERFORMING:
         case gsxStates.COMPLETED:

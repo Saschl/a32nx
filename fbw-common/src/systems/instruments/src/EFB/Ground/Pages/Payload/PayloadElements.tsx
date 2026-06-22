@@ -288,7 +288,7 @@ interface PayloadInputTableProps {
   gwCgMac: number;
   desiredGwCgMac: number;
   setTargetPax: (targetPax: number) => void;
-  setTargetCargo: (targetCargo: number, cargoStation: number) => void;
+  setTargetCargo: (targetCargo: number) => void;
   processZfw: (zfw: number) => void;
   processGw: (zfw: number) => void;
   setDisplayZfw: (displayZfw: boolean) => void;
@@ -349,7 +349,6 @@ export const PayloadInputTable: React.FC<PayloadInputTableProps> = ({
                 onBlur={(x) => {
                   if (!Number.isNaN(parseInt(x) || parseInt(x) === 0)) {
                     setTargetPax(parseInt(x));
-                    setTargetCargo(parseInt(x), 0);
                   }
                 }}
                 unit="PAX"
@@ -376,7 +375,7 @@ export const PayloadInputTable: React.FC<PayloadInputTableProps> = ({
                 value={Units.kilogramToUser(totalCargoDesired)}
                 onBlur={(x) => {
                   if (!Number.isNaN(parseInt(x)) || parseInt(x) === 0) {
-                    setTargetCargo(0, Units.userToKilogram(parseInt(x)));
+                    setTargetCargo(Units.userToKilogram(parseInt(x)));
                   }
                 }}
                 unit={massUnitForDisplay}

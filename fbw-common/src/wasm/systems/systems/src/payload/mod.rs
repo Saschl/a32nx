@@ -139,6 +139,10 @@ impl<const N: usize, const G: usize> PassengerDeck<N, G> {
         self.pax.iter().map(|ps| ps.pax_num() as i32).sum()
     }
 
+    fn total_target_pax_num(&self) -> i32 {
+        self.pax.iter().map(|ps| ps.pax_target_num() as i32).sum()
+    }
+
     fn pax_payload(&self, ps: usize) -> Mass {
         self.pax[ps].payload()
     }
@@ -149,6 +153,14 @@ impl<const N: usize, const G: usize> PassengerDeck<N, G> {
 
     fn max_pax(&self, ps: usize) -> i8 {
         self.pax[ps].max_pax()
+    }
+
+    fn max_total_pax(&self) -> i32 {
+        self.pax.iter().map(|ps| ps.max_pax() as i32).sum()
+    }
+
+    fn set_target_pax_num(&mut self, ps: usize, pax_target: i8) {
+        self.pax[ps].set_pax_target_num(pax_target);
     }
 
     fn has_pax(&self) -> bool {
@@ -289,6 +301,14 @@ impl<const N: usize> CargoDeck<N> {
 
     fn max_cargo(&self, cs: usize) -> Mass {
         self.cargo[cs].max_capacity()
+    }
+
+    fn max_total_cargo(&self) -> Mass {
+        self.cargo.iter().map(|cs| cs.max_capacity()).sum()
+    }
+
+    fn set_target_cargo(&mut self, cs: usize, target_cargo: Mass) {
+        self.cargo[cs].set_cargo_target(target_cargo);
     }
 
     fn is_cargo_loaded(&self) -> bool {
@@ -486,6 +506,15 @@ impl Pax {
     pub fn reset_pax_target(&mut self) {
         self.pax_target = 0;
     }
+
+    pub fn set_pax_target_num(&mut self, pax_target: i8) {
+        let target = pax_target.clamp(0, self.max) as u32;
+        self.pax_target = if target == 0 {
+            0
+        } else {
+            (1_u64 << target) - 1
+        };
+    }
 }
 impl SimulationElement for Pax {
     fn read(&mut self, reader: &mut SimulatorReader) {
@@ -622,6 +651,13 @@ impl Cargo {
     pub fn reset_cargo_target(&mut self) {
         self.cargo_target = Mass::default();
     }
+
+    pub fn set_cargo_target(&mut self, target_cargo: Mass) {
+        let clamped_target = target_cargo
+            .get::<kilogram>()
+            .clamp(0., self.max_capacity.get::<kilogram>());
+        self.cargo_target = Mass::new::<kilogram>(clamped_target);
+    }
 }
 impl SimulationElement for Cargo {
     fn accept<T: SimulationElementVisitor>(&mut self, visitor: &mut T) {
@@ -637,6 +673,7 @@ impl SimulationElement for Cargo {
     }
     fn write(&self, writer: &mut SimulatorWriter) {
         writer.write(&self.cargo_id, self.cargo.get::<kilogram>());
+        writer.write(&self.cargo_target_id, self.cargo_target.get::<kilogram>());
         writer.write(&self.payload_id, self.payload);
     }
 }
@@ -740,6 +777,10 @@ pub struct PayloadManager<const P: usize, const G: usize, const C: usize> {
     passenger_deck: PassengerDeck<P, G>,
     cargo_deck: CargoDeck<C>,
     gsx_driver: GsxDriver,
+    handled_target_pax: Option<i32>,
+    handled_target_cargo_kg: Option<f64>,
+    handled_target_zfw_kg: Option<f64>,
+    handled_target_gw_kg: Option<f64>,
 }
 impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
     pub fn new(
@@ -761,6 +802,10 @@ impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
             cargo_deck,
             fast_rate,
             real_rate,
+            handled_target_pax: None,
+            handled_target_cargo_kg: None,
+            handled_target_zfw_kg: None,
+            handled_target_gw_kg: None,
         }
     }
 
@@ -940,6 +985,191 @@ impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
         self.boarding_sounds.play_sound_pax_ambience(self.has_pax());
     }
 
+    fn distribute_target_pax(&mut self, requested_pax: i32) -> i32 {
+        let max_total_pax = self.passenger_deck.max_total_pax();
+        let target_pax = requested_pax.clamp(0, max_total_pax);
+
+        let mut pax_remaining = target_pax;
+        let max_total_pax_f64 = f64::max(max_total_pax as f64, 1.);
+
+        for station in (1..P).rev() {
+            let station_max = self.passenger_deck.max_pax(station) as i32;
+            let station_ratio = station_max as f64 / max_total_pax_f64;
+            let station_target = (station_ratio * target_pax as f64)
+                .floor()
+                .clamp(0., station_max as f64) as i32;
+
+            pax_remaining -= station_target;
+            self.passenger_deck
+                .set_target_pax_num(station, station_target as i8);
+        }
+
+        if P > 0 {
+            let first_station_max = self.passenger_deck.max_pax(0) as i32;
+            self.passenger_deck
+                .set_target_pax_num(0, pax_remaining.clamp(0, first_station_max) as i8);
+        }
+
+        target_pax
+    }
+
+    fn apply_target_pax(&mut self, requested_pax: i32) {
+        let old_target_pax = self.passenger_deck.total_target_pax_num() as f64;
+        let old_target_cargo_kg = self.cargo_deck.total_target_cargo_load().get::<kilogram>();
+        let per_bag_weight_kg = self.boarding_inputs.per_bag_weight().get::<kilogram>();
+        let retained_freight_kg =
+            f64::max(old_target_cargo_kg - old_target_pax * per_bag_weight_kg, 0.);
+
+        let target_pax = self.distribute_target_pax(requested_pax);
+
+        let target_cargo_kg = target_pax as f64 * per_bag_weight_kg + retained_freight_kg;
+        self.apply_target_cargo(Mass::new::<kilogram>(target_cargo_kg));
+    }
+
+    fn apply_target_zfw(&mut self, requested_zfw_kg: f64) {
+        let empty_weight_kg = f64::max(
+            self.boarding_inputs.airframe_zfw_kg()
+                - self.total_passenger_load().get::<kilogram>()
+                - self.total_cargo_load().get::<kilogram>(),
+            0.,
+        );
+
+        let max_total_cargo_kg = self.cargo_deck.max_total_cargo().get::<kilogram>();
+        let max_total_pax = self.passenger_deck.max_total_pax();
+        let per_pax_weight_kg = self.boarding_inputs.per_pax_weight().get::<kilogram>();
+        let per_bag_weight_kg = self.boarding_inputs.per_bag_weight().get::<kilogram>();
+        let per_pax_total_kg = per_pax_weight_kg + per_bag_weight_kg;
+
+        if per_pax_total_kg <= 0. {
+            return;
+        }
+
+        let mut payload_weight_kg = requested_zfw_kg - empty_weight_kg;
+        let target_pax = (payload_weight_kg / per_pax_total_kg)
+            .round()
+            .clamp(0., max_total_pax as f64) as i32;
+
+        payload_weight_kg -= target_pax as f64 * per_pax_total_kg;
+        let freight_weight_kg = payload_weight_kg.clamp(0., max_total_cargo_kg);
+        let total_cargo_weight_kg = (target_pax as f64 * per_bag_weight_kg + freight_weight_kg)
+            .clamp(0., max_total_cargo_kg);
+
+        self.distribute_target_pax(target_pax);
+        self.apply_target_cargo(Mass::new::<kilogram>(total_cargo_weight_kg));
+    }
+
+    fn apply_target_gw(&mut self, requested_gw_kg: f64) {
+        let empty_weight_kg = f64::max(
+            self.boarding_inputs.airframe_zfw_kg()
+                - self.total_passenger_load().get::<kilogram>()
+                - self.total_cargo_load().get::<kilogram>(),
+            0.,
+        );
+
+        let fuel_weight_kg = f64::max(
+            self.boarding_inputs.airframe_gw_kg() - self.boarding_inputs.airframe_zfw_kg(),
+            0.,
+        );
+        let max_total_cargo_kg = self.cargo_deck.max_total_cargo().get::<kilogram>();
+        let max_total_pax = self.passenger_deck.max_total_pax();
+        let per_pax_weight_kg = self.boarding_inputs.per_pax_weight().get::<kilogram>();
+        let per_bag_weight_kg = self.boarding_inputs.per_bag_weight().get::<kilogram>();
+        let per_pax_total_kg = per_pax_weight_kg + per_bag_weight_kg;
+
+        if per_pax_total_kg <= 0. {
+            return;
+        }
+
+        let mut payload_weight_kg = requested_gw_kg - empty_weight_kg - fuel_weight_kg;
+        let target_pax = (payload_weight_kg / per_pax_total_kg)
+            .round()
+            .clamp(0., max_total_pax as f64) as i32;
+
+        payload_weight_kg -= target_pax as f64 * per_pax_total_kg;
+        let freight_weight_kg = payload_weight_kg.clamp(0., max_total_cargo_kg);
+        let total_cargo_weight_kg = (target_pax as f64 * per_bag_weight_kg + freight_weight_kg)
+            .clamp(0., max_total_cargo_kg);
+
+        self.distribute_target_pax(target_pax);
+        self.apply_target_cargo(Mass::new::<kilogram>(total_cargo_weight_kg));
+    }
+
+    fn apply_target_cargo(&mut self, requested_cargo: Mass) {
+        let max_total_cargo_kg = self.cargo_deck.max_total_cargo().get::<kilogram>();
+        let target_cargo_kg = requested_cargo
+            .get::<kilogram>()
+            .clamp(0., max_total_cargo_kg);
+
+        let mut cargo_remaining_kg = target_cargo_kg;
+
+        for station in (1..C).rev() {
+            let station_max = self.cargo_deck.max_cargo(station).get::<kilogram>();
+            let station_ratio = if max_total_cargo_kg > 0. {
+                station_max / max_total_cargo_kg
+            } else {
+                0.
+            };
+            let station_target = (station_ratio * target_cargo_kg)
+                .round()
+                .clamp(0., station_max);
+
+            cargo_remaining_kg -= station_target;
+            self.cargo_deck
+                .set_target_cargo(station, Mass::new::<kilogram>(station_target));
+        }
+
+        if C > 0 {
+            let first_station_max = self.cargo_deck.max_cargo(0).get::<kilogram>();
+            let first_station_target = cargo_remaining_kg.clamp(0., first_station_max);
+            self.cargo_deck
+                .set_target_cargo(0, Mass::new::<kilogram>(first_station_target));
+        }
+    }
+
+    fn process_payload_input_commands(&mut self) {
+        let target_pax = self.boarding_inputs.target_pax();
+        if self
+            .handled_target_pax
+            .is_some_and(|handled_target_pax| handled_target_pax != target_pax)
+        {
+            self.apply_target_pax(self.boarding_inputs.target_pax());
+        }
+        self.handled_target_pax = Some(target_pax);
+
+        let target_cargo_kg = self.boarding_inputs.target_cargo_kg();
+        if self
+            .handled_target_cargo_kg
+            .is_some_and(|handled_target_cargo_kg| {
+                f64::abs(handled_target_cargo_kg - target_cargo_kg) > f64::EPSILON
+            })
+        {
+            self.apply_target_cargo(Mass::new::<kilogram>(target_cargo_kg));
+        }
+        self.handled_target_cargo_kg = Some(target_cargo_kg);
+
+        let target_zfw_kg = self.boarding_inputs.target_zfw_kg();
+        if self
+            .handled_target_zfw_kg
+            .is_some_and(|handled_target_zfw_kg| {
+                f64::abs(handled_target_zfw_kg - target_zfw_kg) > f64::EPSILON
+            })
+        {
+            self.apply_target_zfw(target_zfw_kg);
+        }
+        self.handled_target_zfw_kg = Some(target_zfw_kg);
+
+        let target_gw_kg = self.boarding_inputs.target_gw_kg();
+        if self
+            .handled_target_gw_kg
+            .is_some_and(|handled_target_gw_kg| {
+                f64::abs(handled_target_gw_kg - target_gw_kg) > f64::EPSILON
+            })
+        {
+            self.apply_target_gw(target_gw_kg);
+        }
+        self.handled_target_gw_kg = Some(target_gw_kg);
+    }
+
     fn update_boarding_sounds(&mut self) {
         self.boarding_sounds
             .play_sound_pax_boarding(self.is_pax_boarding() && !self.is_pax_deboarding());
@@ -956,6 +1186,7 @@ impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
 
     // ======================================
     pub fn update(&mut self, delta_time: Duration) {
+        self.process_payload_input_commands();
         self.update_pax_ambience();
 
         if !self.gsx_driver.is_enabled() {
@@ -1010,11 +1241,25 @@ pub struct BoardingInputs {
     is_boarding_id: VariableIdentifier,
     board_rate_id: VariableIdentifier,
     per_pax_weight_id: VariableIdentifier,
+    per_bag_weight_id: VariableIdentifier,
+    airframe_zfw_id: VariableIdentifier,
+    airframe_gw_id: VariableIdentifier,
+    target_pax_id: VariableIdentifier,
+    target_cargo_id: VariableIdentifier,
+    target_zfw_id: VariableIdentifier,
+    target_gw_id: VariableIdentifier,
 
     developer_state: Rc<Cell<i8>>,
     is_boarding: bool,
     board_rate: BoardingRate,
     per_pax_weight: Rc<Cell<Mass>>,
+    per_bag_weight: Mass,
+    airframe_zfw_kg: f64,
+    airframe_gw_kg: f64,
+    target_pax: i32,
+    target_cargo_kg: f64,
+    target_zfw_kg: f64,
+    target_gw_kg: f64,
 }
 impl BoardingInputs {
     pub fn new(
@@ -1027,11 +1272,25 @@ impl BoardingInputs {
             is_boarding_id: context.get_identifier("BOARDING_STARTED_BY_USR".to_owned()),
             board_rate_id: context.get_identifier("BOARDING_RATE".to_owned()),
             per_pax_weight_id: context.get_identifier("WB_PER_PAX_WEIGHT".to_owned()),
+            per_bag_weight_id: context.get_identifier("WB_PER_BAG_WEIGHT".to_owned()),
+            airframe_zfw_id: context.get_identifier("AIRFRAME_ZFW".to_owned()),
+            airframe_gw_id: context.get_identifier("AIRFRAME_GW".to_owned()),
+            target_pax_id: context.get_identifier("WB_TARGET_PAX".to_owned()),
+            target_cargo_id: context.get_identifier("WB_TARGET_CARGO_KG".to_owned()),
+            target_zfw_id: context.get_identifier("WB_TARGET_ZFW_KG".to_owned()),
+            target_gw_id: context.get_identifier("WB_TARGET_GW_KG".to_owned()),
 
             developer_state,
             is_boarding: false,
             board_rate: BoardingRate::Instant,
             per_pax_weight,
+            per_bag_weight: Mass::default(),
+            airframe_zfw_kg: 0.,
+            airframe_gw_kg: 0.,
+            target_pax: 0,
+            target_cargo_kg: 0.,
+            target_zfw_kg: 0.,
+            target_gw_kg: 0.,
         }
     }
 
@@ -1054,6 +1313,34 @@ impl BoardingInputs {
     pub fn per_pax_weight(&self) -> Mass {
         self.per_pax_weight.get()
     }
+
+    pub fn per_bag_weight(&self) -> Mass {
+        self.per_bag_weight
+    }
+
+    pub fn target_pax(&self) -> i32 {
+        self.target_pax
+    }
+
+    pub fn target_cargo_kg(&self) -> f64 {
+        self.target_cargo_kg
+    }
+
+    pub fn target_zfw_kg(&self) -> f64 {
+        self.target_zfw_kg
+    }
+
+    pub fn target_gw_kg(&self) -> f64 {
+        self.target_gw_kg
+    }
+
+    pub fn airframe_zfw_kg(&self) -> f64 {
+        self.airframe_zfw_kg
+    }
+
+    pub fn airframe_gw_kg(&self) -> f64 {
+        self.airframe_gw_kg
+    }
 }
 impl SimulationElement for BoardingInputs {
     fn read(&mut self, reader: &mut SimulatorReader) {
@@ -1063,6 +1350,16 @@ impl SimulationElement for BoardingInputs {
         self.board_rate = reader.read(&self.board_rate_id);
         self.per_pax_weight
             .set(Mass::new::<kilogram>(reader.read(&self.per_pax_weight_id)));
+        self.per_bag_weight = Mass::new::<kilogram>(reader.read(&self.per_bag_weight_id));
+        self.airframe_zfw_kg = reader.read(&self.airframe_zfw_id);
+        self.airframe_gw_kg = reader.read(&self.airframe_gw_id);
+
+        let target_pax: f64 = reader.read(&self.target_pax_id);
+
+        self.target_pax = target_pax.round() as i32;
+        self.target_cargo_kg = reader.read(&self.target_cargo_id);
+        self.target_zfw_kg = reader.read(&self.target_zfw_id);
+        self.target_gw_kg = reader.read(&self.target_gw_id);
     }
 
     fn write(&self, writer: &mut SimulatorWriter) {

@@ -145,7 +145,32 @@ impl BoardingTestBed {
     fn init_vars(mut self) -> Self {
         self.write_by_name("BOARDING_RATE", BoardingRate::Instant);
         self.write_by_name("WB_PER_PAX_WEIGHT", A320Payload::DEFAULT_PER_PAX_WEIGHT_KG);
+        self.write_by_name("WB_PER_BAG_WEIGHT", 20.0);
+        self.write_by_name("WB_TARGET_PAX", 0.0);
+        self.write_by_name("WB_TARGET_CARGO_KG", 0.0);
+        self.write_by_name("WB_TARGET_ZFW_KG", 0.0);
+        self.write_by_name("WB_TARGET_GW_KG", 0.0);
 
+        self
+    }
+
+    fn request_target_pax(mut self, pax: i32) -> Self {
+        self.write_by_name("WB_TARGET_PAX", pax as f64);
+        self
+    }
+
+    fn request_target_cargo_kg(mut self, cargo_kg: f64) -> Self {
+        self.write_by_name("WB_TARGET_CARGO_KG", cargo_kg);
+        self
+    }
+
+    fn request_target_zfw_kg(mut self, zfw_kg: f64) -> Self {
+        self.write_by_name("WB_TARGET_ZFW_KG", zfw_kg);
+        self
+    }
+
+    fn request_target_gw_kg(mut self, gw_kg: f64) -> Self {
+        self.write_by_name("WB_TARGET_GW_KG", gw_kg);
         self
     }
 
@@ -742,6 +767,11 @@ fn boarding_init() {
     assert!(test_bed.contains_variable_with_name("BOARDING_STARTED_BY_USR"));
     assert!(test_bed.contains_variable_with_name("BOARDING_RATE"));
     assert!(test_bed.contains_variable_with_name("WB_PER_PAX_WEIGHT"));
+    assert!(test_bed.contains_variable_with_name("WB_PER_BAG_WEIGHT"));
+    assert!(test_bed.contains_variable_with_name("WB_TARGET_PAX"));
+    assert!(test_bed.contains_variable_with_name("WB_TARGET_CARGO_KG"));
+    assert!(test_bed.contains_variable_with_name("WB_TARGET_ZFW_KG"));
+    assert!(test_bed.contains_variable_with_name("WB_TARGET_GW_KG"));
     assert!(test_bed.contains_variable_with_name(
         A320Payload::A320_PAX[Into::<usize>::into(A320Pax::A)].pax_id
     ));
@@ -754,6 +784,104 @@ fn boarding_init() {
     assert!(test_bed.contains_variable_with_name(
         A320Payload::A320_PAX[Into::<usize>::into(A320Pax::D)].pax_id
     ));
+}
+
+#[test]
+fn backend_target_pax_distribution_command_updates_station_targets() {
+    let mut test_bed = test_bed_with()
+        .init_vars()
+        .and_run()
+        .request_target_pax(90)
+        .and_run();
+
+    let mut target_total = 0;
+    for ps in 0..A320Payload::A320_PAX.len() {
+        let target_bits: u64 =
+            test_bed.read_by_name(&format!("{}_DESIRED", A320Payload::A320_PAX[ps].pax_id));
+        target_total += target_bits.count_ones() as i32;
+    }
+
+    assert_eq!(target_total, 90);
+
+    test_bed = test_bed.request_target_pax(0).and_run().and_run();
+    for ps in 0..A320Payload::A320_PAX.len() {
+        let target_bits: u64 =
+            test_bed.read_by_name(&format!("{}_DESIRED", A320Payload::A320_PAX[ps].pax_id));
+        assert_eq!(target_bits, 0);
+    }
+}
+
+#[test]
+fn backend_target_cargo_distribution_command_updates_station_targets() {
+    let mut test_bed = test_bed_with()
+        .init_vars()
+        .and_run()
+        .request_target_cargo_kg(4000.)
+        .and_run();
+
+    let mut target_total_kg = 0.;
+    for cs in 0..A320Payload::A320_CARGO.len() {
+        let target_kg: f64 =
+            test_bed.read_by_name(&format!("{}_DESIRED", A320Payload::A320_CARGO[cs].cargo_id));
+        target_total_kg += target_kg;
+    }
+
+    assert!(
+        (target_total_kg - 4000.).abs() <= 1.0,
+        "target_total_kg={target_total_kg}"
+    );
+}
+
+#[test]
+fn backend_target_zfw_command_updates_station_targets() {
+    let mut test_bed = test_bed_with()
+        .init_vars()
+        .and_run()
+        .request_target_zfw_kg(55000.)
+        .and_run();
+
+    let mut target_pax_total = 0;
+    for ps in 0..A320Payload::A320_PAX.len() {
+        let target_bits: u64 =
+            test_bed.read_by_name(&format!("{}_DESIRED", A320Payload::A320_PAX[ps].pax_id));
+        target_pax_total += target_bits.count_ones() as i32;
+    }
+
+    let mut target_cargo_total_kg = 0.;
+    for cs in 0..A320Payload::A320_CARGO.len() {
+        let target_kg: f64 =
+            test_bed.read_by_name(&format!("{}_DESIRED", A320Payload::A320_CARGO[cs].cargo_id));
+        target_cargo_total_kg += target_kg;
+    }
+
+    assert!(target_pax_total > 0);
+    assert!(target_cargo_total_kg > 0.);
+}
+
+#[test]
+fn backend_target_gw_command_updates_station_targets() {
+    let mut test_bed = test_bed_with()
+        .init_vars()
+        .and_run()
+        .request_target_gw_kg(61000.)
+        .and_run();
+
+    let mut target_pax_total = 0;
+    for ps in 0..A320Payload::A320_PAX.len() {
+        let target_bits: u64 =
+            test_bed.read_by_name(&format!("{}_DESIRED", A320Payload::A320_PAX[ps].pax_id));
+        target_pax_total += target_bits.count_ones() as i32;
+    }
+
+    let mut target_cargo_total_kg = 0.;
+    for cs in 0..A320Payload::A320_CARGO.len() {
+        let target_kg: f64 =
+            test_bed.read_by_name(&format!("{}_DESIRED", A320Payload::A320_CARGO[cs].cargo_id));
+        target_cargo_total_kg += target_kg;
+    }
+
+    assert!(target_pax_total > 0);
+    assert!(target_cargo_total_kg > 0.);
 }
 #[test]
 fn loaded_no_pax() {
