@@ -163,6 +163,14 @@ impl<const N: usize, const G: usize> PassengerDeck<N, G> {
         self.pax[ps].set_pax_target_num(pax_target);
     }
 
+    fn toggle_target_seat(&mut self, ps: usize, seat_id: usize) -> bool {
+        if let Some(pax_station) = self.pax.get_mut(ps) {
+            pax_station.toggle_target_seat(seat_id)
+        } else {
+            false
+        }
+    }
+
     fn has_pax(&self) -> bool {
         self.pax.iter().any(|ps| ps.pax_num() > 0)
     }
@@ -515,6 +523,15 @@ impl Pax {
             (1_u64 << target) - 1
         };
     }
+
+    pub fn toggle_target_seat(&mut self, seat_id: usize) -> bool {
+        if seat_id >= self.max as usize || seat_id >= Self::JS_MAX_SAFE_INTEGER as usize {
+            return false;
+        }
+
+        self.pax_target ^= 1_u64 << seat_id;
+        true
+    }
 }
 impl SimulationElement for Pax {
     fn read(&mut self, reader: &mut SimulatorReader) {
@@ -778,11 +795,15 @@ pub struct PayloadManager<const P: usize, const G: usize, const C: usize> {
     cargo_deck: CargoDeck<C>,
     gsx_driver: GsxDriver,
     handled_target_pax: Option<i32>,
+    handled_seat_click_cmd: Option<i64>,
     handled_target_cargo_kg: Option<f64>,
     handled_target_zfw_kg: Option<f64>,
     handled_target_gw_kg: Option<f64>,
 }
 impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
+    const SEAT_CLICK_CMD_STATION_FACTOR: i64 = 1000;
+    const SEAT_CLICK_CMD_SEQ_FACTOR: i64 = 1_000_000;
+
     pub fn new(
         context: &mut InitContext,
         per_pax_weight: Rc<Cell<Mass>>,
@@ -803,6 +824,7 @@ impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
             fast_rate,
             real_rate,
             handled_target_pax: None,
+            handled_seat_click_cmd: None,
             handled_target_cargo_kg: None,
             handled_target_zfw_kg: None,
             handled_target_gw_kg: None,
@@ -1021,9 +1043,28 @@ impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
             f64::max(old_target_cargo_kg - old_target_pax * per_bag_weight_kg, 0.);
 
         let target_pax = self.distribute_target_pax(requested_pax);
+        self.boarding_inputs.set_target_pax(target_pax);
 
         let target_cargo_kg = target_pax as f64 * per_bag_weight_kg + retained_freight_kg;
         self.apply_target_cargo(Mass::new::<kilogram>(target_cargo_kg));
+    }
+
+    fn apply_seat_click_command(&mut self, seat_click_cmd: i64) -> Option<i32> {
+        if seat_click_cmd < 0 {
+            return None;
+        }
+
+        let station_and_seat = seat_click_cmd % Self::SEAT_CLICK_CMD_SEQ_FACTOR;
+        let station = (station_and_seat / Self::SEAT_CLICK_CMD_STATION_FACTOR) as usize;
+        let seat = (station_and_seat % Self::SEAT_CLICK_CMD_STATION_FACTOR) as usize;
+
+        if !self.passenger_deck.toggle_target_seat(station, seat) {
+            return None;
+        }
+
+        let target_pax = self.passenger_deck.total_target_pax_num();
+        self.boarding_inputs.set_target_pax(target_pax);
+        Some(target_pax)
     }
 
     fn apply_target_zfw(&mut self, requested_zfw_kg: f64) {
@@ -1127,6 +1168,17 @@ impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
     }
 
     fn process_payload_input_commands(&mut self) {
+        let seat_click_cmd = self.boarding_inputs.seat_click_cmd();
+        if self
+            .handled_seat_click_cmd
+            .is_some_and(|handled_seat_click_cmd| handled_seat_click_cmd != seat_click_cmd)
+        {
+            if let Some(target_pax) = self.apply_seat_click_command(seat_click_cmd) {
+                self.handled_target_pax = Some(target_pax);
+            }
+        }
+        self.handled_seat_click_cmd = Some(seat_click_cmd);
+
         let target_pax = self.boarding_inputs.target_pax();
         if self
             .handled_target_pax
@@ -1134,7 +1186,7 @@ impl<const P: usize, const G: usize, const C: usize> PayloadManager<P, G, C> {
         {
             self.apply_target_pax(self.boarding_inputs.target_pax());
         }
-        self.handled_target_pax = Some(target_pax);
+        self.handled_target_pax = Some(self.boarding_inputs.target_pax());
 
         let target_cargo_kg = self.boarding_inputs.target_cargo_kg();
         if self
@@ -1245,6 +1297,7 @@ pub struct BoardingInputs {
     airframe_zfw_id: VariableIdentifier,
     airframe_gw_id: VariableIdentifier,
     target_pax_id: VariableIdentifier,
+    seat_click_cmd_id: VariableIdentifier,
     target_cargo_id: VariableIdentifier,
     target_zfw_id: VariableIdentifier,
     target_gw_id: VariableIdentifier,
@@ -1257,6 +1310,7 @@ pub struct BoardingInputs {
     airframe_zfw_kg: f64,
     airframe_gw_kg: f64,
     target_pax: i32,
+    seat_click_cmd: i64,
     target_cargo_kg: f64,
     target_zfw_kg: f64,
     target_gw_kg: f64,
@@ -1276,6 +1330,7 @@ impl BoardingInputs {
             airframe_zfw_id: context.get_identifier("AIRFRAME_ZFW".to_owned()),
             airframe_gw_id: context.get_identifier("AIRFRAME_GW".to_owned()),
             target_pax_id: context.get_identifier("WB_TARGET_PAX".to_owned()),
+            seat_click_cmd_id: context.get_identifier("WB_SEAT_CLICK_CMD".to_owned()),
             target_cargo_id: context.get_identifier("WB_TARGET_CARGO_KG".to_owned()),
             target_zfw_id: context.get_identifier("WB_TARGET_ZFW_KG".to_owned()),
             target_gw_id: context.get_identifier("WB_TARGET_GW_KG".to_owned()),
@@ -1288,6 +1343,7 @@ impl BoardingInputs {
             airframe_zfw_kg: 0.,
             airframe_gw_kg: 0.,
             target_pax: 0,
+            seat_click_cmd: 0,
             target_cargo_kg: 0.,
             target_zfw_kg: 0.,
             target_gw_kg: 0.,
@@ -1320,6 +1376,14 @@ impl BoardingInputs {
 
     pub fn target_pax(&self) -> i32 {
         self.target_pax
+    }
+
+    pub fn set_target_pax(&mut self, target_pax: i32) {
+        self.target_pax = target_pax.max(0);
+    }
+
+    pub fn seat_click_cmd(&self) -> i64 {
+        self.seat_click_cmd
     }
 
     pub fn target_cargo_kg(&self) -> f64 {
@@ -1357,6 +1421,8 @@ impl SimulationElement for BoardingInputs {
         let target_pax: f64 = reader.read(&self.target_pax_id);
 
         self.target_pax = target_pax.round() as i32;
+        let seat_click_cmd: f64 = reader.read(&self.seat_click_cmd_id);
+        self.seat_click_cmd = seat_click_cmd.round() as i64;
         self.target_cargo_kg = reader.read(&self.target_cargo_id);
         self.target_zfw_kg = reader.read(&self.target_zfw_id);
         self.target_gw_kg = reader.read(&self.target_gw_id);
@@ -1368,6 +1434,7 @@ impl SimulationElement for BoardingInputs {
             &self.per_pax_weight_id,
             self.per_pax_weight().get::<kilogram>(),
         );
+        writer.write(&self.target_pax_id, self.target_pax as f64);
     }
 }
 

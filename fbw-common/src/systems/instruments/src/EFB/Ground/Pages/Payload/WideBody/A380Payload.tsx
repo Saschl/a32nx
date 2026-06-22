@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 /* eslint-disable max-len */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AirplaneFill, CloudArrowDown } from 'react-bootstrap-icons';
 import {
   CargoStationInfo,
@@ -73,72 +73,72 @@ export const A380Payload: React.FC<PayloadProps> = ({
   const [upperMidB] = useSeatFlags(`L:${cabinInfo.seatMap[12].simVar}`, cabinInfo.seatMap[12].capacity, 599);
   const [upperAft] = useSeatFlags(`L:${cabinInfo.seatMap[13].simVar}`, cabinInfo.seatMap[13].capacity, 601);
 
-  const [mainFwdADesired, setMainFwdADesired] = useSeatFlags(
+  const [mainFwdADesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[0].simVar}_DESIRED`,
     cabinInfo.seatMap[0].capacity,
     317,
   );
-  const [mainFwdBDesired, setMainFwdBDesired] = useSeatFlags(
+  const [mainFwdBDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[1].simVar}_DESIRED`,
     cabinInfo.seatMap[1].capacity,
     347,
   );
-  const [mainMid1ADesired, setMainMid1ADesired] = useSeatFlags(
+  const [mainMid1ADesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[2].simVar}_DESIRED`,
     cabinInfo.seatMap[2].capacity,
     359,
   );
-  const [mainMid1BDesired, setMainMid1BDesired] = useSeatFlags(
+  const [mainMid1BDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[3].simVar}_DESIRED`,
     cabinInfo.seatMap[3].capacity,
     379,
   );
-  const [mainMid1CDesired, setMainMid1CDesired] = useSeatFlags(
+  const [mainMid1CDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[4].simVar}_DESIRED`,
     cabinInfo.seatMap[4].capacity,
     397,
   );
-  const [mainMid2ADesired, setMainMid2ADesired] = useSeatFlags(
+  const [mainMid2ADesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[5].simVar}_DESIRED`,
     cabinInfo.seatMap[5].capacity,
     421,
   );
-  const [mainMid2BDesired, setMainMid2BDesired] = useSeatFlags(
+  const [mainMid2BDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[6].simVar}_DESIRED`,
     cabinInfo.seatMap[6].capacity,
     439,
   );
-  const [mainMid2CDesired, setMainMid2CDesired] = useSeatFlags(
+  const [mainMid2CDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[7].simVar}_DESIRED`,
     cabinInfo.seatMap[7].capacity,
     457,
   );
-  const [mainAftADesired, setMainAftADesired] = useSeatFlags(
+  const [mainAftADesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[8].simVar}_DESIRED`,
     cabinInfo.seatMap[8].capacity,
     479,
   );
-  const [mainAftBDesired, setMainAftBDesired] = useSeatFlags(
+  const [mainAftBDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[9].simVar}_DESIRED`,
     cabinInfo.seatMap[9].capacity,
     499,
   );
-  const [upperFwdDesired, setUpperFwdDesired] = useSeatFlags(
+  const [upperFwdDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[10].simVar}_DESIRED`,
     cabinInfo.seatMap[10].capacity,
     521,
   );
-  const [upperMidADesired, setUpperMidADesired] = useSeatFlags(
+  const [upperMidADesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[11].simVar}_DESIRED`,
     cabinInfo.seatMap[11].capacity,
     541,
   );
-  const [upperMidBDesired, setUpperMidBDesired] = useSeatFlags(
+  const [upperMidBDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[12].simVar}_DESIRED`,
     cabinInfo.seatMap[12].capacity,
     557,
   );
-  const [upperAftDesired, setUpperAftDesired] = useSeatFlags(
+  const [upperAftDesired] = useSeatFlags(
     `L:${cabinInfo.seatMap[13].simVar}_DESIRED`,
     cabinInfo.seatMap[13].capacity,
     571,
@@ -212,25 +212,6 @@ export const A380Payload: React.FC<PayloadProps> = ({
       upperAftDesired,
     ],
   );
-  const setDesiredFlags = useMemo(
-    () => [
-      setMainFwdADesired,
-      setMainFwdBDesired,
-      setMainMid1ADesired,
-      setMainMid1BDesired,
-      setMainMid1CDesired,
-      setMainMid2ADesired,
-      setMainMid2BDesired,
-      setMainMid2CDesired,
-      setMainAftADesired,
-      setMainAftBDesired,
-      setUpperFwdDesired,
-      setUpperMidADesired,
-      setUpperMidBDesired,
-      setUpperAftDesired,
-    ],
-    [],
-  );
 
   const [fwdBag] = useSimVar(`L:${cabinInfo.cargoMap[0].simVar}`, 'Number', 619);
   const [aftBag] = useSimVar(`L:${cabinInfo.cargoMap[1].simVar}`, 'Number', 631);
@@ -298,6 +279,8 @@ export const A380Payload: React.FC<PayloadProps> = ({
   const [totalCargoDesired, setTargetCargoCmd] = useSimVar('L:A32NX_WB_TARGET_CARGO_KG', 'Number', 1_907);
   const [zfwDesired, setTargetZfwCmd] = useSimVar('L:A32NX_WB_TARGET_ZFW_KG', 'Number', 1_909);
   const [gwDesired, setTargetGwCmd] = useSimVar('L:A32NX_WB_TARGET_GW_KG', 'Number', 1_911);
+  const [, setSeatClickCmd] = useSimVar('L:A32NX_WB_SEAT_CLICK_CMD', 'Number', 400);
+  const seatClickSeqRef = useRef(0);
 
   const displayPaxMainDeck = useAppSelector((state) => state.payload.displayPaxMainDeck);
 
@@ -387,11 +370,13 @@ export const A380Payload: React.FC<PayloadProps> = ({
         return;
       }
 
-      const seatFlags = desiredFlags[stationIndex];
-      seatFlags.toggleSeatId(seatId);
-      setDesiredFlags[stationIndex](seatFlags);
+      const nextSequence = (seatClickSeqRef.current + 1) % 1_000_000;
+      seatClickSeqRef.current = nextSequence;
+
+      const seatClickCmd = nextSequence * 1_000_000 + stationIndex * 1_000 + seatId;
+      setSeatClickCmd(seatClickCmd);
     },
-    [...desiredFlags, boardingStarted, gsxBoardingState, gsxDeBoardingState, gsxPayloadSyncEnabled],
+    [boardingStarted, gsxBoardingState, gsxDeBoardingState, gsxPayloadSyncEnabled],
   );
 
   const handleDeboarding = useCallback(() => {

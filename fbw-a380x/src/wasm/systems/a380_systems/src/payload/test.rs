@@ -1,5 +1,7 @@
 const HOURS_TO_MINUTES: u64 = 60;
 const MINUTES_TO_SECONDS: u64 = 60;
+const SEAT_CLICK_CMD_STATION_FACTOR: f64 = 1_000.;
+const SEAT_CLICK_CMD_SEQ_FACTOR: f64 = 1_000_000.;
 
 use std::time::Duration;
 
@@ -144,6 +146,7 @@ impl BoardingTestBed {
         self.write_by_name("WB_PER_PAX_WEIGHT", A380Payload::DEFAULT_PER_PAX_WEIGHT_KG);
         self.write_by_name("WB_PER_BAG_WEIGHT", 20.0);
         self.write_by_name("WB_TARGET_PAX", 0.0);
+        self.write_by_name("WB_SEAT_CLICK_CMD", 0.0);
         self.write_by_name("WB_TARGET_CARGO_KG", 0.0);
         self.write_by_name("WB_TARGET_ZFW_KG", 0.0);
         self.write_by_name("WB_TARGET_GW_KG", 0.0);
@@ -168,6 +171,14 @@ impl BoardingTestBed {
 
     fn request_target_gw_kg(mut self, gw_kg: f64) -> Self {
         self.write_by_name("WB_TARGET_GW_KG", gw_kg);
+        self
+    }
+
+    fn request_seat_click(mut self, sequence: i32, station: usize, seat: usize) -> Self {
+        let cmd = sequence as f64 * SEAT_CLICK_CMD_SEQ_FACTOR
+            + station as f64 * SEAT_CLICK_CMD_STATION_FACTOR
+            + seat as f64;
+        self.write_by_name("WB_SEAT_CLICK_CMD", cmd);
         self
     }
 
@@ -757,6 +768,7 @@ fn boarding_init() {
     assert!(test_bed.contains_variable_with_name("WB_PER_PAX_WEIGHT"));
     assert!(test_bed.contains_variable_with_name("WB_PER_BAG_WEIGHT"));
     assert!(test_bed.contains_variable_with_name("WB_TARGET_PAX"));
+    assert!(test_bed.contains_variable_with_name("WB_SEAT_CLICK_CMD"));
     assert!(test_bed.contains_variable_with_name("WB_TARGET_CARGO_KG"));
     assert!(test_bed.contains_variable_with_name("WB_TARGET_ZFW_KG"));
     assert!(test_bed.contains_variable_with_name("WB_TARGET_GW_KG"));
@@ -906,6 +918,37 @@ fn backend_target_gw_command_updates_station_targets() {
 
     assert!(target_pax_total > 0);
     assert!(target_cargo_total_kg > 0.);
+}
+
+#[test]
+fn backend_seat_click_command_toggles_station_seat_and_syncs_target_pax() {
+    let mut test_bed = test_bed_with().init_vars().and_run();
+
+    let initial_station_bits: u64 =
+        test_bed.read_by_name(&format!("{}_DESIRED", A380Payload::A380_PAX[0].pax_id));
+    let initial_target_pax: f64 = test_bed.read_by_name("WB_TARGET_PAX");
+
+    test_bed = test_bed.request_seat_click(1, 0, 0).and_run();
+    let toggled_station_bits: u64 =
+        test_bed.read_by_name(&format!("{}_DESIRED", A380Payload::A380_PAX[0].pax_id));
+    let toggled_target_pax: f64 = test_bed.read_by_name("WB_TARGET_PAX");
+
+    assert_eq!(toggled_station_bits, initial_station_bits ^ 1);
+
+    let expected_delta = if initial_station_bits & 1 == 0 {
+        1.
+    } else {
+        -1.
+    };
+    assert_eq!(toggled_target_pax, initial_target_pax + expected_delta);
+
+    test_bed = test_bed.request_seat_click(2, 0, 0).and_run();
+    let reverted_station_bits: u64 =
+        test_bed.read_by_name(&format!("{}_DESIRED", A380Payload::A380_PAX[0].pax_id));
+    let reverted_target_pax: f64 = test_bed.read_by_name("WB_TARGET_PAX");
+
+    assert_eq!(reverted_station_bits, initial_station_bits);
+    assert_eq!(reverted_target_pax, initial_target_pax);
 }
 #[test]
 fn loaded_no_pax() {
