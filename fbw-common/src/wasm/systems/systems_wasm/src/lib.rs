@@ -35,7 +35,8 @@ use systems::simulation::{InitContext, StartState};
 use systems::{
     failures::FailureType,
     simulation::{
-        Aircraft, Simulation, SimulatorReaderWriter, VariableIdentifier, VariableRegistry,
+        Aircraft, Simulation, SimulationInputCommand, SimulatorReaderWriter, VariableIdentifier,
+        VariableRegistry,
     },
 };
 
@@ -188,9 +189,11 @@ pub struct MsfsHandler {
     variables: Option<MsfsVariableRegistry>,
     aspects: Vec<Box<dyn Aspect>>,
     failures: Rc<RefCell<Failures>>,
+    payload_input_commands: Rc<RefCell<Vec<SimulationInputCommand>>>,
     _commbus: CommBus<'static>,
     time: Time,
 }
+
 impl MsfsHandler {
     fn new(
         variables: MsfsVariableRegistry,
@@ -199,6 +202,7 @@ impl MsfsHandler {
         sim_connect: &mut SimConnect,
     ) -> Result<Self, Box<dyn Error>> {
         let failures = Rc::new(RefCell::new(failures));
+        let payload_input_commands = Rc::new(RefCell::new(Vec::new()));
         let mut commbus = CommBus::default();
         {
             let failures = failures.clone();
@@ -206,11 +210,47 @@ impl MsfsHandler {
                 failures.borrow_mut().handle_failure_update(data);
             });
         }
+        {
+            let payload_input_commands = payload_input_commands.clone();
+            commbus.register("FBW_PAYLOAD_INPUT", move |data| {
+                let payload = data.trim_start_matches('\u{feff}');
+                let mut message_stream =
+                    serde_json::Deserializer::from_str(payload).into_iter::<serde_json::Value>();
+
+                match message_stream.next() {
+                    Some(Ok(message)) => {
+                        let Some(name) = message.get("name").and_then(|v| v.as_str()) else {
+                            eprintln!("SYSTEMS: Payload input command missing string 'name'.");
+                            return;
+                        };
+                        let Some(value) = message.get("value").and_then(|v| v.as_f64()) else {
+                            eprintln!("SYSTEMS: Payload input command missing numeric 'value'.");
+                            return;
+                        };
+
+                        payload_input_commands
+                            .borrow_mut()
+                            .push(SimulationInputCommand {
+                                name: Self::normalize_payload_command_name(name),
+                                value,
+                            });
+                    }
+                    Some(Err(e)) => {
+                        eprintln!("SYSTEMS: Failed to parse payload input command: '{e}'");
+                    }
+                    None => {
+                        eprintln!("SYSTEMS: Failed to parse payload input command: no JSON payload");
+                    }
+                }
+            });
+
+        }
         CommBus::call("FBW_FAILURE_REQUEST", "", CommBusBroadcastFlags::JS);
         Ok(Self {
             variables: Some(variables),
             aspects,
             failures,
+            payload_input_commands,
             _commbus: commbus,
             time: Time::new(sim_connect)?,
         })
@@ -226,6 +266,7 @@ impl MsfsHandler {
             MSFSEvent::PreDraw(_) => {
                 if !self.time.is_pausing() {
                     let delta_time = self.time.take();
+                    self.apply_payload_input_commands(simulation);
                     self.pre_tick(sim_connect, delta_time)?;
                     self.read_failures_into_simulation(simulation);
 
@@ -294,6 +335,28 @@ impl MsfsHandler {
     fn read_failures_into_simulation<T: Aircraft>(&mut self, simulation: &mut Simulation<T>) {
         if let Some(active_failures) = self.failures.borrow_mut().get_updated_active_failures() {
             simulation.update_active_failures(active_failures);
+        }
+    }
+
+    fn apply_payload_input_commands<T: Aircraft>(&mut self, simulation: &mut Simulation<T>) {
+        let mut queued_commands = self.payload_input_commands.borrow_mut();
+        if queued_commands.is_empty() {
+            return;
+        }
+
+        let commands: Vec<SimulationInputCommand> = queued_commands.drain(..).collect();
+        drop(queued_commands);
+
+        simulation.handle_input_commands(&commands);
+    }
+
+    fn normalize_payload_command_name(name: &str) -> String {
+        if let Some(stripped_name) = name.strip_prefix("A32NX_") {
+            stripped_name.to_owned()
+        } else if let Some(stripped_name) = name.strip_prefix("A380X_") {
+            stripped_name.to_owned()
+        } else {
+            name.to_owned()
         }
     }
 }

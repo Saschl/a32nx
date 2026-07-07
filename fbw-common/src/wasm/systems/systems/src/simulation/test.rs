@@ -20,8 +20,8 @@ use crate::{
 
 use super::{
     Aircraft, Read, Reader, Simulation, SimulationElement, SimulationElementVisitor,
-    SimulationToSimulatorVisitor, SimulatorReaderWriter, SimulatorWriter, UpdateContext, Write,
-    Writer,
+    SimulationInputCommand, SimulationToSimulatorVisitor, SimulatorReaderWriter, SimulatorWriter,
+    UpdateContext, Write, Writer,
 };
 use crate::landing_gear::LandingGear;
 use crate::shared::arinc429::{from_arinc429, to_arinc429, Arinc429Word, SignStatus};
@@ -60,6 +60,10 @@ pub trait TestBed {
 
     fn unfail(&mut self, failure_type: FailureType) {
         self.test_bed_mut().unfail(failure_type);
+    }
+
+    fn send_input_command(&mut self, name: &str, value: f64) {
+        self.test_bed_mut().send_input_command(name, value);
     }
 
     fn command<V: FnOnce(&mut Self::Aircraft)>(&mut self, func: V) {
@@ -336,6 +340,14 @@ impl<T: Aircraft> SimulationTestBed<T> {
         self.failures.remove(&failure_type);
         self.simulation
             .update_active_failures(self.failures.clone());
+    }
+
+    fn send_input_command(&mut self, name: &str, value: f64) {
+        self.simulation
+            .handle_input_commands(&[SimulationInputCommand {
+                name: name.to_owned(),
+                value,
+            }]);
     }
 
     fn aircraft(&self) -> &T {

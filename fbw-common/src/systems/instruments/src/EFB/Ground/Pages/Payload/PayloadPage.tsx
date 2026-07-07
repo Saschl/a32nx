@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 /* eslint-disable max-len */
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   AirframeInfo,
   AirframeType,
@@ -16,6 +16,7 @@ import {
 import { useAppSelector, isSimbriefDataLoaded, getMaxPax, getMaxCargo } from '@flybywiresim/flypad';
 import { A380Payload } from './WideBody/A380Payload';
 import { A320Payload } from './NarrowBody/A320Payload';
+import { sendPayloadInputCommand } from './PayloadCommbus';
 
 export interface PayloadProps {
   airframeInfo: AirframeInfo;
@@ -48,8 +49,8 @@ export const PayloadPage = () => {
   const simbriefFreight = parseInt(useAppSelector((state) => state.simbrief.data.weights.freight));
 
   const [isOnGround] = useSimVar('SIM ON GROUND', 'Bool', 8_059);
-  const [boardingStarted, setBoardingStarted] = useSimVar('L:A32NX_BOARDING_STARTED_BY_USR', 'Bool', 509);
-  const [boardingRate, setBoardingRate] = usePersistentProperty('CONFIG_BOARDING_RATE', 'REAL');
+  const [boardingStarted] = useSimVar('L:A32NX_BOARDING_STARTED_BY_USR', 'Bool', 509);
+  const [boardingRate, setBoardingRateConfig] = usePersistentProperty('CONFIG_BOARDING_RATE', 'REAL');
   const payloadImported = useAppSelector((state) => state.simbrief.payloadImported);
 
   const simbriefDataLoaded = isSimbriefDataLoaded();
@@ -59,6 +60,26 @@ export const PayloadPage = () => {
   const flypadInfo = useAppSelector((state) => state.config.flypadInfo);
   const airframeInfo = useAppSelector((state) => state.config.airframeInfo);
   const cabinInfo = useAppSelector((state) => state.config.cabinInfo);
+
+  const setBoardingStarted = useCallback((startBoarding: boolean) => {
+    sendPayloadInputCommand({
+      name: 'A32NX_BOARDING_STARTED_BY_USR',
+      value: startBoarding ? 1 : 0,
+    });
+  }, []);
+
+  const setBoardingRate = useCallback(
+    (rate: string) => {
+      setBoardingRateConfig(rate);
+
+      const numericRate = rate === 'REAL' ? 2 : rate === 'FAST' ? 1 : 0;
+      sendPayloadInputCommand({
+        name: 'A32NX_BOARDING_RATE',
+        value: numericRate,
+      });
+    },
+    [setBoardingRateConfig],
+  );
 
   switch (airframeInfo.variant) {
     case AirframeType.A380_842:

@@ -329,6 +329,15 @@ pub trait SimulationElement {
 
     /// Receives a failure in order to activate or deactivate it.
     fn receive_failure(&mut self, _active_failures: &FxHashSet<FailureType>) {}
+
+    /// Receives a named input command from an external source.
+    fn receive_input_command(&mut self, _command: &SimulationInputCommand) {}
+}
+
+#[derive(Clone, Debug)]
+pub struct SimulationInputCommand {
+    pub name: String,
+    pub value: f64,
 }
 
 /// Trait for visitors that visit the aircraft's system simulation to call
@@ -470,6 +479,13 @@ impl<T: Aircraft> Simulation<T> {
             .accept(&mut FailureSimulationElementVisitor::new(active_failures));
     }
 
+    pub fn handle_input_commands(&mut self, commands: &[SimulationInputCommand]) {
+        for command in commands {
+            self.aircraft
+                .accept(&mut InputCommandSimulationElementVisitor::new(command));
+        }
+    }
+
     fn electricity(&self) -> &Electricity {
         &self.electricity
     }
@@ -501,6 +517,20 @@ impl FailureSimulationElementVisitor {
 impl SimulationElementVisitor for FailureSimulationElementVisitor {
     fn visit<T: SimulationElement>(&mut self, visited: &mut T) {
         visited.receive_failure(&self.active_failures);
+    }
+}
+
+struct InputCommandSimulationElementVisitor<'a> {
+    command: &'a SimulationInputCommand,
+}
+impl<'a> InputCommandSimulationElementVisitor<'a> {
+    fn new(command: &'a SimulationInputCommand) -> Self {
+        Self { command }
+    }
+}
+impl SimulationElementVisitor for InputCommandSimulationElementVisitor<'_> {
+    fn visit<T: SimulationElement>(&mut self, visited: &mut T) {
+        visited.receive_input_command(self.command);
     }
 }
 

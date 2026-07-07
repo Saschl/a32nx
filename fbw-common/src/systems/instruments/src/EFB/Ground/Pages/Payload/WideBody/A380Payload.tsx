@@ -30,6 +30,7 @@ import {
   useAppSelector,
 } from '@flybywiresim/flypad';
 import { BoardingInput, MiscParamsInput, PayloadInputTable } from '../PayloadElements';
+import { sendPayloadInputCommand } from '../PayloadCommbus';
 import { CargoWidget } from './CargoWidget';
 import { ChartWidget } from '../Chart/ChartWidget';
 import { SeatMapWidget } from '../Seating/SeatMapWidget';
@@ -217,19 +218,18 @@ export const A380Payload: React.FC<PayloadProps> = ({
   const [aftBag] = useSimVar(`L:${cabinInfo.cargoMap[1].simVar}`, 'Number', 631);
   const [aftBulk] = useSimVar(`L:${cabinInfo.cargoMap[2].simVar}`, 'Number', 641);
 
-  const [fwdBagDesired, setFwdBagDesired] = useSimVar(`L:${cabinInfo.cargoMap[0].simVar}_DESIRED`, 'Number', 607);
-  const [aftBagDesired, setAftBagDesired] = useSimVar(`L:${cabinInfo.cargoMap[1].simVar}_DESIRED`, 'Number', 613);
-  const [aftBulkDesired, setAftBulkDesired] = useSimVar(`L:${cabinInfo.cargoMap[2].simVar}_DESIRED`, 'Number', 617);
+  const [fwdBagDesired] = useSimVar(`L:${cabinInfo.cargoMap[0].simVar}_DESIRED`, 'Number', 607);
+  const [aftBagDesired] = useSimVar(`L:${cabinInfo.cargoMap[1].simVar}_DESIRED`, 'Number', 613);
+  const [aftBulkDesired] = useSimVar(`L:${cabinInfo.cargoMap[2].simVar}_DESIRED`, 'Number', 617);
 
   const cargo = useMemo(() => [fwdBag, aftBag, aftBulk], [fwdBag, aftBag, aftBulk]);
   const cargoDesired = useMemo(
     () => [fwdBagDesired, aftBagDesired, aftBulkDesired],
     [fwdBagDesired, aftBagDesired, aftBulkDesired],
   );
-  const setCargoDesired = useMemo(() => [setFwdBagDesired, setAftBagDesired, setAftBulkDesired], []);
 
-  const [paxWeight, setPaxWeight] = useSimVar('L:A32NX_WB_PER_PAX_WEIGHT', 'Kilograms', 739);
-  const [paxBagWeight, setPaxBagWeight] = useSimVar('L:A32NX_WB_PER_BAG_WEIGHT', 'Kilograms', 797);
+  const [paxWeight] = useSimVar('L:A32NX_WB_PER_PAX_WEIGHT', 'Kilograms', 739);
+  const [paxBagWeight] = useSimVar('L:A32NX_WB_PER_BAG_WEIGHT', 'Kilograms', 797);
   // const [destEfob] = useSimVar('L:A32NX_DESTINATION_FUEL_ON_BOARD', 'Kilograms', 5_000);
 
   const [emptyWeight] = useState(SimVar.GetSimVarValue('A:EMPTY WEIGHT', 'Kilograms'));
@@ -275,18 +275,16 @@ export const A380Payload: React.FC<PayloadProps> = ({
 
   const [showSimbriefButton, setShowSimbriefButton] = useState(false);
   const [displayZfw, setDisplayZfw] = useState(true);
-  const [totalPaxDesired, setTargetPaxCmd] = useSimVar('L:A32NX_WB_TARGET_PAX', 'Number', 1_903);
-  const [totalCargoDesired, setTargetCargoCmd] = useSimVar('L:A32NX_WB_TARGET_CARGO_KG', 'Number', 1_907);
-  const [zfwDesired, setTargetZfwCmd] = useSimVar('L:A32NX_WB_TARGET_ZFW_KG', 'Number', 1_909);
-  const [gwDesired, setTargetGwCmd] = useSimVar('L:A32NX_WB_TARGET_GW_KG', 'Number', 1_911);
-  const [, setSeatClickCmd] = useSimVar('L:A32NX_WB_SEAT_CLICK_CMD', 'Number', 400);
+  const [totalPaxDesired] = useSimVar('L:A32NX_WB_TARGET_PAX', 'Number', 1_903);
+  const [totalCargoDesired] = useSimVar('L:A32NX_WB_TARGET_CARGO_KG', 'Number', 1_907);
+  const [zfwDesired] = useSimVar('L:A32NX_WB_TARGET_ZFW_KG', 'Number', 1_909);
+  const [gwDesired] = useSimVar('L:A32NX_WB_TARGET_GW_KG', 'Number', 1_911);
   const seatClickSeqRef = useRef(0);
 
   const displayPaxMainDeck = useAppSelector((state) => state.payload.displayPaxMainDeck);
 
   // GSX
   const [gsxPayloadSyncEnabled] = usePersistentNumberProperty('GSX_PAYLOAD_SYNC', 0);
-  const [, setGsxNumPassengers] = useSimVar('L:FSDT_GSX_NUMPASSENGERS', 'Number', 223);
   const [gsxBoardingState] = useSimVar('L:FSDT_GSX_BOARDING_STATE', 'Number', 227);
   const [gsxDeBoardingState] = useSimVar('L:FSDT_GSX_DEBOARDING_STATE', 'Number', 229);
   const gsxInProgress = () =>
@@ -302,6 +300,24 @@ export const A380Payload: React.FC<PayloadProps> = ({
 
   const dispatch = useAppDispatch();
 
+  const sendPayloadInput = useCallback((name: string, value: number) => {
+    sendPayloadInputCommand({ name, value });
+  }, []);
+
+  const setPaxWeightInput = useCallback(
+    (weightKg: number) => {
+      sendPayloadInput('A32NX_WB_PER_PAX_WEIGHT', Math.max(weightKg, 0));
+    },
+    [sendPayloadInput],
+  );
+
+  const setPaxBagWeightInput = useCallback(
+    (weightKg: number) => {
+      sendPayloadInput('A32NX_WB_PER_BAG_WEIGHT', Math.max(weightKg, 0));
+    },
+    [sendPayloadInput],
+  );
+
   useEffect(() => {
     if (simbriefDataLoaded === true && payloadImported === false) {
       setSimBriefValues();
@@ -311,13 +327,13 @@ export const A380Payload: React.FC<PayloadProps> = ({
 
   const setSimBriefValues = () => {
     if (simbriefUnits === 'kgs') {
-      setPaxBagWeight(simbriefBagWeight);
-      setPaxWeight(simbriefPaxWeight);
+      setPaxBagWeightInput(simbriefBagWeight);
+      setPaxWeightInput(simbriefPaxWeight);
       setTargetPax(simbriefPax > maxPax ? maxPax : simbriefPax);
       setTargetCargo(simbriefBag * simbriefBagWeight + simbriefFreight);
     } else {
-      setPaxBagWeight(Units.poundToKilogram(simbriefBagWeight));
-      setPaxWeight(Units.poundToKilogram(simbriefPaxWeight));
+      setPaxBagWeightInput(Units.poundToKilogram(simbriefBagWeight));
+      setPaxWeightInput(Units.poundToKilogram(simbriefPaxWeight));
       setTargetPax(simbriefPax);
       setTargetCargo(Units.poundToKilogram(simbriefBag * simbriefBagWeight + simbriefFreight));
     }
@@ -329,29 +345,35 @@ export const A380Payload: React.FC<PayloadProps> = ({
 
   const setTargetPax = useCallback(
     (numOfPax: number) => {
-      setGsxNumPassengers(numOfPax);
-
       const clampedPax = Math.max(Math.min(Math.round(numOfPax), maxPax), 0);
-      setTargetPaxCmd(clampedPax);
+      // GSX is an external app polling this LVar directly, so it must stay a SimVar write
+      SimVar.SetSimVarValue('L:FSDT_GSX_NUMPASSENGERS', 'Number', clampedPax);
+      sendPayloadInput('A32NX_WB_TARGET_PAX', clampedPax);
     },
-    [maxPax],
+    [maxPax, sendPayloadInput],
   );
 
   const setTargetCargo = useCallback(
     (targetCargoKg: number) => {
       const clampedCargo = Math.max(Math.min(targetCargoKg, maxCargo), 0);
-      setTargetCargoCmd(clampedCargo);
+      sendPayloadInput('A32NX_WB_TARGET_CARGO_KG', clampedCargo);
     },
-    [maxCargo],
+    [maxCargo, sendPayloadInput],
   );
 
-  const processZfw = useCallback((newZfw) => {
-    setTargetZfwCmd(Math.max(newZfw, 0));
-  }, []);
+  const processZfw = useCallback(
+    (newZfw) => {
+      sendPayloadInput('A32NX_WB_TARGET_ZFW_KG', Math.max(newZfw, 0));
+    },
+    [sendPayloadInput],
+  );
 
-  const processGw = useCallback((newGw) => {
-    setTargetGwCmd(Math.max(newGw, 0));
-  }, []);
+  const processGw = useCallback(
+    (newGw) => {
+      sendPayloadInput('A32NX_WB_TARGET_GW_KG', Math.max(newGw, 0));
+    },
+    [sendPayloadInput],
+  );
 
   const onClickCargo = useCallback(
     (cargoStation, e) => {
@@ -359,9 +381,12 @@ export const A380Payload: React.FC<PayloadProps> = ({
         return;
       }
       const cargoPercent = Math.min(Math.max(0, e.nativeEvent.offsetX / cargoMap[cargoStation].progressBarWidth), 1);
-      setCargoDesired[cargoStation](Math.round(cargoMap[cargoStation].weight * cargoPercent));
+      sendPayloadInput(
+        `A32NX_WB_CARGO_STATION_TARGET_${cargoStation}`,
+        Math.round(cargoMap[cargoStation].weight * cargoPercent),
+      );
     },
-    [cargoMap, boardingStarted, gsxBoardingState, gsxDeBoardingState, gsxPayloadSyncEnabled],
+    [cargoMap, boardingStarted, gsxBoardingState, gsxDeBoardingState, gsxPayloadSyncEnabled, sendPayloadInput],
   );
 
   const onClickSeat = useCallback(
@@ -374,9 +399,9 @@ export const A380Payload: React.FC<PayloadProps> = ({
       seatClickSeqRef.current = nextSequence;
 
       const seatClickCmd = nextSequence * 1_000_000 + stationIndex * 1_000 + seatId;
-      setSeatClickCmd(seatClickCmd);
+      sendPayloadInput('A32NX_WB_SEAT_CLICK_CMD', seatClickCmd);
     },
-    [boardingStarted, gsxBoardingState, gsxDeBoardingState, gsxPayloadSyncEnabled],
+    [boardingStarted, gsxBoardingState, gsxDeBoardingState, gsxPayloadSyncEnabled, sendPayloadInput],
   );
 
   const handleDeboarding = useCallback(() => {
@@ -461,10 +486,10 @@ export const A380Payload: React.FC<PayloadProps> = ({
   // Init
   useEffect(() => {
     if (paxWeight === 0) {
-      setPaxWeight(Math.round(cabinInfo.defaultPaxWeight));
+      setPaxWeightInput(Math.round(cabinInfo.defaultPaxWeight));
     }
     if (paxBagWeight === 0) {
-      setPaxBagWeight(Math.round(cabinInfo.defaultBagWeight));
+      setPaxBagWeightInput(Math.round(cabinInfo.defaultBagWeight));
     }
   }, []);
 
@@ -654,8 +679,8 @@ export const A380Payload: React.FC<PayloadProps> = ({
                     paxWeight={paxWeight}
                     bagWeight={paxBagWeight}
                     massUnitForDisplay={massUnitForDisplay}
-                    setPaxWeight={setPaxWeight}
-                    setBagWeight={setPaxBagWeight}
+                    setPaxWeight={setPaxWeightInput}
+                    setBagWeight={setPaxBagWeightInput}
                   />
                   {gsxPayloadSyncEnabled !== 1 && (
                     <BoardingInput

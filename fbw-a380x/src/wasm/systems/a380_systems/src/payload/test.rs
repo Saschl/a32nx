@@ -142,35 +142,34 @@ impl BoardingTestBed {
     }
 
     fn init_vars(mut self) -> Self {
-        self.write_by_name("BOARDING_RATE", BoardingRate::Instant);
+        // Seed the LVars so helpers reading them before the first tick see sane values...
         self.write_by_name("WB_PER_PAX_WEIGHT", A380Payload::DEFAULT_PER_PAX_WEIGHT_KG);
         self.write_by_name("WB_PER_BAG_WEIGHT", 20.0);
-        self.write_by_name("WB_TARGET_PAX", 0.0);
-        self.write_by_name("WB_SEAT_CLICK_CMD", 0.0);
-        self.write_by_name("WB_TARGET_CARGO_KG", 0.0);
-        self.write_by_name("WB_TARGET_ZFW_KG", 0.0);
-        self.write_by_name("WB_TARGET_GW_KG", 0.0);
+        // ...and configure the backend through the input command path it owns.
+        self.send_input_command("BOARDING_RATE", 0.);
+        self.send_input_command("WB_PER_PAX_WEIGHT", A380Payload::DEFAULT_PER_PAX_WEIGHT_KG);
+        self.send_input_command("WB_PER_BAG_WEIGHT", 20.0);
 
         self
     }
 
     fn request_target_pax(mut self, pax: i32) -> Self {
-        self.write_by_name("WB_TARGET_PAX", pax as f64);
+        self.send_input_command("WB_TARGET_PAX", pax as f64);
         self
     }
 
     fn request_target_cargo_kg(mut self, cargo_kg: f64) -> Self {
-        self.write_by_name("WB_TARGET_CARGO_KG", cargo_kg);
+        self.send_input_command("WB_TARGET_CARGO_KG", cargo_kg);
         self
     }
 
     fn request_target_zfw_kg(mut self, zfw_kg: f64) -> Self {
-        self.write_by_name("WB_TARGET_ZFW_KG", zfw_kg);
+        self.send_input_command("WB_TARGET_ZFW_KG", zfw_kg);
         self
     }
 
     fn request_target_gw_kg(mut self, gw_kg: f64) -> Self {
-        self.write_by_name("WB_TARGET_GW_KG", gw_kg);
+        self.send_input_command("WB_TARGET_GW_KG", gw_kg);
         self
     }
 
@@ -178,7 +177,7 @@ impl BoardingTestBed {
         let cmd = sequence as f64 * SEAT_CLICK_CMD_SEQ_FACTOR
             + station as f64 * SEAT_CLICK_CMD_STATION_FACTOR
             + seat as f64;
-        self.write_by_name("WB_SEAT_CLICK_CMD", cmd);
+        self.send_input_command("WB_SEAT_CLICK_CMD", cmd);
         self
     }
 
@@ -189,19 +188,19 @@ impl BoardingTestBed {
     }
 
     fn instant_board_rate(mut self) -> Self {
-        self.write_by_name("BOARDING_RATE", BoardingRate::Instant);
+        self.send_input_command("BOARDING_RATE", 0.);
 
         self
     }
 
     fn fast_board_rate(mut self) -> Self {
-        self.write_by_name("BOARDING_RATE", BoardingRate::Fast);
+        self.send_input_command("BOARDING_RATE", 1.);
 
         self
     }
 
     fn real_board_rate(mut self) -> Self {
-        self.write_by_name("BOARDING_RATE", BoardingRate::Real);
+        self.send_input_command("BOARDING_RATE", 2.);
 
         self
     }
@@ -337,10 +336,7 @@ impl BoardingTestBed {
             pax_flag ^= 1 << c;
         }
 
-        self.write_by_name(
-            &format!("{}_DESIRED", A380Payload::A380_PAX[ps].pax_id),
-            pax_flag,
-        );
+        self.send_input_command(&format!("WB_PAX_STATION_TARGET_{}", ps), pax_flag as f64);
     }
 
     fn load_cargo(&mut self, cs: usize, cargo_qty: Mass) {
@@ -359,19 +355,19 @@ impl BoardingTestBed {
     fn target_cargo(&mut self, cs: usize, cargo_qty: Mass) {
         assert!(cargo_qty <= test_bed().query(|a| a.max_cargo(cs)));
 
-        self.write_by_name(
-            &format!("{}_DESIRED", A380Payload::A380_CARGO[cs].cargo_id),
+        self.send_input_command(
+            &format!("WB_CARGO_STATION_TARGET_{}", cs),
             cargo_qty.get::<kilogram>(),
         );
     }
 
     fn start_boarding(mut self) -> Self {
-        self.write_by_name("BOARDING_STARTED_BY_USR", true);
+        self.send_input_command("BOARDING_STARTED_BY_USR", 1.);
         self
     }
 
     fn stop_boarding(mut self) -> Self {
-        self.write_by_name("BOARDING_STARTED_BY_USR", false);
+        self.send_input_command("BOARDING_STARTED_BY_USR", 0.);
         self
     }
 
@@ -768,7 +764,7 @@ fn boarding_init() {
     assert!(test_bed.contains_variable_with_name("WB_PER_PAX_WEIGHT"));
     assert!(test_bed.contains_variable_with_name("WB_PER_BAG_WEIGHT"));
     assert!(test_bed.contains_variable_with_name("WB_TARGET_PAX"));
-    assert!(test_bed.contains_variable_with_name("WB_SEAT_CLICK_CMD"));
+    // WB_SEAT_CLICK_CMD is no longer written back; seat clicks arrive as input commands
     assert!(test_bed.contains_variable_with_name("WB_TARGET_CARGO_KG"));
     assert!(test_bed.contains_variable_with_name("WB_TARGET_ZFW_KG"));
     assert!(test_bed.contains_variable_with_name("WB_TARGET_GW_KG"));
@@ -847,6 +843,33 @@ fn backend_target_pax_distribution_command_updates_station_targets() {
         let target_bits: u64 =
             test_bed.read_by_name(&format!("{}_DESIRED", A380Payload::A380_PAX[ps].pax_id));
         assert_eq!(target_bits, 0);
+    }
+}
+
+#[test]
+fn backend_target_pax_distribution_near_max_capacity_loses_no_pax() {
+    // Near max capacity the proportional split overflows individual stations;
+    // the overflow must be redistributed instead of dropped (468/484 used to load 463).
+    let mut max_pax = 0;
+    for ps in 0..A380Payload::A380_PAX.len() {
+        max_pax += test_bed().query(|a| a.max_pax(ps)) as i32;
+    }
+
+    for requested_pax in [max_pax - 16, 468, max_pax - 1, max_pax] {
+        let mut test_bed = test_bed_with()
+            .init_vars()
+            .and_run()
+            .request_target_pax(requested_pax)
+            .and_run();
+
+        let mut target_total = 0;
+        for ps in 0..A380Payload::A380_PAX.len() {
+            let target_bits: u64 =
+                test_bed.read_by_name(&format!("{}_DESIRED", A380Payload::A380_PAX[ps].pax_id));
+            target_total += target_bits.count_ones() as i32;
+        }
+
+        assert_eq!(target_total, requested_pax);
     }
 }
 
