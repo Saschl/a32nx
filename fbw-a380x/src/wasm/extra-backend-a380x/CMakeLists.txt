@@ -22,6 +22,7 @@ set(SOURCE_FILES
     ${FBW_COMMON}/extra-backend/Pushback/Pushback.cpp
     ${FBW_COMMON}/extra-backend/AircraftPresets/AircraftPresets.cpp
     ${FBW_COMMON}/extra-backend/LightingPresets/LightingPresets.cpp
+    ${FBW_COMMON}/extra-backend/OansFacilityData/OansFacilityDataProvider.cpp
 )
 
 set(INCLUDE_FILES
@@ -34,6 +35,7 @@ set(INCLUDE_FILES
     ${FBW_COMMON}/extra-backend/AircraftPresets/PresetProcedures.hpp
     ${FBW_COMMON}/extra-backend/AircraftPresets/ProcedureStep.hpp
     ${FBW_COMMON}/extra-backend/LightingPresets/LightingPresets.h
+    ${FBW_COMMON}/extra-backend/OansFacilityData/OansFacilityDataProvider.h
 )
 
 # create the targets

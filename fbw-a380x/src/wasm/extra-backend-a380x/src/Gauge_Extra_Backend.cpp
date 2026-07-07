@@ -23,6 +23,7 @@
 
 #include "AircraftPresets/AircraftPresets.h"
 #include "LightingPresets/LightingPresets_A380X.h"
+#include "OansFacilityData/OansFacilityDataProvider.h"
 #include "Pushback/Pushback_A380X.h"
 
 // FIXME: Using the A32NX_ prefix is a workaround until the A380X_ prefix is used
@@ -34,9 +35,10 @@ ExampleModule exampleModule(msfsHandler);
 
 // ADD ADDITIONAL MODULES HERE
 // This is the only place these have to be added - everything else is handled automatically
-LightingPresets_A380X lightingPresets(msfsHandler);
-Pushback_A380X        pushback(msfsHandler);
-AircraftPresets       aircraftPresets(msfsHandler, "./config/a380x/a380-842/aircraft_preset_procedures.xml");
+LightingPresets_A380X    lightingPresets(msfsHandler);
+Pushback_A380X           pushback(msfsHandler);
+AircraftPresets          aircraftPresets(msfsHandler, "./config/a380x/a380-842/aircraft_preset_procedures.xml");
+OansFacilityDataProvider oansFacilityDataProvider(msfsHandler);
 
 /**
  * Gauge Callback

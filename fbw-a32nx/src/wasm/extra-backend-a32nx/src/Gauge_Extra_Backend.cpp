@@ -22,6 +22,7 @@
 
 #include "AircraftPresets/AircraftPresets.h"
 #include "LightingPresets/LightingPresets_A32NX.h"
+#include "OansFacilityData/OansFacilityDataProvider.h"
 #include "Pushback/Pushback_A32NX.h"
 
 MsfsHandler msfsHandler("Gauge_Extra_Backend_A32NX", "A32NX_");
@@ -31,9 +32,10 @@ ExampleModule exampleModule(msfsHandler);
 
 // ADD ADDITIONAL MODULES HERE
 // This is the only place these have to be added - everything else is handled automatically
-LightingPresets_A32NX lightingPresets(msfsHandler);
-Pushback_A32NX        pushback(msfsHandler);
-AircraftPresets       aircraftPresets(msfsHandler, "./config/a32nx/a320-251n/aircraft_preset_procedures.xml");
+LightingPresets_A32NX    lightingPresets(msfsHandler);
+Pushback_A32NX           pushback(msfsHandler);
+AircraftPresets          aircraftPresets(msfsHandler, "./config/a32nx/a320-251n/aircraft_preset_procedures.xml");
+OansFacilityDataProvider oansFacilityDataProvider(msfsHandler);
 
 /**
  * Gauge Callback

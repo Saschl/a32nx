@@ -25,6 +25,7 @@ import {
   AmdbFeatureTypeStrings,
   AmdbProjection,
   AmdbProperties,
+  AmdbResponse,
   Arinc429LocalVarConsumerSubject,
   EfisNdMode,
   EfisSide,
@@ -63,7 +64,7 @@ import { OancLabelManager } from './OancLabelManager';
 import { OancPositionComputer } from './OancPositionComputer';
 import { OancMarkerManager } from './OancMarkerManager';
 import { ResetPanelSimvars } from './ResetPanelPublisher';
-import { NavigraphAmdbClient } from './api/NavigraphAmdbClient';
+import { SwitchingAmdbClient } from './api/SwitchingAmdbClient';
 import { pointAngle } from './OancMapUtils';
 import { LubberLine } from '../ND/pages/arc/LubberLine';
 
@@ -210,7 +211,7 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
     featureCollection([]), // Layer 4: TAXIWAY GUIDANCE LINES (scaled width), HOLD SHORT LINES
   ];
 
-  public readonly amdbClient = new NavigraphAmdbClient();
+  public readonly amdbClient = new SwitchingAmdbClient();
 
   private readonly labelManager = new OancLabelManager<T>(this);
 
@@ -670,13 +671,22 @@ export class Oanc<T extends number> extends DisplayComponent<OancProps<T>> {
     includeLayers.push(FeatureTypeString.PaintedCenterline);
     includeLayers.push(FeatureTypeString.RunwayThreshold);
 
-    const data = await this.amdbClient.getAirportData(icao, includeLayers, undefined);
-    const wgs84ArpDat = await this.amdbClient.getAirportData(
-      icao,
-      [FeatureTypeString.AerodromeReferencePoint],
-      undefined,
-      AmdbProjection.Epsg4326,
-    );
+    let data: AmdbResponse;
+    let wgs84ArpDat: AmdbResponse;
+    try {
+      data = await this.amdbClient.getAirportData(icao, includeLayers, undefined);
+      wgs84ArpDat = await this.amdbClient.getAirportData(
+        icao,
+        [FeatureTypeString.AerodromeReferencePoint],
+        undefined,
+        AmdbProjection.Epsg4326,
+      );
+    } catch (e) {
+      console.error(`[OANC](loadAirportMap) Failed to load airport data for ${icao}:`, e);
+      this.dataLoading = false;
+      this.airportLoading.set(false);
+      return;
+    }
 
     const features = Object.values(data).reduce((acc, it) => {
       const features = it.features.map((f) => {

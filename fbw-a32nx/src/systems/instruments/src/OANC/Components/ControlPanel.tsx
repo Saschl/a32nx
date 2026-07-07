@@ -15,12 +15,12 @@ import {
   VNode,
 } from '@microsoft/msfs-sdk';
 
-import { AmdbAirportSearchResult } from '@flybywiresim/fbw-sdk';
+import { AmdbAirportSearchResult, NXDataStore } from '@flybywiresim/fbw-sdk';
 import {
+  AmdbDataInterface,
   ControlPanelAirportSearchMode,
   ControlPanelStore,
   ControlPanelUtils,
-  NavigraphAmdbClient,
 } from '@flybywiresim/oanc';
 import { RadioButtonGroup } from './RadioButtonGroup';
 import { DropdownMenu } from './DropdownMenu';
@@ -28,7 +28,7 @@ import { DropdownMenu } from './DropdownMenu';
 import './ControlPanel.scss';
 
 export interface ControlPanelProps extends ComponentProps {
-  amdbClient: NavigraphAmdbClient;
+  amdbClient: AmdbDataInterface;
 
   isVisible: Subscribable<boolean>;
 
@@ -82,9 +82,16 @@ export class ControlPanel extends DisplayComponent<ControlPanelProps> {
       this.props.isVisible.sub((it) => this.style.setValue('visibility', it ? 'visible' : 'hidden'), true),
     );
 
-    this.props.amdbClient.searchForAirports('').then((airports) => {
-      this.store.airports.set(airports);
-    });
+    const loadAirportList = () =>
+      this.props.amdbClient
+        .searchForAirports('')
+        .then((airports) => this.store.airports.set(airports))
+        .catch(() => this.store.airports.set([]));
+
+    loadAirportList();
+
+    // reload the airport list when the map data source is changed in the EFB
+    this.subscriptions.push(NXDataStore.getSetting('CONFIG_OANS_MAP_DATA_SOURCE').sub(() => loadAirportList()));
 
     this.subscriptions.push(this.store.airports.sub(() => this.sortAirports(this.store.airportSearchMode.get())));
 

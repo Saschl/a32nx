@@ -40,7 +40,7 @@ import {
   ControlPanelMapDataSearchMode,
   ControlPanelStore,
   ControlPanelUtils,
-  NavigraphAmdbClient,
+  SwitchingAmdbClient,
 } from '@flybywiresim/oanc';
 import { NavigationDatabaseService } from '@fmgc/flightplanning/NavigationDatabaseService';
 import { NavigationDatabase, NavigationDatabaseBackend } from '@fmgc/NavigationDatabase';
@@ -89,7 +89,8 @@ export class OansControlPanel extends DisplayComponent<OansProps> {
       ResetPanelSimvars
   >();
 
-  /** If navigraph not available, this class will compute BTV features */
+  /** Whether the selected map data source (Navigraph AMDB or MSFS facility data) is available.
+   * If not available, this class will compute BTV features */
   private readonly navigraphAvailable = Subject.create(false);
   private readonly oansResetPulled = ConsumerSubject.create(this.sub.on('a380x_reset_panel_arpt_nav'), false);
 
@@ -107,7 +108,9 @@ export class OansControlPanel extends DisplayComponent<OansProps> {
 
   private readonly oansFailed = MappedSubject.create(([reset]) => reset, this.oansResetPulled);
 
-  private amdbClient = new NavigraphAmdbClient();
+  private amdbClient = new SwitchingAmdbClient();
+
+  private readonly mapDataSourceSetting = NXDataStore.getSetting('CONFIG_OANS_MAP_DATA_SOURCE');
 
   private readonly lengthUnit = NXDataStore.getSetting('CONFIG_USING_METRIC_UNIT').map((v) =>
     v ? UnitType.METER : UnitType.FOOT,
@@ -253,7 +256,11 @@ export class OansControlPanel extends DisplayComponent<OansProps> {
   private readonly ropsDetectedRunwayLda = ConsumerSubject.create(this.sub.on('ropsDetectedRunwayLda'), null);
   private readonly oansSelectedLandingRunway = ConsumerSubject.create(this.sub.on('oansSelectedLandingRunway'), null);
 
-  private readonly airportDatabase = this.navigraphAvailable.map((a) => (a ? 'FBW9027250BB04' : 'N/A'));
+  private readonly airportDatabase = MappedSubject.create(
+    ([available, source]) => (available ? (source === 'MSFS' ? 'MSFS' : 'FBW9027250BB04') : 'N/A'),
+    this.navigraphAvailable,
+    this.mapDataSourceSetting,
+  );
 
   private readonly activeDatabase = Subject.create('30DEC-27JAN');
 
@@ -303,6 +310,9 @@ export class OansControlPanel extends DisplayComponent<OansProps> {
     });
 
     NXDataStore.getAndSubscribeLegacy('NAVIGRAPH_ACCESS_TOKEN', () => this.loadOansDb());
+
+    // reload the airport database when the map data source is changed in the EFB
+    this.subs.push(this.mapDataSourceSetting.sub(() => this.loadOansDb()));
 
     this.subs.push(
       this.props.isVisible.sub((it) => this.style.setValue('visibility', it ? 'inherit' : 'hidden'), true),

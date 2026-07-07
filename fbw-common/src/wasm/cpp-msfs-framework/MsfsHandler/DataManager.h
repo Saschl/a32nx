@@ -49,6 +49,18 @@ using KeyEventID = ID32;
 using KeyEventCallbackID = UINT64;
 
 /**
+ * Defines a callback function for facility data messages (SIMCONNECT_RECV_ID_FACILITY_DATA)
+ * matching a previously registered facility data request ID.
+ */
+using FacilityDataCallback = std::function<void(const SIMCONNECT_RECV_FACILITY_DATA*)>;
+
+/**
+ * Defines a callback function for the end-of-transmission message of a facility data request
+ * (SIMCONNECT_RECV_ID_FACILITY_DATA_END).
+ */
+using FacilityDataEndCallback = std::function<void(const SIMCONNECT_RECV_FACILITY_DATA_END*)>;
+
+/**
  * Defines a callback function for a key event
  * @param number of parameters to use
  * @param parameters 0-4 to pass to the callback function
@@ -90,6 +102,9 @@ class DataManager {
 
   // Map of callback maps to be called when a key event is triggered in the sim.
   std::map<KeyEventID, std::map<KeyEventCallbackID, KeyEventCallbackFunction>> keyEventCallbacks{};
+
+  // A map of callbacks for facility data requests, keyed by the user request ID.
+  std::map<SIMCONNECT_DATA_REQUEST_ID, std::pair<FacilityDataCallback, FacilityDataEndCallback>> facilityDataCallbacks{};
 
   // Flag to indicate if the data manager is initialized.
   bool isInitialized = false;
@@ -488,6 +503,43 @@ class DataManager {
   }
 
   // ===============================================================================================
+  // Facility Data Handling
+  // ===============================================================================================
+
+  /**
+   * @brief Reserves a unique data definition ID, e.g. for use with SimConnect_AddToFacilityDefinition.
+   * @return A unique SIMCONNECT_DATA_DEFINITION_ID
+   */
+  [[nodiscard]] SIMCONNECT_DATA_DEFINITION_ID reserveDataDefinitionId() { return dataDefIDGen.getNextId(); }
+
+  /**
+   * @brief Reserves a unique data request ID, e.g. for use with SimConnect_RequestFacilityData.
+   * @return A unique SIMCONNECT_DATA_REQUEST_ID
+   */
+  [[nodiscard]] SIMCONNECT_DATA_REQUEST_ID reserveDataRequestId() { return dataReqIDGen.getNextId(); }
+
+  /**
+   * @brief Registers callbacks for facility data messages for a given request ID.<br/>
+   * The data callback is called for every SIMCONNECT_RECV_ID_FACILITY_DATA message whose
+   * UserRequestId matches the given request ID. The end callback is called once for the
+   * corresponding SIMCONNECT_RECV_ID_FACILITY_DATA_END message.
+   * @param requestId The request ID used with SimConnect_RequestFacilityData
+   * @param dataCallback The callback for facility data messages
+   * @param endCallback The callback for the end-of-transmission message
+   */
+  void addFacilityDataCallback(SIMCONNECT_DATA_REQUEST_ID requestId,
+                               const FacilityDataCallback&    dataCallback,
+                               const FacilityDataEndCallback& endCallback) {
+    facilityDataCallbacks[requestId] = {dataCallback, endCallback};
+  }
+
+  /**
+   * @brief Removes the facility data callbacks for the given request ID.
+   * @param requestId The request ID the callbacks were registered with
+   */
+  void removeFacilityDataCallback(SIMCONNECT_DATA_REQUEST_ID requestId) { facilityDataCallbacks.erase(requestId); }
+
+  // ===============================================================================================
   // Key Event Handling
   // ===============================================================================================
 
@@ -583,6 +635,18 @@ class DataManager {
    * @param pRecv the SIMCONNECT_RECV_EVENT_EX1 structure
    */
   void processEvent(const SIMCONNECT_RECV_EVENT_EX1* pRecv) const;
+
+  /**
+   * Called from processDispatchMessage() for SIMCONNECT_RECV_ID_FACILITY_DATA messages.
+   * @param pRecv the SIMCONNECT_RECV_FACILITY_DATA structure
+   */
+  void processFacilityData(const SIMCONNECT_RECV_FACILITY_DATA* pRecv) const;
+
+  /**
+   * Called from processDispatchMessage() for SIMCONNECT_RECV_ID_FACILITY_DATA_END messages.
+   * @param pRecv the SIMCONNECT_RECV_FACILITY_DATA_END structure
+   */
+  void processFacilityDataEnd(const SIMCONNECT_RECV_FACILITY_DATA_END* pRecv) const;
 };
 
 #endif  // FLYBYWIRE_DATAMANAGER_H

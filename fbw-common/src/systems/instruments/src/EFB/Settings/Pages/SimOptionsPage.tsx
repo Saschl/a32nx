@@ -59,6 +59,8 @@ export const SimOptionsPage = () => {
     0,
   );
 
+  const [oansMapDataSource, setOansMapDataSource] = usePersistentSetting('CONFIG_OANS_MAP_DATA_SOURCE');
+
   const defaultBaroButtons: ButtonType[] = [
     { name: t('Settings.SimOptions.Auto'), setting: 'AUTO' },
     { name: t('Settings.SimOptions.inHg'), setting: 'IN HG' },
@@ -305,6 +307,17 @@ export const SimOptionsPage = () => {
               <Toggle value={!!oansPerformanceMode} onToggle={(value) => setOansPerformanceMode(value ? 1 : 0)} />
             </SettingItem>
           )}
+
+          <SettingItem name={t('Settings.SimOptions.OansMapDataSource')}>
+            <SelectGroup>
+              <SelectItem onSelect={() => setOansMapDataSource('NAVIGRAPH')} selected={oansMapDataSource !== 'MSFS'}>
+                {t('Settings.SimOptions.OansMapDataSourceNavigraph')}
+              </SelectItem>
+              <SelectItem onSelect={() => setOansMapDataSource('MSFS')} selected={oansMapDataSource === 'MSFS'}>
+                {t('Settings.SimOptions.OansMapDataSourceMsfs')}
+              </SelectItem>
+            </SelectGroup>
+          </SettingItem>
         </SettingsPage>
       )}
       <ThrottleConfig isShown={showThrottleSettings} onClose={() => setShowThrottleSettings(false)} />

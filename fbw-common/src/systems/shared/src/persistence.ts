@@ -17,6 +17,7 @@ export interface NXDataStoreSettings {
   CONFIG_ATIS_SRC: ConfigAtisSource;
   CONFIG_TAF_SRC: ConfigTafSource;
   CONFIG_AUTO_SIM_ROUTE_LOAD: boolean;
+  CONFIG_OANS_MAP_DATA_SOURCE: 'NAVIGRAPH' | 'MSFS';
   CONFIG_USING_METRIC_UNIT: boolean;
   EFB_UI_THEME: 'blue' | 'dark' | 'light';
 }
@@ -34,6 +35,7 @@ export class NXDataStore {
     CONFIG_ATIS_SRC: ConfigWeatherMap.IVAO,
     CONFIG_TAF_SRC: ConfigWeatherMap.NOAA,
     CONFIG_AUTO_SIM_ROUTE_LOAD: false,
+    CONFIG_OANS_MAP_DATA_SOURCE: 'NAVIGRAPH',
     CONFIG_USING_METRIC_UNIT: true,
     EFB_UI_THEME: 'blue',
   };

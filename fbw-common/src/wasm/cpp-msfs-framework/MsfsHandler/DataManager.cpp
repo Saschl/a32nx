@@ -297,6 +297,14 @@ void DataManager::processDispatchMessage(SIMCONNECT_RECV* pRecv, [[maybe_unused]
       processEvent(reinterpret_cast<const SIMCONNECT_RECV_EVENT_EX1*>(pRecv));
       break;
 
+    case SIMCONNECT_RECV_ID_FACILITY_DATA:
+      processFacilityData(reinterpret_cast<const SIMCONNECT_RECV_FACILITY_DATA*>(pRecv));
+      break;
+
+    case SIMCONNECT_RECV_ID_FACILITY_DATA_END:
+      processFacilityDataEnd(reinterpret_cast<const SIMCONNECT_RECV_FACILITY_DATA_END*>(pRecv));
+      break;
+
     case SIMCONNECT_RECV_ID_OPEN:
       LOG_INFO("DataManager: SimConnect connection established");
       break;
@@ -346,4 +354,22 @@ void DataManager::processEvent(const SIMCONNECT_RECV_EVENT_EX1* pRecv) const {
     return;
   }
   LOG_WARN("DataManager::processEvent() - unknown event id: " + std::to_string(pRecv->uEventID));
+}
+
+void DataManager::processFacilityData(const SIMCONNECT_RECV_FACILITY_DATA* pRecv) const {
+  const auto pair = facilityDataCallbacks.find(pRecv->UserRequestId);
+  if (pair != facilityDataCallbacks.end()) {
+    pair->second.first(pRecv);
+    return;
+  }
+  LOG_WARN("DataManager::processFacilityData() - unknown request id: " + std::to_string(pRecv->UserRequestId));
+}
+
+void DataManager::processFacilityDataEnd(const SIMCONNECT_RECV_FACILITY_DATA_END* pRecv) const {
+  const auto pair = facilityDataCallbacks.find(pRecv->RequestId);
+  if (pair != facilityDataCallbacks.end()) {
+    pair->second.second(pRecv);
+    return;
+  }
+  LOG_WARN("DataManager::processFacilityDataEnd() - unknown request id: " + std::to_string(pRecv->RequestId));
 }
