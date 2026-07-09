@@ -30,6 +30,8 @@ interface DropdownMenuProps extends ComponentProps {
    * If defined, this component does not update the selectedIndex prop, but rather calls this method.
    */
   onModified?: (newSelectedIndex: number, freeTextEntry: string) => void;
+  /** Called live while the user types into the input field, e.g. to re-query an async source backing `values`. */
+  onTextInput?: (text: string) => void;
   inactive?: Subscribable<boolean>;
   containerStyle?: string;
   alignLabels?: 'flex-start' | 'center' | 'flex-end' | Subscribable<'flex-start' | 'center' | 'flex-end'>;
@@ -64,6 +66,8 @@ export class DropdownMenu extends DisplayComponent<DropdownMenuProps> {
 
   private freeTextEntered = false;
 
+  private currentFreeText = '';
+
   private renderedDropdownOptions = ArraySubject.create<string>();
 
   private renderedDropdownOptionsIndices: number[] = [];
@@ -78,6 +82,7 @@ export class DropdownMenu extends DisplayComponent<DropdownMenuProps> {
   clickHandler(i: number, thisArg: DropdownMenu) {
     if (this.props.inactive.get() === false) {
       this.freeTextEntered = false;
+      this.currentFreeText = '';
       if (thisArg.props.onModified) {
         thisArg.props.onModified(this.renderedDropdownOptionsIndices[i], '');
       } else {
@@ -99,6 +104,7 @@ export class DropdownMenu extends DisplayComponent<DropdownMenuProps> {
       this.dropdownIsOpened.set(false);
       this.freeTextEntered = false;
     }
+    this.currentFreeText = '';
     this.filterList('');
   }
 
@@ -110,6 +116,9 @@ export class DropdownMenu extends DisplayComponent<DropdownMenuProps> {
 
   private onFieldChanged(text: string) {
     this.freeTextEntered = true;
+    this.currentFreeText = text;
+
+    this.props.onTextInput?.(text);
 
     // Filter dropdown options based on input
     this.filterList(text);
@@ -165,6 +174,13 @@ export class DropdownMenu extends DisplayComponent<DropdownMenuProps> {
 
     this.subs.push(
       this.props.values.sub((index, type, item, array) => {
+        // if the values change while the user is typing (e.g. an async re-query backing the list),
+        // keep the entered text and only re-filter the options
+        if (this.freeTextEntered && this.dropdownIsOpened.get()) {
+          this.filterList(this.currentFreeText);
+          return;
+        }
+
         const selectedIndex = this.props.selectedIndex.get();
         const value = array[selectedIndex];
 

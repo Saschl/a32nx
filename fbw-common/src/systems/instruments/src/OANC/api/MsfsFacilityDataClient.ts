@@ -25,10 +25,22 @@ export interface MsfsRawRunway {
   snum: number;
   /** secondary designator */
   sdes: number;
-  /** primary displaced threshold length, metres */
-  pthr: number;
-  /** secondary displaced threshold length, metres */
-  sthr: number;
+  /** primary end closed flag (0/1) */
+  pcl?: number;
+  /** secondary end closed flag (0/1) */
+  scl?: number;
+  /** primary displaced threshold [length, width], metres */
+  pthr?: [number, number];
+  /** primary blastpad [length, width], metres */
+  pbp?: [number, number];
+  /** primary overrun (stopway) [length, width], metres */
+  pov?: [number, number];
+  /** secondary displaced threshold [length, width], metres */
+  sthr?: [number, number];
+  /** secondary blastpad [length, width], metres */
+  sbp?: [number, number];
+  /** secondary overrun (stopway) [length, width], metres */
+  sov?: [number, number];
 }
 
 /** [type, orientation, biasX (m east of ARP), biasZ (m north of ARP)] */

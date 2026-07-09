@@ -120,16 +120,20 @@ bool OansFacilityDataProvider::buildFacilityDefinition() {
   const HANDLE hSimConnect = dataManager->getSimConnectHandle();
 
   // Field order MUST match the structs in the header.
-  // Only fields available in both MSFS 2020 and MSFS 2024 are used, as the A32NX and A380X
-  // packages target different simulator versions.
+  // NOTE: PRIMARY_CLOSED/SECONDARY_CLOSED require MSFS 2024.
   const char* fields[] = {
       "OPEN AIRPORT",                                                                                    //
       "LATITUDE", "LONGITUDE", "ALTITUDE", "MAGVAR", "NAME",                                             //
       "OPEN RUNWAY",                                                                                     //
       "LATITUDE", "LONGITUDE", "ALTITUDE", "HEADING", "LENGTH", "WIDTH", "SURFACE",                      //
       "PRIMARY_NUMBER", "PRIMARY_DESIGNATOR", "SECONDARY_NUMBER", "SECONDARY_DESIGNATOR",                //
+      "PRIMARY_CLOSED", "SECONDARY_CLOSED",                                                              //
       "OPEN PRIMARY_THRESHOLD", "LENGTH", "WIDTH", "ENABLE", "CLOSE PRIMARY_THRESHOLD",                  //
+      "OPEN PRIMARY_BLASTPAD", "LENGTH", "WIDTH", "ENABLE", "CLOSE PRIMARY_BLASTPAD",                    //
+      "OPEN PRIMARY_OVERRUN", "LENGTH", "WIDTH", "ENABLE", "CLOSE PRIMARY_OVERRUN",                      //
       "OPEN SECONDARY_THRESHOLD", "LENGTH", "WIDTH", "ENABLE", "CLOSE SECONDARY_THRESHOLD",              //
+      "OPEN SECONDARY_BLASTPAD", "LENGTH", "WIDTH", "ENABLE", "CLOSE SECONDARY_BLASTPAD",                //
+      "OPEN SECONDARY_OVERRUN", "LENGTH", "WIDTH", "ENABLE", "CLOSE SECONDARY_OVERRUN",                  //
       "CLOSE RUNWAY",                                                                                    //
       "OPEN TAXI_POINT",                                                                                 //
       "TYPE", "ORIENTATION", "BIAS_X", "BIAS_Z",                                                         //
@@ -181,19 +185,48 @@ void OansFacilityDataProvider::onFacilityData(const SIMCONNECT_RECV_FACILITY_DAT
       std::memcpy(&runway.data, data, sizeof(RunwayData));
       runways.push_back(runway);
       pavementCounter = 0;
+      LOG_INFO(fmt::format("OansFacilityDataProvider: runway[{}] {}{}/{}{} len={:.0f} wid={:.0f} pcl={} scl={}", runways.size() - 1,
+                           runway.data.primaryNumber, runway.data.primaryDesignator, runway.data.secondaryNumber,
+                           runway.data.secondaryDesignator, runway.data.length, runway.data.width, runway.data.primaryClosed,
+                           runway.data.secondaryClosed));
       break;
     }
 
     case SIMCONNECT_FACILITY_DATA_PAVEMENT: {
-      // primary and secondary threshold arrive in request order after their parent runway
+      // the pavements arrive in request order after their parent runway:
+      // primary threshold/blastpad/overrun, then secondary threshold/blastpad/overrun
       PavementData pavement{};
       std::memcpy(&pavement, data, sizeof(PavementData));
+      // expected order per runway: 0=pri threshold, 1=pri blastpad, 2=pri overrun, 3=sec threshold, 4=sec blastpad, 5=sec overrun
+      LOG_INFO(fmt::format("OansFacilityDataProvider: runway[{}] pavement[{}] enable={} len={:.1f} wid={:.1f}",
+                           runways.empty() ? -1 : static_cast<int>(runways.size()) - 1, pavementCounter, pavement.enable,
+                           pavement.length, pavement.width));
+      if (pavement.enable == 0) {
+        pavement = {};
+      }
       if (!runways.empty()) {
-        const float length = pavement.enable != 0 ? pavement.length : 0.f;
-        if (pavementCounter == 0) {
-          runways.back().primaryThresholdLength = length;
-        } else if (pavementCounter == 1) {
-          runways.back().secondaryThresholdLength = length;
+        Runway& runway = runways.back();
+        switch (pavementCounter) {
+          case 0:
+            runway.primaryThreshold = pavement;
+            break;
+          case 1:
+            runway.primaryBlastpad = pavement;
+            break;
+          case 2:
+            runway.primaryOverrun = pavement;
+            break;
+          case 3:
+            runway.secondaryThreshold = pavement;
+            break;
+          case 4:
+            runway.secondaryBlastpad = pavement;
+            break;
+          case 5:
+            runway.secondaryOverrun = pavement;
+            break;
+          default:
+            break;
         }
         pavementCounter++;
       }
@@ -261,11 +294,17 @@ std::string OansFacilityDataProvider::serializeAirportData() const {
   json += ",\"runways\":[";
   for (size_t i = 0; i < runways.size(); i++) {
     const Runway& rwy = runways[i];
+    // pavements are serialized as [length, width] pairs
     json += fmt::format(R"({}{{"lat":{:.8f},"lon":{:.8f},"alt":{:.1f},"hdg":{:.2f},"len":{:.1f},"wid":{:.1f},"surf":{},)"
-                        R"("pnum":{},"pdes":{},"snum":{},"sdes":{},"pthr":{:.1f},"sthr":{:.1f}}})",
+                        R"("pnum":{},"pdes":{},"snum":{},"sdes":{},"pcl":{},"scl":{},)"
+                        R"("pthr":[{:.1f},{:.1f}],"pbp":[{:.1f},{:.1f}],"pov":[{:.1f},{:.1f}],)"
+                        R"("sthr":[{:.1f},{:.1f}],"sbp":[{:.1f},{:.1f}],"sov":[{:.1f},{:.1f}]}})",
                         i > 0 ? "," : "", rwy.data.lat, rwy.data.lon, rwy.data.alt, rwy.data.heading, rwy.data.length, rwy.data.width,
                         rwy.data.surface, rwy.data.primaryNumber, rwy.data.primaryDesignator, rwy.data.secondaryNumber,
-                        rwy.data.secondaryDesignator, rwy.primaryThresholdLength, rwy.secondaryThresholdLength);
+                        rwy.data.secondaryDesignator, rwy.data.primaryClosed != 0 ? 1 : 0, rwy.data.secondaryClosed != 0 ? 1 : 0,
+                        rwy.primaryThreshold.length, rwy.primaryThreshold.width, rwy.primaryBlastpad.length, rwy.primaryBlastpad.width,
+                        rwy.primaryOverrun.length, rwy.primaryOverrun.width, rwy.secondaryThreshold.length, rwy.secondaryThreshold.width,
+                        rwy.secondaryBlastpad.length, rwy.secondaryBlastpad.width, rwy.secondaryOverrun.length, rwy.secondaryOverrun.width);
   }
 
   json += "],\"points\":[";

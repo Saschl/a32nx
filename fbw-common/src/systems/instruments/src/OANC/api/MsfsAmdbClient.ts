@@ -13,12 +13,14 @@ import {
   OansMapProjection,
 } from '@flybywiresim/fbw-sdk';
 import {
+  AirportFacilityDataFlags,
   EventBus,
   FacilityLoader,
   FacilityRepository,
   FacilitySearchType,
   FacilityType,
   ICAO,
+  IcaoValue,
   NearestAirportFilteredSearchSession,
   NearestIcaoSearchSessionDataType,
 } from '@microsoft/msfs-sdk';
@@ -45,7 +47,180 @@ const NON_STAND_PARKING_TYPES = [0 /* NONE */, 12 /* FUEL */, 13 /* VEHICLE */];
 /** Maximum length of a synthesized runway exit line, in metres */
 const EXIT_LINE_MAX_LENGTH = 300;
 
-/** Radius around the aircraft used for the airport search, in metres */
+/** Painted runway designation character height, metres (ICAO Annex 14) */
+const MARKING_CHAR_HEIGHT = 9;
+
+/** Painted runway designation stroke width, metres */
+const MARKING_STROKE_WIDTH = 1.5;
+
+/**
+ * Stroke font for painted runway designations. Each character is a list of polylines in a unit
+ * box (x 0..0.6, y 0..1, y up), scaled by MARKING_CHAR_HEIGHT and extruded to pavement polygons.
+ */
+const MARKING_FONT: Record<string, [number, number][][]> = {
+  '0': [
+    [
+      [0, 0],
+      [0, 1],
+      [0.6, 1],
+      [0.6, 0],
+      [0, 0],
+    ],
+  ],
+  '1': [
+    [
+      [0.3, 0],
+      [0.3, 1],
+    ],
+  ],
+  '2': [
+    [
+      [0, 1],
+      [0.6, 1],
+      [0.6, 0.5],
+      [0, 0.5],
+      [0, 0],
+      [0.6, 0],
+    ],
+  ],
+  '3': [
+    [
+      [0, 1],
+      [0.6, 1],
+      [0.6, 0],
+      [0, 0],
+    ],
+    [
+      [0.6, 0.5],
+      [0.2, 0.5],
+    ],
+  ],
+  '4': [
+    [
+      [0, 1],
+      [0, 0.5],
+      [0.6, 0.5],
+    ],
+    [
+      [0.6, 1],
+      [0.6, 0],
+    ],
+  ],
+  '5': [
+    [
+      [0.6, 1],
+      [0, 1],
+      [0, 0.5],
+      [0.6, 0.5],
+      [0.6, 0],
+      [0, 0],
+    ],
+  ],
+  '6': [
+    [
+      [0.6, 1],
+      [0, 1],
+      [0, 0],
+      [0.6, 0],
+      [0.6, 0.5],
+      [0, 0.5],
+    ],
+  ],
+  '7': [
+    [
+      [0, 1],
+      [0.6, 1],
+      [0.3, 0],
+    ],
+  ],
+  '8': [
+    [
+      [0, 0],
+      [0, 1],
+      [0.6, 1],
+      [0.6, 0],
+      [0, 0],
+    ],
+    [
+      [0, 0.5],
+      [0.6, 0.5],
+    ],
+  ],
+  '9': [
+    [
+      [0, 0],
+      [0.6, 0],
+      [0.6, 1],
+      [0, 1],
+      [0, 0.5],
+      [0.6, 0.5],
+    ],
+  ],
+  L: [
+    [
+      [0, 1],
+      [0, 0],
+      [0.6, 0],
+    ],
+  ],
+  R: [
+    [
+      [0, 0],
+      [0, 1],
+      [0.6, 1],
+      [0.6, 0.5],
+      [0, 0.5],
+    ],
+    [
+      [0.3, 0.5],
+      [0.6, 0],
+    ],
+  ],
+  C: [
+    [
+      [0.6, 1],
+      [0, 1],
+      [0, 0],
+      [0.6, 0],
+    ],
+  ],
+  W: [
+    [
+      [0, 1],
+      [0.1, 0],
+      [0.3, 0.6],
+      [0.5, 0],
+      [0.6, 1],
+    ],
+  ],
+  A: [
+    [
+      [0, 0],
+      [0, 1],
+      [0.6, 1],
+      [0.6, 0],
+    ],
+    [
+      [0, 0.5],
+      [0.6, 0.5],
+    ],
+  ],
+  B: [
+    [
+      [0, 0],
+      [0, 1],
+      [0.6, 1],
+      [0.6, 0],
+      [0, 0],
+    ],
+    [
+      [0, 0.5],
+      [0.6, 0.5],
+    ],
+  ],
+};
+
+/** Radius around the aircraft used for the empty-query airport search, in metres */
 const AIRPORT_SEARCH_RADIUS = 400_000;
 
 /** Maximum number of airports returned by the airport search */
@@ -92,42 +267,65 @@ export class MsfsAmdbClient implements AmdbDataInterface {
   private nextFeatureId = 1;
 
   public async searchForAirports(queryString: string): Promise<AmdbAirportSearchResponse> {
-    const lat = SimVar.GetSimVarValue('PLANE LATITUDE', 'degree latitude');
-    const long = SimVar.GetSimVarValue('PLANE LONGITUDE', 'degree longitude');
-
     if (!this.facilityLoader) {
       this.facilityLoader = new FacilityLoader(FacilityRepository.getRepository(this.bus));
     }
-    if (!this.searchSession) {
-      this.searchSession = await this.facilityLoader.startNearestSearchSession(FacilitySearchType.Airport);
-    }
 
-    const diff = await this.searchSession.searchNearest(lat, long, AIRPORT_SEARCH_RADIUS, AIRPORT_SEARCH_MAX_RESULTS);
-    for (const icao of diff.added) {
-      this.nearbyAirportIcaos.add(icao);
-    }
-    for (const icao of diff.removed) {
-      this.nearbyAirportIcaos.delete(icao);
+    const query = queryString.trim().toUpperCase();
+
+    let icaos: IcaoValue[];
+    if (query.length > 0) {
+      // global ident-prefix search
+      icaos = await this.facilityLoader.searchByIdentWithIcaoStructs(
+        FacilitySearchType.Airport,
+        query,
+        AIRPORT_SEARCH_MAX_RESULTS,
+      );
+    } else {
+      // no query: return the airports around the aircraft
+      const lat = SimVar.GetSimVarValue('PLANE LATITUDE', 'degree latitude');
+      const long = SimVar.GetSimVarValue('PLANE LONGITUDE', 'degree longitude');
+
+      if (!this.searchSession) {
+        this.searchSession = await this.facilityLoader.startNearestSearchSession(FacilitySearchType.Airport);
+      }
+
+      const diff = await this.searchSession.searchNearest(lat, long, AIRPORT_SEARCH_RADIUS, AIRPORT_SEARCH_MAX_RESULTS);
+      for (const icao of diff.added) {
+        this.nearbyAirportIcaos.add(icao);
+      }
+      for (const icao of diff.removed) {
+        this.nearbyAirportIcaos.delete(icao);
+      }
+
+      icaos = [...this.nearbyAirportIcaos].map((icao) => ICAO.stringV1ToValue(icao));
     }
 
     const facilities = await Promise.all(
-      [...this.nearbyAirportIcaos].map((icao) =>
-        this.facilityLoader.getFacility(FacilityType.Airport, icao).catch(() => null),
+      icaos.map((icao) =>
+        this.facilityLoader.getFacility(FacilityType.Airport, icao, AirportFacilityDataFlags.Minimal).catch(() => null),
       ),
     );
 
-    const query = queryString.trim().toUpperCase();
+    const seenIdents = new Set<string>();
 
     return facilities
       .filter((fac) => fac !== null)
       .map((fac) => ({
-        idarpt: ICAO.getIdent(fac.icao).trim(),
+        idarpt: (fac.icaoStruct?.ident ?? ICAO.getIdent(fac.icao)).trim(),
         iata: null,
         name: typeof Utils !== 'undefined' ? Utils.Translate(fac.name) ?? fac.name : fac.name,
         coordinates: { lat: fac.lat, lon: fac.lon },
         elev: 0,
       }))
-      .filter((arpt) => query.length === 0 || arpt.idarpt.startsWith(query) || arpt.name.toUpperCase().includes(query))
+      .filter((arpt) => {
+        // real airport idents are at most 4 characters - longer ones are MSFS-internal pseudo idents
+        if (arpt.idarpt.length === 0 || arpt.idarpt.length > 4 || seenIdents.has(arpt.idarpt)) {
+          return false;
+        }
+        seenIdents.add(arpt.idarpt);
+        return true;
+      })
       .sort((a, b) => a.idarpt.localeCompare(b.idarpt));
   }
 
@@ -229,6 +427,9 @@ export class MsfsAmdbClient implements AmdbDataInterface {
     for (const type of [
       FeatureTypeString.RunwayElement,
       FeatureTypeString.RunwayDisplacedArea,
+      FeatureTypeString.RunwayMarking,
+      FeatureTypeString.BlastPad,
+      FeatureTypeString.Stopway,
       FeatureTypeString.RunwayThreshold,
       FeatureTypeString.PaintedCenterline,
       FeatureTypeString.TaxiwayElement,
@@ -258,6 +459,14 @@ export class MsfsAmdbClient implements AmdbDataInterface {
 
     this.synthesizeTaxiNetwork(raw, push);
 
+    console.log(
+      `[OANC] MsfsAmdbClient: synthesized features for ${raw.icao}:`,
+      [...map.entries()]
+        .filter(([, features]) => features.length > 0)
+        .map(([type, features]) => `${type}=${features.length}`)
+        .join(' '),
+    );
+
     return map;
   }
 
@@ -274,7 +483,6 @@ export class MsfsAmdbClient implements AmdbDataInterface {
     const perp = [Math.cos(hdgRad), -Math.sin(hdgRad)];
 
     const halfLen = runway.len / 2;
-    const halfWid = runway.wid / 2;
 
     const along = (base: Position, distance: number): Position => [
       base[0] + dir[0] * distance,
@@ -293,18 +501,25 @@ export class MsfsAmdbClient implements AmdbDataInterface {
     const secondaryIdent = MsfsAmdbClient.runwayEndIdent(runway.snum, runway.sdes);
     const idrwy = `${primaryIdent}.${secondaryIdent}`;
 
-    const rectangle = (from: Position, to: Position): Polygon => ({
-      type: 'Polygon',
-      coordinates: [
-        [
-          across(from, halfWid),
-          across(to, halfWid),
-          across(to, -halfWid),
-          across(from, -halfWid),
-          across(from, halfWid),
+    const rectangle = (from: Position, to: Position, width = runway.wid): Polygon => {
+      const halfW = width / 2;
+      return {
+        type: 'Polygon',
+        coordinates: [
+          [across(from, halfW), across(to, halfW), across(to, -halfW), across(from, -halfW), across(from, halfW)],
         ],
-      ],
-    });
+      };
+    };
+
+    const pthr = MsfsAmdbClient.pavementLength(runway.pthr);
+    const sthr = MsfsAmdbClient.pavementLength(runway.sthr);
+
+    console.log(
+      `[OANC] MsfsAmdbClient: runway ${idrwy}: len=${runway.len} wid=${runway.wid}`,
+      `pthr=${JSON.stringify(runway.pthr)} pbp=${JSON.stringify(runway.pbp)} pov=${JSON.stringify(runway.pov)}`,
+      `sthr=${JSON.stringify(runway.sthr)} sbp=${JSON.stringify(runway.sbp)} sov=${JSON.stringify(runway.sov)}`,
+      `pcl=${runway.pcl} scl=${runway.scl}`,
+    );
 
     push(
       FeatureTypeString.RunwayElement,
@@ -323,13 +538,8 @@ export class MsfsAmdbClient implements AmdbDataInterface {
     );
 
     const thresholds: [Position, string, number, number][] = [
-      [along(primaryEnd, runway.pthr), primaryIdent, runway.hdg, runway.pthr],
-      [
-        along(secondaryEnd, -runway.sthr),
-        secondaryIdent,
-        MsfsAmdbClient.normalizeHeading(runway.hdg + 180),
-        runway.sthr,
-      ],
+      [along(primaryEnd, pthr), primaryIdent, runway.hdg, pthr],
+      [along(secondaryEnd, -sthr), secondaryIdent, MsfsAmdbClient.normalizeHeading(runway.hdg + 180), sthr],
     ];
 
     for (const [position, idthr, brngtrue, displaced] of thresholds) {
@@ -350,22 +560,204 @@ export class MsfsAmdbClient implements AmdbDataInterface {
       );
     }
 
-    if (runway.pthr > 0) {
+    if (pthr > 0) {
       push(
         FeatureTypeString.RunwayDisplacedArea,
-        this.feature(rectangle(primaryEnd, along(primaryEnd, runway.pthr)), {
-          feattype: FeatureType.RunwayDisplacedArea,
+        this.feature(
+          rectangle(primaryEnd, along(primaryEnd, pthr), MsfsAmdbClient.pavementWidth(runway.pthr, runway.wid)),
+          { feattype: FeatureType.RunwayDisplacedArea, idrwy },
+        ),
+      );
+    }
+    if (sthr > 0) {
+      push(
+        FeatureTypeString.RunwayDisplacedArea,
+        this.feature(
+          rectangle(along(secondaryEnd, -sthr), secondaryEnd, MsfsAmdbClient.pavementWidth(runway.sthr, runway.wid)),
+          { feattype: FeatureType.RunwayDisplacedArea, idrwy },
+        ),
+      );
+    }
+
+    // blastpads and overruns (stopways) extend beyond the runway pavement ends
+    const pbp = MsfsAmdbClient.pavementLength(runway.pbp);
+    const sbp = MsfsAmdbClient.pavementLength(runway.sbp);
+    const pov = MsfsAmdbClient.pavementLength(runway.pov);
+    const sov = MsfsAmdbClient.pavementLength(runway.sov);
+    const overrunAreas: [number, number, Position, Position, FeatureTypeString, FeatureType][] = [
+      [
+        pbp,
+        MsfsAmdbClient.pavementWidth(runway.pbp, runway.wid),
+        along(primaryEnd, -pbp),
+        primaryEnd,
+        FeatureTypeString.BlastPad,
+        FeatureType.BlastPad,
+      ],
+      [
+        sbp,
+        MsfsAmdbClient.pavementWidth(runway.sbp, runway.wid),
+        secondaryEnd,
+        along(secondaryEnd, sbp),
+        FeatureTypeString.BlastPad,
+        FeatureType.BlastPad,
+      ],
+      [
+        pov,
+        MsfsAmdbClient.pavementWidth(runway.pov, runway.wid),
+        along(primaryEnd, -pov),
+        primaryEnd,
+        FeatureTypeString.Stopway,
+        FeatureType.Stopway,
+      ],
+      [
+        sov,
+        MsfsAmdbClient.pavementWidth(runway.sov, runway.wid),
+        secondaryEnd,
+        along(secondaryEnd, sov),
+        FeatureTypeString.Stopway,
+        FeatureType.Stopway,
+      ],
+    ];
+    for (const [length, width, from, to, typeString, feattype] of overrunAreas) {
+      if (length > 0) {
+        push(typeString, this.feature(rectangle(from, to, width), { feattype, idrwy }));
+      }
+    }
+
+    this.synthesizeRunwayMarkings(runway, primaryEnd, dir, perp, primaryIdent, secondaryIdent, idrwy, pthr, sthr, push);
+  }
+
+  /**
+   * Synthesizes the painted runway markings (threshold stripes, designation characters and
+   * centreline dashes) as AMDB RunwayMarking pavement polygons. Dimensions follow ICAO Annex 14.
+   */
+  private synthesizeRunwayMarkings(
+    runway: MsfsRawRunway,
+    primaryEnd: Position,
+    dir: number[],
+    perp: number[],
+    primaryIdent: string,
+    secondaryIdent: string,
+    idrwy: string,
+    pthr: number,
+    sthr: number,
+    push: (type: FeatureTypeString, feature: AmdbFeature) => void,
+  ): void {
+    const pushMarking = (coordinates: Position[], width: number) =>
+      push(
+        FeatureTypeString.RunwayMarking,
+        this.feature(MsfsAmdbClient.extrudePolyline(coordinates, [width]), {
+          feattype: FeatureType.RunwayMarking,
           idrwy,
         }),
       );
+
+    // both runway ends: threshold position, direction of travel, and "reading right" vector for text
+    const ends: {
+      threshold: Position;
+      ident: string;
+      dir: number[];
+      right: number[];
+      closed: boolean;
+      displaced: number;
+      overrun: number;
+    }[] = [
+      {
+        threshold: [primaryEnd[0] + dir[0] * pthr, primaryEnd[1] + dir[1] * pthr],
+        ident: primaryIdent,
+        dir,
+        right: perp,
+        closed: (runway.pcl ?? 0) !== 0,
+        displaced: pthr,
+        overrun: Math.max(MsfsAmdbClient.pavementLength(runway.pbp), MsfsAmdbClient.pavementLength(runway.pov)),
+      },
+      {
+        threshold: [primaryEnd[0] + dir[0] * (runway.len - sthr), primaryEnd[1] + dir[1] * (runway.len - sthr)],
+        ident: secondaryIdent,
+        dir: [-dir[0], -dir[1]],
+        right: [-perp[0], -perp[1]],
+        closed: (runway.scl ?? 0) !== 0,
+        displaced: sthr,
+        overrun: Math.max(MsfsAmdbClient.pavementLength(runway.sbp), MsfsAmdbClient.pavementLength(runway.sov)),
+      },
+    ];
+
+    for (const end of ends) {
+      // closed runway ends carry no threshold/designation markings
+      if (end.closed) {
+        continue;
+      }
+      const at = (alongDist: number, acrossDist: number): Position => [
+        end.threshold[0] + end.dir[0] * alongDist + end.right[0] * acrossDist,
+        end.threshold[1] + end.dir[1] * alongDist + end.right[1] * acrossDist,
+      ];
+
+      // threshold stripes ("piano keys"), 6 m to 36 m past the threshold; stripe count per ICAO by width
+      const stripeCount =
+        runway.wid >= 55 ? 16 : runway.wid >= 40 ? 12 : runway.wid >= 27 ? 8 : runway.wid >= 20 ? 6 : 4;
+      const usableWidth = runway.wid * 0.75;
+      const stripePitch = usableWidth / stripeCount;
+
+      // displaced threshold: transverse bar at the threshold and centreline arrows pointing towards it
+      if (end.displaced > 0) {
+        pushMarking([at(-1.5, -usableWidth / 2), at(-1.5, usableWidth / 2)], 1.8);
+
+        for (let tip = -end.displaced + 30; tip <= -10; tip += 30) {
+          pushMarking([at(tip - 20, 0), at(tip - 6, 0)], 0.9);
+          pushMarking([at(tip - 8, -3), at(tip, 0)], 1.2);
+          pushMarking([at(tip - 8, 3), at(tip, 0)], 1.2);
+        }
+      }
+
+      // blastpad/stopway: chevrons across the pavement, pointing towards the runway
+      if (end.overrun > 0) {
+        const chevronHalfWidth = runway.wid * 0.35;
+        for (let tip = -end.displaced - end.overrun + 25; tip <= -end.displaced - 5; tip += 30) {
+          pushMarking([at(tip - 15, -chevronHalfWidth), at(tip, 0)], 1.5);
+          pushMarking([at(tip - 15, chevronHalfWidth), at(tip, 0)], 1.5);
+        }
+      }
+      for (let i = 0; i < stripeCount; i++) {
+        const offset = -usableWidth / 2 + stripePitch * (i + 0.5);
+        pushMarking([at(6, offset), at(36, offset)], 1.8);
+      }
+
+      // designation: parallel-runway letter between the threshold marking and the numerals (ICAO)
+      const numerals = end.ident.slice(0, 2);
+      const letter = end.ident.slice(2);
+
+      const drawCharacterRow = (text: string, startDist: number) => {
+        const charWidth = 0.6 * MARKING_CHAR_HEIGHT;
+        const charGap = 2;
+        let x = -(text.length * charWidth + (text.length - 1) * charGap) / 2;
+        for (const char of text) {
+          for (const stroke of MARKING_FONT[char] ?? []) {
+            pushMarking(
+              stroke.map(([gx, gy]) => at(startDist + gy * MARKING_CHAR_HEIGHT, x + gx * MARKING_CHAR_HEIGHT)),
+              MARKING_STROKE_WIDTH,
+            );
+          }
+          x += charWidth + charGap;
+        }
+      };
+
+      if (letter.length > 0) {
+        drawCharacterRow(letter, 42);
+      }
+      drawCharacterRow(numerals, 57);
     }
-    if (runway.sthr > 0) {
-      push(
-        FeatureTypeString.RunwayDisplacedArea,
-        this.feature(rectangle(along(secondaryEnd, -runway.sthr), secondaryEnd), {
-          feattype: FeatureType.RunwayDisplacedArea,
-          idrwy,
-        }),
+
+    // centreline dashes (30 m dash / 20 m gap) between the designation markings of both ends
+    const dashStart = pthr + 75;
+    const dashEnd = runway.len - sthr - 75;
+    for (let s = dashStart; s < dashEnd; s += 50) {
+      const e = Math.min(s + 30, dashEnd);
+      pushMarking(
+        [
+          [primaryEnd[0] + dir[0] * s, primaryEnd[1] + dir[1] * s],
+          [primaryEnd[0] + dir[0] * e, primaryEnd[1] + dir[1] * e],
+        ],
+        0.9,
       );
     }
   }
@@ -442,7 +834,9 @@ export class MsfsAmdbClient implements AmdbDataInterface {
 
         push(
           FeatureTypeString.TaxiwayElement,
-          this.feature(MsfsAmdbClient.extrudePolyline(coordinates, chain.widths), {
+          // scenery-authored per-segment widths are often noisy, so the whole chain is extruded
+          // at its median width to avoid visible steps/tapers along a taxiway
+          this.feature(MsfsAmdbClient.extrudePolyline(coordinates, [MsfsAmdbClient.medianWidth(chain.widths)]), {
             feattype: FeatureType.TaxiwayElement,
             idlin: name.length > 0 ? name : undefined,
           }),
@@ -467,7 +861,7 @@ export class MsfsAmdbClient implements AmdbDataInterface {
       const coordinates = chain.nodes.map(nodePosition);
       push(
         FeatureTypeString.ServiceRoad,
-        this.feature(MsfsAmdbClient.extrudePolyline(coordinates, chain.widths), {
+        this.feature(MsfsAmdbClient.extrudePolyline(coordinates, [MsfsAmdbClient.medianWidth(chain.widths)]), {
           feattype: FeatureType.ServiceRoad,
         }),
       );
@@ -637,12 +1031,28 @@ export class MsfsAmdbClient implements AmdbDataInterface {
     return `${number.toString().padStart(2, '0')}${DESIGNATOR_LETTERS[designator] ?? ''}`;
   }
 
+  /** Length of a [length, width] runway pavement (threshold/blastpad/overrun), 0 if absent */
+  private static pavementLength(pavement?: [number, number]): number {
+    return pavement?.[0] ?? 0;
+  }
+
+  /** Width of a [length, width] runway pavement, falling back to the given width if absent/zero */
+  private static pavementWidth(pavement: [number, number] | undefined, fallback: number): number {
+    const width = pavement?.[1] ?? 0;
+    return width > 0 ? width : fallback;
+  }
+
   private static normalizeHeading(heading: number): number {
     return ((heading % 360) + 360) % 360;
   }
 
   private static distance(a: Position, b: Position): number {
     return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  }
+
+  private static medianWidth(widths: number[]): number {
+    const sorted = [...widths].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
   }
 
   /** Formats a TAXI_PARKING name/number/suffix triple into an AMDB-style stand name, e.g. GATE_A/12/NONE -> "A12" */

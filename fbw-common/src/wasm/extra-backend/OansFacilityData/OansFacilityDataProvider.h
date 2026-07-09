@@ -52,6 +52,8 @@ class OansFacilityDataProvider : public Module {
     int32_t primaryDesignator;
     int32_t secondaryNumber;
     int32_t secondaryDesignator;
+    int8_t  primaryClosed;
+    int8_t  secondaryClosed;
   } __attribute__((packed));
 
   struct PavementData {
@@ -93,11 +95,15 @@ class OansFacilityDataProvider : public Module {
     char name[32];
   } __attribute__((packed));
 
-  // Runway with the displaced threshold pavements of both ends
+  // Runway with the threshold/blastpad/overrun pavements of both ends
   struct Runway {
-    RunwayData data{};
-    float      primaryThresholdLength   = 0.f;
-    float      secondaryThresholdLength = 0.f;
+    RunwayData   data{};
+    PavementData primaryThreshold{};
+    PavementData primaryBlastpad{};
+    PavementData primaryOverrun{};
+    PavementData secondaryThreshold{};
+    PavementData secondaryBlastpad{};
+    PavementData secondaryOverrun{};
   };
 
  private:

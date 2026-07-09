@@ -103,6 +103,35 @@ export class ControlPanel extends DisplayComponent<ControlPanelProps> {
     );
   }
 
+  private airportSearchRequeryTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  /** Re-queries the map data source with the entered text and merges new matches into the airport list */
+  private onAirportSearchTextInput(text: string) {
+    if (this.airportSearchRequeryTimeout !== undefined) {
+      clearTimeout(this.airportSearchRequeryTimeout);
+      this.airportSearchRequeryTimeout = undefined;
+    }
+
+    const query = text.trim();
+    if (query.length < 2) {
+      return;
+    }
+
+    this.airportSearchRequeryTimeout = setTimeout(() => {
+      this.airportSearchRequeryTimeout = undefined;
+      this.props.amdbClient
+        .searchForAirports(query)
+        .then((airports) => {
+          const knownIdents = new Set(this.store.airports.getArray().map((it) => it.idarpt));
+          const additions = airports.filter((it) => !knownIdents.has(it.idarpt));
+          if (additions.length > 0) {
+            this.store.airports.set([...this.store.airports.getArray(), ...additions]);
+          }
+        })
+        .catch(() => {});
+    }, 500);
+  }
+
   public updateAirportSearchData() {
     const searchMode = this.store.airportSearchMode.get();
     const sortedAirports = this.store.sortedAirports.getArray();
@@ -245,6 +274,7 @@ export class ControlPanel extends DisplayComponent<ControlPanelProps> {
                   onModified={(newSelectedIndex) => {
                     this.handleSelectAirport(this.store.sortedAirports.get(newSelectedIndex).idarpt, newSelectedIndex);
                   }}
+                  onTextInput={(text) => this.onAirportSearchTextInput(text)}
                   freeTextAllowed={false}
                   numberOfDigitsForInputField={10}
                   alignLabels={this.store.airportSearchMode.map((it) =>
