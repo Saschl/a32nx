@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use std::{error::Error, time::Duration};
-use systems::shared::ElectricalBusType;
+use systems::shared::{set_diagnostics_reporter, ElectricalBusType};
 use systems::simulation::{InitContext, StartState};
 use systems::{
     failures::FailureType,
@@ -203,6 +203,15 @@ impl MsfsHandler {
     ) -> Result<Self, Box<dyn Error>> {
         let failures = Rc::new(RefCell::new(failures));
         let payload_input_commands = Rc::new(RefCell::new(Vec::new()));
+
+        set_diagnostics_reporter(|message| {
+            CommBus::call(
+                "FBW_SYSTEMS_TROUBLESHOOTING_LOG",
+                message,
+                CommBusBroadcastFlags::JS,
+            );
+        });
+
         let mut commbus = CommBus::default();
         {
             let failures = failures.clone();
@@ -239,11 +248,12 @@ impl MsfsHandler {
                         eprintln!("SYSTEMS: Failed to parse payload input command: '{e}'");
                     }
                     None => {
-                        eprintln!("SYSTEMS: Failed to parse payload input command: no JSON payload");
+                        eprintln!(
+                            "SYSTEMS: Failed to parse payload input command: no JSON payload"
+                        );
                     }
                 }
             });
-
         }
         CommBus::call("FBW_FAILURE_REQUEST", "", CommBusBroadcastFlags::JS);
         Ok(Self {
