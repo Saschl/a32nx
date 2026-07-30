@@ -9,6 +9,7 @@ members = [
     "fbw-a32nx/src/wasm/systems/a320_hydraulic_simulation_graphs",
     "fbw-common/src/wasm/systems/systems",
     "fbw-common/src/wasm/systems/systems_wasm",
+    "fbw-common/src/wasm/terronnd_rs",
 ]
 
 [workspace.dependencies]

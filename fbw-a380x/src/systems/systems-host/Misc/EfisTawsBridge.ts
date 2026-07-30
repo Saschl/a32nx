@@ -74,6 +74,7 @@ class EfisDataSync implements Instrument {
 
   init(): void {
     this.backplane.init();
+    RegisterViewListener('JS_LISTENER_COMM_BUS', () => {});
   }
 
   onUpdate(): void {
@@ -583,14 +584,34 @@ export class EfisTawsBridge implements Instrument {
       tawsWxrSelected === 1 ? this.terr1Failed.get() : tawsWxrSelected === 2 ? this.terr2Failed.get() : true,
     );
 
-    if (this.aircraftStatusShouldBeUpdated && this.simBridgeClient.isConnected()) {
-      const success = await TawsData.postAircraftStatusData(this.aircraftStatusData.get());
-      this.aircraftStatusShouldBeUpdated = !success;
+    if (this.aircraftStatusShouldBeUpdated) {
+      const data = this.aircraftStatusData.get();
+      // primary consumer: the in-process terronnd WASM gauge
+      Coherent.call('COMM_BUS_WASM_CALLBACK', 'FBW_TERR_AIRCRAFT_STATUS', JSON.stringify(data));
+      // legacy best-effort: keep SimBridge fed while it is around
+      if (this.simBridgeClient.isConnected()) {
+        TawsData.postAircraftStatusData(data).catch(() => {});
+      }
+      this.aircraftStatusShouldBeUpdated = false;
     }
 
-    if (this.verticalPathShouldBeUpdated && this.simBridgeClient.isConnected()) {
-      const success = await TawsData.postVerticalDisplayPath(this.terrVdPathData.get());
-      this.verticalPathShouldBeUpdated = !success;
+    if (this.verticalPathShouldBeUpdated) {
+      const data = this.terrVdPathData.get();
+      // ~0.1 m precision is plenty for terrain sampling and keeps the CommBus
+      // payload small for long FMS paths
+      const compact = {
+        ...data,
+        waypoints: data.waypoints.map((w) => ({
+          latitude: Math.round(w.latitude * 1e6) / 1e6,
+          longitude: Math.round(w.longitude * 1e6) / 1e6,
+        })),
+      };
+      console.log(JSON.stringify(compact));
+      Coherent.call('COMM_BUS_WASM_CALLBACK', 'FBW_TERR_VD_PATH', JSON.stringify(compact));
+      if (this.simBridgeClient.isConnected()) {
+        TawsData.postVerticalDisplayPath(data).catch(() => {});
+      }
+      this.verticalPathShouldBeUpdated = false;
     }
   }
 
