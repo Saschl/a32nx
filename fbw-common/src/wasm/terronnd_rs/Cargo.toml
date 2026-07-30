@@ -1,0 +1,25 @@
+[package]
+name = "terronnd"
+version = "0.1.0"
+edition = "2021"
+description = "In-process terrain-on-ND/VD gauge: SimBridge terrain renderer running inside MSFS"
+license = "GPL-3.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+flate2 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+msfs = { git = "https://github.com/flybywiresim/msfs-rs", branch = "main" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+png = "0.17"
+
+# NOTE: no [profile.release] here — as a workspace member this crate inherits
+# the root workspace profile (which already sets lto = true, strip = true);
+# a local profile section would be ignored with a warning.
