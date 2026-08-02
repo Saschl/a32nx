@@ -1,9 +1,11 @@
 //! The gauge itself: raw multi-callback exports with the exact shape of the
-//! C++ gauge (`terronnd_gauge_init/update/draw/kill`, side in the install
-//! parameter string) so panel.cfg stays untouched. `#[msfs::gauge]` cannot be
-//! used here: terronnd is instantiated twice (L/R) and the macro's single
-//! static executor drops the first instance's future on the second install,
-//! and never surfaces `strParameters`.
+//! C++ gauge (`terronnd_gauge_init/update/draw/kill`). panel.cfg passes
+//! `<L|R>,<terrain folder>` as the install parameter string (e.g.
+//! `L,fbw-a32nx`), selecting the display side and the aircraft's terrain2.map
+//! location. `#[msfs::gauge]` cannot be used here: terronnd is instantiated
+//! twice (L/R) and the macro's single static executor drops the first
+//! instance's future on the second install, and never surfaces
+//! `strParameters`.
 //!
 //! All work runs on the draw callback: once per sim frame the shared state is
 //! advanced (input sampling, budgeted world-map work, 40 ms renderer ticks),
@@ -25,9 +27,13 @@ use crate::state::AircraftStatus;
 use crate::transition::TRANSITION_DELTA_TIME_MS;
 use crate::vd_path::{parse_aircraft_status, parse_vd_path};
 
-/// Inside the aircraft package (VFS `.` = package root), placed there by
-/// `scripts/terrain_map.js` (v1 -> v2 conversion at build time).
-const TERRAIN_MAP_PATH: &str = "./terrain/terrain2.map";
+/// Map location inside the aircraft package (VFS `.` = package root), placed
+/// there by `scripts/terrain_map.js` (v1 -> v2 conversion at build time).
+/// The per-aircraft folder (`fbw-a32nx` / `fbw-a380x`) comes from the second
+/// gauge parameter in panel.cfg.
+fn terrain_map_path(folder: &str) -> String {
+    format!("./terrain/{folder}/terrain2.map")
+}
 
 /// Decompressed tile bytes inflated per sim frame during region rebuilds
 /// (~4 full-res tiles per frame; the full A380X-sized raster warms up in a
@@ -99,8 +105,6 @@ fn install_frame(images: &mut SideImages, old_slot: usize, new_slot: usize, fram
     images.stamps[new_slot] = generation;
 }
 
-/// Data arriving from CommBus callbacks between frames. Callbacks only write
-/// here — no I/O in that context (see the registration comment).
 #[derive(Default)]
 struct CommBusInbox {
     vd_path: Option<VerticalPathData>,
@@ -159,39 +163,44 @@ struct TerrainModule {
 }
 
 impl TerrainModule {
-    fn new() -> Self {
-        let map = match TerrainMapV2::open(TERRAIN_MAP_PATH) {
-            Ok(terrain) => {
-                println!(
-                    "TERR ON ND: terrain2.map opened, {}x{} tile directory",
-                    terrain.header.dir_rows, terrain.header.dir_cols
-                );
-                let mut region = RegionManager::new(terrain);
-                // async tile reads (fsIORead): package files may be streamed
-                // by the sim, and blocking freads in the update callback can
-                // stall whole frames — observed as lockups on range changes
-                match crate::io::AsyncTileIo::open(TERRAIN_MAP_PATH) {
-                    Some(io) => {
-                        println!("TERR ON ND: async tile IO enabled (fsIORead)");
-                        region.use_async_io(io);
+    fn new(map_path: Option<&str>) -> Self {
+        let map = match map_path {
+            Some(map_path) => match TerrainMapV2::open(map_path) {
+                Ok(terrain) => {
+                    println!(
+                        "TERR ON ND: {map_path} opened, {}x{} tile directory",
+                        terrain.header.dir_rows, terrain.header.dir_cols
+                    );
+                    let mut region = RegionManager::new(terrain);
+                    // async tile reads (fsIORead): package files may be streamed
+                    // by the sim, and blocking freads in the update callback can
+                    // stall whole frames — observed as lockups on range changes
+                    match crate::io::AsyncTileIo::open(map_path) {
+                        Some(io) => {
+                            println!("TERR ON ND: async tile IO enabled (fsIORead)");
+                            region.use_async_io(io);
+                        }
+                        None => {
+                            eprintln!(
+                                "TERR ON ND: fsIOOpen rejected — falling back to blocking reads"
+                            );
+                        }
                     }
-                    None => {
-                        eprintln!("TERR ON ND: fsIOOpen rejected — falling back to blocking reads");
-                    }
+                    MapState::Ready(Box::new(region))
                 }
-                MapState::Ready(Box::new(region))
-            }
-            Err(e) => {
-                eprintln!("TERR ON ND: cannot open {TERRAIN_MAP_PATH}: {e} — terrain disabled");
+                Err(e) => {
+                    eprintln!("TERR ON ND: cannot open {map_path}: {e} — terrain disabled");
+                    MapState::Failed
+                }
+            },
+            None => {
+                eprintln!(
+                    "TERR ON ND: no terrain folder in gauge parameters (expected e.g. `L,fbw-a32nx` in panel.cfg) — terrain disabled"
+                );
                 MapState::Failed
             }
         };
 
-        // IMPORTANT: CommBus callbacks fire from the sim's dispatch context,
-        // NOT from our gauge callbacks — printing there (println!/eprintln!)
-        // can panic on fd_write and trap the whole module (observed as a sim
-        // crash). Callbacks must only parse and store; all logging happens
-        // deferred in update_work.
         let inbox = Rc::new(RefCell::new(CommBusInbox::default()));
         let mut commbus = CommBus::default();
         {
@@ -463,7 +472,14 @@ fn module_slot() -> &'static mut Option<TerrainModule> {
     unsafe { &mut *std::ptr::addr_of_mut!(MODULE) }
 }
 
-fn side_index_from_parameters(install: *mut sys::sGaugeInstallData) -> Option<usize> {
+/// panel.cfg gauge parameters: `<L|R>,<terrain folder>`, e.g. `L,fbw-a32nx`.
+struct GaugeParameters {
+    side_index: usize,
+    /// Package subfolder holding terrain2.map (`fbw-a32nx` / `fbw-a380x`).
+    terrain_folder: Option<String>,
+}
+
+fn parse_parameters(install: *mut sys::sGaugeInstallData) -> Option<GaugeParameters> {
     if install.is_null() {
         return None;
     }
@@ -472,11 +488,21 @@ fn side_index_from_parameters(install: *mut sys::sGaugeInstallData) -> Option<us
         return None;
     }
     let parameters = unsafe { std::ffi::CStr::from_ptr(parameters) };
-    match parameters.to_str().ok()?.trim().chars().next()? {
-        'L' | 'l' => Some(SIDE_LEFT),
-        'R' | 'r' => Some(SIDE_RIGHT),
-        _ => None,
-    }
+    let mut tokens = parameters.to_str().ok()?.split(' ').map(str::trim);
+    let side_index = match tokens.next()?.chars().next()? {
+        'L' | 'l' => SIDE_LEFT,
+        'R' | 'r' => SIDE_RIGHT,
+        _ => return None,
+    };
+    println!("TERR ON ND params: {}", parameters.to_str().unwrap());
+    let terrain_folder = tokens
+        .next()
+        .filter(|folder| !folder.is_empty())
+        .map(str::to_owned);
+    Some(GaugeParameters {
+        side_index,
+        terrain_folder,
+    })
 }
 
 #[no_mangle]
@@ -484,16 +510,18 @@ pub extern "C" fn terronnd_gauge_init(
     ctx: sys::FsContext,
     install: *mut sys::sGaugeInstallData,
 ) -> bool {
-    let slot = module_slot();
-    if slot.is_none() {
-        *slot = Some(TerrainModule::new());
-    }
-    let module = slot.as_mut().unwrap();
-
-    let Some(side_index) = side_index_from_parameters(install) else {
+    let Some(parameters) = parse_parameters(install) else {
         eprintln!("TERR ON ND: gauge installed without L/R parameter — ignored");
         return true;
     };
+    let side_index = parameters.side_index;
+
+    let slot = module_slot();
+    if slot.is_none() {
+        let map_path = parameters.terrain_folder.as_deref().map(terrain_map_path);
+        *slot = Some(TerrainModule::new(map_path.as_deref()));
+    }
+    let module = slot.as_mut().unwrap();
     let Some(blit) = Blit::create(ctx) else {
         eprintln!("TERR ON ND: NanoVG context creation failed");
         return false;
