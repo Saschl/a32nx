@@ -2,7 +2,8 @@
 // terrain2.map (flat directory + grid-sorted payloads, a pure repack — see
 // fbw-common/src/wasm/terronnd_rs/src/convert.rs) and places the converted
 // file in the aircraft package where the terronnd gauge reads it from
-// ./terrain/terrain2.map.
+// ./terrain/<fbw-a32nx|fbw-a380x>/terrain2.map (per-aircraft paths — a
+// shared VFS path across two packages breaks fsIO's package attribution).
 //
 // Usage: node scripts/terrain_map.js <a32nx|a380x>
 
@@ -22,8 +23,24 @@ const CACHE_V2_PATH = path.join(REPO_ROOT, 'cache', 'terrain2.map');
 const MIN_PLAUSIBLE_BYTES = 50 * 1024 * 1024;
 
 const TARGETS = {
-  a32nx: path.join(REPO_ROOT, 'fbw-a32nx', 'out', 'flybywire-aircraft-a320-neo', 'terrain', 'terrain2.map'),
-  a380x: path.join(REPO_ROOT, 'fbw-a380x', 'out', 'flybywire-aircraft-a380-842', 'terrain', 'terrain2.map'),
+  a32nx: path.join(
+    REPO_ROOT,
+    'fbw-a32nx',
+    'out',
+    'flybywire-aircraft-a320-neo',
+    'terrain',
+    'fbw-a32nx',
+    'terrain2.map',
+  ),
+  a380x: path.join(
+    REPO_ROOT,
+    'fbw-a380x',
+    'out',
+    'flybywire-aircraft-a380-842',
+    'terrain',
+    'fbw-a380x',
+    'terrain2.map',
+  ),
 };
 
 function validCache() {
@@ -51,10 +68,22 @@ async function download() {
 }
 
 function cargoConvert(args) {
-  return spawnSync('cargo', ['run', '-q', '--release', '-p', 'terronnd', '--bin', 'terrain_map_convert', '--', ...args], {
-    cwd: REPO_ROOT,
-    stdio: 'inherit',
-  });
+  return spawnSync(
+    'cargo',
+    ['run', '-q', '--release', '-p', 'terronnd', '--bin', 'terrain_map_convert', '--', ...args],
+    {
+      cwd: REPO_ROOT,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        // the repo target/ dir is shared between the Windows host and the
+        // Linux dev-env container; native artifacts of the two triples
+        // collide there (E0461: wrong target triple). Give the converter a
+        // platform-scoped dir so host and container builds never mix.
+        CARGO_TARGET_DIR: path.join(REPO_ROOT, 'target', `convert-${process.platform}`),
+      },
+    },
+  );
 }
 
 // v1 -> v2 conversion, skipped when cache/terrain2.map is newer than the
@@ -92,12 +121,7 @@ async function execute() {
   if (fs.existsSync(target)) {
     fs.unlinkSync(target);
   }
-  try {
-    fs.linkSync(CACHE_V2_PATH, target);
-  } catch {
-    // hard links fail across drives/filesystems — fall back to a copy
-    fs.copyFileSync(CACHE_V2_PATH, target);
-  }
+  fs.copyFileSync(CACHE_V2_PATH, target);
   console.log(`Terrain map placed at ${target}`);
 }
 
