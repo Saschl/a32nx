@@ -1,8 +1,9 @@
 //! The gauge itself: raw multi-callback exports with the exact shape of the
 //! C++ gauge (`terronnd_gauge_init/update/draw/kill`). panel.cfg passes
-//! `<L|R>,<terrain folder>` as the install parameter string (e.g.
-//! `L,fbw-a32nx`), selecting the display side and the aircraft's terrain2.map
-//! location. `#[msfs::gauge]` cannot be used here: terronnd is instantiated
+//! `<L|R> <terrain folder>` (space separated) as the install parameter
+//! string (e.g. `L fbw-a32nx`), selecting the display side and the
+//! aircraft's terrain2.map location — per-aircraft paths, because two
+//! packages sharing one VFS path confuses fsIO's file->package attribution. `#[msfs::gauge]` cannot be used here: terronnd is instantiated
 //! twice (L/R) and the macro's single static executor drops the first
 //! instance's future on the second install, and never surfaces
 //! `strParameters`.
@@ -36,22 +37,32 @@ fn terrain_map_path(folder: &str) -> String {
 }
 
 /// Decompressed tile bytes inflated per sim frame during region rebuilds
-/// (~4 full-res tiles per frame; the full A380X-sized raster warms up in a
-/// few seconds, streaming north to south).
+/// (~2 full-res tiles per frame, <= ~1.5 ms of inflate). Cold start still
+/// shows the displayed level in ~2 s; only the background A380X L2 warm-up
+/// stretches (~20 s — it rebuilds every ~90 nm, nobody is waiting on it).
 const LOAD_BUDGET_BYTES_PER_FRAME: usize = 640 * 1024;
-/// Region tile-row bands copied per sim frame (a few hundred KB each).
+/// Region tile-row bands assembled per sim frame. One: an L2 band carries
+/// ~46 per-tile max-reductions, and two of those on one frame is a spike.
 const STITCH_BAND_BUDGET_PER_FRAME: usize = 2;
 
 /// How long a CommBus aircraft status overrides the LVar-derived one — the
 /// same window SimBridge granted HTTP client data over SimConnect.
 const STATUS_OVERRIDE_TIMEOUT_MS: u64 = 2 * 60 * 1000;
 
-/// Per-frame time budget for the amortized cycle computation (the ~200 ms
-/// elevation extraction + render, spread across frames by the runner). Bigger
-/// = faster terrain refresh, smaller = smoother frame times. This work runs in
-/// the UPDATE callback, which has more frame-time slack than the draw phase
-/// (draw gates the instrument texture hand-off to the render pipeline).
+/// Per-frame time budget for the amortized cycle computation (extraction +
+/// render, sliced across frames by the runner in ~50-100 us units). A whole
+/// cycle is only ~2-4 ms in-sim since the level rasters became
+/// cache-resident, so this caps the per-FRAME chunk, at the price of the
+/// cycle finishing a couple of frames later — invisible at the ~1 s cycle
+/// cadence. Set to 1 for an even flatter profile (~2x the cycle latency).
+/// This work runs in the UPDATE callback, which has more frame-time slack
+/// than the draw phase (draw gates the instrument texture hand-off).
 const CYCLE_COMPUTE_BUDGET_MS: u64 = 4;
+
+/// Skip the cycle-compute slice on frames where the region work (tile
+/// inflate + band stitching) already used this much time — the budgets must
+/// not STACK on one frame. The pending compute resumes next frame.
+const UPDATE_SHARED_BUDGET_MS: u128 = 4;
 
 /// Warn on the MSFS console when the shared per-frame work exceeds this.
 const SLOW_FRAME_WARN_MS: u128 = 8;
@@ -115,6 +126,81 @@ struct CommBusInbox {
     status_errors: u64,
 }
 
+/// Rate-limited console diagnostics. All printing happens from `update_work`
+/// — the CommBus/fsIO callbacks only leave data in the inbox (no printing
+/// from the sim's dispatch contexts).
+#[derive(Default)]
+struct Diagnostics {
+    /// Last logged tile-IO stats + earliest next log time (rate limit).
+    io_stats: (u64, u64, u64, u64),
+    next_io_log_ms: u64,
+    /// Earliest next region-build progress log (rate limit).
+    next_build_log_ms: u64,
+    status_override_logged: bool,
+    vd_waypoints: Option<usize>,
+    commbus_errors: u64,
+}
+
+impl Diagnostics {
+    /// First CommBus status override — logged once per module lifetime.
+    fn log_status_override(&mut self, status: &AircraftStatus) {
+        if !self.status_override_logged {
+            self.status_override_logged = true;
+            println!(
+                "TERR ON ND: aircraft status override active (manualAzim={})",
+                status.manual_azim_enabled
+            );
+        }
+    }
+
+    /// VD path arrivals — logged when the waypoint count changes.
+    fn log_vd_path(&mut self, path: &VerticalPathData) {
+        if self.vd_waypoints != Some(path.waypoints.len()) {
+            self.vd_waypoints = Some(path.waypoints.len());
+            println!(
+                "TERR ON ND: VD path received: {} waypoints, track change at {:.1} nm",
+                path.waypoints.len(),
+                path.track_changes_significantly_at_distance
+            );
+        }
+    }
+
+    /// CommBus parse failures — logged when the total changes.
+    fn log_commbus_errors(&mut self, vd_path_errors: u64, status_errors: u64) {
+        let errors = vd_path_errors + status_errors;
+        if errors != self.commbus_errors {
+            self.commbus_errors = errors;
+            println!(
+                "TERR ON ND: CommBus parse errors: vdPath={vd_path_errors} status={status_errors}"
+            );
+        }
+    }
+
+    /// Transport diagnostics, rate-limited (deferred-print pattern).
+    fn log_io_stats(&mut self, now_ms: u64, stats: (u64, u64, u64, u64)) {
+        if stats != self.io_stats && now_ms >= self.next_io_log_ms {
+            self.io_stats = stats;
+            self.next_io_log_ms = now_ms + 5000;
+            let (ok, rejected, short, unknown_tiles) = stats;
+            println!(
+                "TERR ON ND: tile IO: {ok} reads ok, {rejected} rejected, {short} short/failed, {unknown_tiles} tiles unknown"
+            );
+        }
+    }
+
+    /// Build progress while a raster is assembling — the breadcrumb that
+    /// separates "transport is silent" from "decode is slow".
+    fn log_build_progress(&mut self, now_ms: u64, progress: (usize, usize, usize, usize)) {
+        if now_ms >= self.next_build_log_ms {
+            self.next_build_log_ms = now_ms + 5000;
+            let (band, total, in_flight, queued) = progress;
+            println!(
+                "TERR ON ND: region build: band {band}/{total}, {in_flight} reads in flight, {queued} payloads queued"
+            );
+        }
+    }
+}
+
 enum MapState {
     /// terrain2.map missing/corrupt: gauge stays alive, displays stay empty.
     Failed,
@@ -131,7 +217,7 @@ struct TerrainModule {
     map: MapState,
     runner: Runner,
     input: InputAdapter,
-    output: ThresholdVars,
+    threshold_vars: ThresholdVars,
     // keeps the CommBus registrations alive
     _commbus: CommBus<'static>,
     inbox: Rc<RefCell<CommBusInbox>>,
@@ -150,16 +236,7 @@ struct TerrainModule {
     ticks_initialized: bool,
     /// Per-side region coverage, refreshed by update_work; gates cycle starts.
     sides_ready: [bool; 2],
-    /// Last logged tile-IO stats + earliest next log time (rate limit).
-    logged_io_stats: (u64, u64, u64, u64),
-    next_io_log_ms: u64,
-    /// Earliest next region-build progress log (rate limit).
-    next_build_log_ms: u64,
-    /// Deferred CommBus diagnostics (printed from update_work, never from the
-    /// callbacks themselves).
-    logged_status_active: bool,
-    logged_vd_waypoints: Option<usize>,
-    logged_commbus_errors: u64,
+    diagnostics: Diagnostics,
 }
 
 impl TerrainModule {
@@ -195,7 +272,7 @@ impl TerrainModule {
             },
             None => {
                 eprintln!(
-                    "TERR ON ND: no terrain folder in gauge parameters (expected e.g. `L,fbw-a32nx` in panel.cfg) — terrain disabled"
+                    "TERR ON ND: no terrain folder in gauge parameters (expected e.g. `L fbw-a32nx` in panel.cfg) — terrain disabled"
                 );
                 MapState::Failed
             }
@@ -239,7 +316,7 @@ impl TerrainModule {
             map,
             runner,
             input: InputAdapter::new(),
-            output: ThresholdVars::new(),
+            threshold_vars: ThresholdVars::new(),
             _commbus: commbus,
             inbox,
             status_override: None,
@@ -253,12 +330,7 @@ impl TerrainModule {
             last_frame_ms: u64::MAX,
             ticks_initialized: false,
             sides_ready: [false; 2],
-            logged_io_stats: (0, 0, 0, 0),
-            next_io_log_ms: 0,
-            next_build_log_ms: 0,
-            logged_status_active: false,
-            logged_vd_waypoints: None,
-            logged_commbus_errors: 0,
+            diagnostics: Diagnostics::default(),
         }
     }
 
@@ -278,44 +350,7 @@ impl TerrainModule {
             self.last_frame_ms
         };
 
-        // ingest CommBus arrivals (A380X full-status override, VD path) and
-        // emit the deferred diagnostics — safe to print from here
-        {
-            let mut inbox = self.inbox.borrow_mut();
-            if let Some(status) = inbox.status_pending.take() {
-                if !self.logged_status_active {
-                    self.logged_status_active = true;
-                    println!(
-                        "TERR ON ND: aircraft status override active (manualAzim={})",
-                        status.manual_azim_enabled
-                    );
-                }
-                self.status_override = Some(status);
-                self.status_override_until_ms = now_ms + STATUS_OVERRIDE_TIMEOUT_MS;
-            }
-
-            self.vd_path = inbox.vd_path.clone();
-            self.vd_path_seq = inbox.vd_path_seq;
-            if let Some(path) = &inbox.vd_path {
-                if self.logged_vd_waypoints != Some(path.waypoints.len()) {
-                    self.logged_vd_waypoints = Some(path.waypoints.len());
-                    println!(
-                        "TERR ON ND: VD path received: {} waypoints, track change at {:.1} nm",
-                        path.waypoints.len(),
-                        path.track_changes_significantly_at_distance
-                    );
-                }
-            }
-
-            let errors = inbox.vd_path_errors + inbox.status_errors;
-            if errors != self.logged_commbus_errors {
-                self.logged_commbus_errors = errors;
-                println!(
-                    "TERR ON ND: CommBus parse errors: vdPath={} status={}",
-                    inbox.vd_path_errors, inbox.status_errors
-                );
-            }
-        }
+        self.ingest_commbus(now_ms);
         if self.status_override.is_some() && now_ms >= self.status_override_until_ms {
             self.status_override = None;
         }
@@ -325,60 +360,73 @@ impl TerrainModule {
             None => self.input.aircraft_status(),
         };
 
-        {
-            let MapState::Ready(world) = &mut self.map else {
-                self.status = Some(status);
-                return;
-            };
-            let inputs = RegionInputs::from_status(&status);
-            world.update_budgeted(
-                &inputs,
-                LOAD_BUDGET_BYTES_PER_FRAME,
-                STITCH_BAND_BUDGET_PER_FRAME,
-            );
-            // per-side gating: a side whose display circle the published
-            // region does not cover yet starts no cycle (no Unknown fringe
-            // mid-load); the other side keeps rendering
-            self.sides_ready = [
-                world.side_covered(&inputs, SIDE_LEFT),
-                world.side_covered(&inputs, SIDE_RIGHT),
-            ];
+        self.advance_region(&status, now_ms);
 
-            // transport diagnostics, rate-limited (deferred-print pattern)
-            let io_stats = world.io_stats();
-            if io_stats != self.logged_io_stats && now_ms >= self.next_io_log_ms {
-                self.logged_io_stats = io_stats;
-                self.next_io_log_ms = now_ms + 5000;
-                let (ok, rejected, short, unknown_tiles) = io_stats;
-                println!(
-                    "TERR ON ND: tile IO: {ok} reads ok, {rejected} rejected, {short} short/failed, {unknown_tiles} tiles unknown"
-                );
-            }
-
-            // build progress while a raster is assembling — the breadcrumb
-            // that separates "transport is silent" from "decode is slow"
-            if let Some((band, total, in_flight, queued)) = world.build_progress() {
-                if now_ms >= self.next_build_log_ms {
-                    self.next_build_log_ms = now_ms + 5000;
-                    println!(
-                        "TERR ON ND: region build: band {band}/{total}, {in_flight} reads in flight, {queued} payloads queued"
-                    );
-                }
-            }
+        // amortized cycle computation: a time-budgeted slice — but only on
+        // frames where the region work above left headroom, so decode /
+        // stitch / compute never stack into one frame spike. The current
+        // status lets the runner drop a compute whose captured EFIS
+        // configuration went stale mid-cycle (range flip) instead of
+        // sweeping the old-range image for a moment.
+        if started.elapsed().as_millis() < UPDATE_SHARED_BUDGET_MS {
+            let outputs = self.runner.advance_compute(now_ms, &status);
+            Self::apply_side_outputs(&mut self.images, &self.threshold_vars, outputs);
         }
         self.status = Some(status);
-
-        // amortized cycle computation: a time-budgeted slice every frame.
-        // The current status lets the runner drop a compute whose captured
-        // EFIS configuration went stale mid-cycle (range flip) instead of
-        // sweeping the old-range image for a moment.
-        let status_ref = self.status.as_ref().expect("assigned above");
-        let outputs = self.runner.advance_compute(now_ms, status_ref);
-        Self::apply_side_outputs(&mut self.images, &self.output, outputs);
 
         let elapsed = started.elapsed().as_millis();
         if elapsed > CYCLE_COMPUTE_BUDGET_MS as u128 + 4 {
             println!("TERR ON ND: slow update: {elapsed} ms");
+        }
+    }
+
+    /// Ingest CommBus arrivals (A380X full-status override, VD path) and emit
+    /// their deferred diagnostics — printing is safe here, unlike in the
+    /// CommBus callbacks that filled the inbox.
+    fn ingest_commbus(&mut self, now_ms: u64) {
+        let mut inbox = self.inbox.borrow_mut();
+        if let Some(status) = inbox.status_pending.take() {
+            self.diagnostics.log_status_override(&status);
+            self.status_override = Some(status);
+            self.status_override_until_ms = now_ms + STATUS_OVERRIDE_TIMEOUT_MS;
+        }
+
+        if self.vd_path_seq != inbox.vd_path_seq {
+            self.vd_path_seq = inbox.vd_path_seq;
+            self.vd_path = inbox.vd_path.clone();
+            if let Some(path) = &self.vd_path {
+                self.diagnostics.log_vd_path(path);
+            }
+        }
+
+        self.diagnostics
+            .log_commbus_errors(inbox.vd_path_errors, inbox.status_errors);
+    }
+
+    /// Budgeted world-map work: tile inflate + band stitching under the
+    /// per-frame budgets, the per-side coverage gates, and the rate-limited
+    /// transport/build diagnostics. No-op while the map failed to open.
+    fn advance_region(&mut self, status: &AircraftStatus, now_ms: u64) {
+        let MapState::Ready(world) = &mut self.map else {
+            return;
+        };
+        let inputs = RegionInputs::from_status(status);
+        world.update_budgeted(
+            &inputs,
+            LOAD_BUDGET_BYTES_PER_FRAME,
+            STITCH_BAND_BUDGET_PER_FRAME,
+        );
+        // per-side gating: a side whose display circle the published
+        // region does not cover yet starts no cycle (no Unknown fringe
+        // mid-load); the other side keeps rendering
+        self.sides_ready = [
+            world.side_covered(&inputs, SIDE_LEFT),
+            world.side_covered(&inputs, SIDE_RIGHT),
+        ];
+
+        self.diagnostics.log_io_stats(now_ms, world.io_stats());
+        if let Some(progress) = world.build_progress() {
+            self.diagnostics.log_build_progress(now_ms, progress);
         }
     }
 
@@ -421,7 +469,7 @@ impl TerrainModule {
                 self.vd_path_seq,
                 [snapshots[0].as_ref(), snapshots[1].as_ref()],
             );
-            Self::apply_side_outputs(&mut self.images, &self.output, outputs);
+            Self::apply_side_outputs(&mut self.images, &self.threshold_vars, outputs);
             self.next_tick_ms += TRANSITION_DELTA_TIME_MS;
             catch_up += 1;
         }
@@ -439,7 +487,7 @@ impl TerrainModule {
     /// world-map borrow from `self.map` is alive.
     fn apply_side_outputs(
         images: &mut [SideImages; 2],
-        output: &ThresholdVars,
+        threshold_vars: &ThresholdVars,
         outputs: [SideOutput; 2],
     ) {
         for (side, out) in outputs.into_iter().enumerate() {
@@ -451,7 +499,7 @@ impl TerrainModule {
                 side_images.stamps = [generation; SLOT_COUNT];
             }
             if let Some(thresholds) = &out.thresholds_write {
-                output.write(side, thresholds);
+                threshold_vars.write(side, thresholds);
             }
             if let Some(frame) = out.nd_frame {
                 install_frame(&mut images[side], SLOT_ND_OLD, SLOT_ND_NEW, frame);
@@ -469,10 +517,13 @@ static mut MODULE: Option<TerrainModule> = None;
 
 #[allow(static_mut_refs)]
 fn module_slot() -> &'static mut Option<TerrainModule> {
+    // each call mints a fresh &mut to the static — callers must bind it once
+    // per callback and never hold two overlapping results
     unsafe { &mut *std::ptr::addr_of_mut!(MODULE) }
 }
 
-/// panel.cfg gauge parameters: `<L|R>,<terrain folder>`, e.g. `L,fbw-a32nx`.
+/// panel.cfg gauge parameters: `<L|R> <terrain folder>` (space separated),
+/// e.g. `L fbw-a32nx`.
 struct GaugeParameters {
     side_index: usize,
     /// Package subfolder holding terrain2.map (`fbw-a32nx` / `fbw-a380x`).
@@ -488,17 +539,14 @@ fn parse_parameters(install: *mut sys::sGaugeInstallData) -> Option<GaugeParamet
         return None;
     }
     let parameters = unsafe { std::ffi::CStr::from_ptr(parameters) };
-    let mut tokens = parameters.to_str().ok()?.split(' ').map(str::trim);
+    // split_whitespace: tolerant of doubled spaces, never yields empty tokens
+    let mut tokens = parameters.to_str().ok()?.split_whitespace();
     let side_index = match tokens.next()?.chars().next()? {
         'L' | 'l' => SIDE_LEFT,
         'R' | 'r' => SIDE_RIGHT,
         _ => return None,
     };
-    println!("TERR ON ND params: {}", parameters.to_str().unwrap());
-    let terrain_folder = tokens
-        .next()
-        .filter(|folder| !folder.is_empty())
-        .map(str::to_owned);
+    let terrain_folder = tokens.next().map(str::to_owned);
     Some(GaugeParameters {
         side_index,
         terrain_folder,
@@ -534,7 +582,7 @@ pub extern "C" fn terronnd_gauge_init(
         blit,
     });
     // initial threshold reset, like the C++ Display constructor
-    module.output.reset(side_index);
+    module.threshold_vars.reset(side_index);
     println!(
         "TERR ON ND: created {} display",
         if side_index == SIDE_LEFT {
@@ -604,10 +652,11 @@ pub extern "C" fn terronnd_gauge_draw(ctx: sys::FsContext, draw: *mut sys::sGaug
 
 #[no_mangle]
 pub extern "C" fn terronnd_gauge_kill(ctx: sys::FsContext) -> bool {
-    if let Some(module) = module_slot().as_mut() {
+    let slot = module_slot();
+    if let Some(module) = slot.as_mut() {
         module.displays.retain(|d| d.ctx != ctx);
         if module.displays.is_empty() {
-            *module_slot() = None;
+            *slot = None;
             println!("TERR ON ND: last display killed, module shut down");
         }
     }
