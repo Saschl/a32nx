@@ -306,23 +306,20 @@ impl Runner {
         world: Option<&WorldMap>,
     ) -> SideOutput {
         let side = self.sides[index].side;
-        let efis = status.efis(side).clone();
+        let efis = *status.efis(side);
         let state = &mut self.sides[index];
         let mut out = SideOutput::default();
 
         // configuration diffing (`updateRendering`)
-        let config_changed = state.last_efis.as_ref().is_some_and(|last| {
-            last.efis_mode != efis.efis_mode
-                || last.nd_range != efis.nd_range
-                || last.arc_mode != efis.arc_mode
-                || last.terr_on_nd != efis.terr_on_nd
-                || last.terr_on_vd != efis.terr_on_vd
-        });
+        let config_changed = state
+            .last_efis
+            .as_ref()
+            .is_some_and(|last| last.render_config_differs(&efis));
         let start_rendering = config_changed
             || state.last_manual_azim_enabled != status.manual_azim_enabled
             || state.last_efis.is_none();
         state.last_manual_azim_enabled = status.manual_azim_enabled;
-        state.last_efis = Some(efis.clone());
+        state.last_efis = Some(efis);
 
         if start_rendering {
             state.reset();
@@ -375,7 +372,7 @@ impl Runner {
         if state.cycle_active {
             self.advance_cycle(index, now_ms, status);
         } else if state.next_cycle_at.is_some_and(|at| now_ms >= at) {
-            let efis = status.efis(side).clone();
+            let efis = status.efis(side);
             if efis.terr_on_nd || efis.terr_on_vd {
                 // when the region does not cover this side yet, leave the
                 // trigger armed — the cycle starts as soon as coverage lands
@@ -402,7 +399,7 @@ impl Runner {
         out: &mut SideOutput,
     ) {
         let side = self.sides[index].side;
-        let efis = status.efis(side).clone();
+        let efis = status.efis(side);
         let geometry = nd_map_geometry(efis.arc_mode, status.vertical_display_required());
 
         if efis.nd_range == 0.0 {
@@ -478,19 +475,16 @@ impl Runner {
     }
 
     /// The pending compute's captured EFIS configuration no longer matches
-    /// the current status (the same fields `tick_side` diffs for its reset).
+    /// the current status (the same diff `tick_side` uses for its reset).
     fn pending_config_stale(&self, index: usize, status: &AircraftStatus) -> bool {
         let side = self.sides[index].side;
         let Some(pending) = &self.sides[index].pending else {
             return false;
         };
-        let captured = pending.status.efis(side);
-        let current = status.efis(side);
-        captured.efis_mode != current.efis_mode
-            || captured.nd_range != current.nd_range
-            || captured.arc_mode != current.arc_mode
-            || captured.terr_on_nd != current.terr_on_nd
-            || captured.terr_on_vd != current.terr_on_vd
+        pending
+            .status
+            .efis(side)
+            .render_config_differs(status.efis(side))
             || pending.status.manual_azim_enabled != status.manual_azim_enabled
     }
 
@@ -502,7 +496,7 @@ impl Runner {
         let Some(pending) = self.sides[index].pending.as_mut() else {
             return;
         };
-        let efis = pending.status.efis(side).clone();
+        let efis = *pending.status.efis(side);
         let timing_bucket = match &pending.phase {
             ComputePhase::Extract { .. } => 0,
             ComputePhase::Render { .. } => 1,
@@ -609,7 +603,7 @@ impl Runner {
         };
         let status = &pending.status;
         let side = self.sides[index].side;
-        let efis = status.efis(side).clone();
+        let efis = *status.efis(side);
         let geometry = pending.geometry;
 
         // did the PREVIOUS sweeps run to completion? (decides whether their
@@ -623,22 +617,19 @@ impl Runner {
             && efis.terr_on_vd
             && (efis.efis_mode == 2 || efis.efis_mode == 3);
         let vd_frame = if vd_rendered {
-            let (profile_config, grey_from_x) =
-                self.vd_profile_config(index, status, pending.vd_path.as_ref(), &efis);
-            profile_config.map(|config| {
-                let profile = extract_elevation_profile(
-                    &pending.world,
-                    status.latitude,
-                    status.longitude,
-                    &config,
-                );
-                render_vertical_display(
-                    &profile,
-                    efis.vd_range_lower,
-                    efis.vd_range_upper,
-                    grey_from_x,
-                )
-            })
+            let (config, grey_from_x) = vd_profile_config(status, pending.vd_path.as_ref(), &efis);
+            let profile = extract_elevation_profile(
+                &pending.world,
+                status.latitude,
+                status.longitude,
+                &config,
+            );
+            Some(render_vertical_display(
+                &profile,
+                efis.vd_range_lower,
+                efis.vd_range_upper,
+                grey_from_x,
+            ))
         } else {
             None
         };
@@ -712,60 +703,12 @@ impl Runner {
         });
     }
 
-    /// VD elevation profile configuration: manual azimuth or the FMS path
-    /// (`updateRendering` / `updatePathData`).
-    fn vd_profile_config(
-        &mut self,
-        _index: usize,
-        status: &AircraftStatus,
-        vd_path: Option<&VerticalPathData>,
-        efis: &EfisData,
-    ) -> (Option<ElevationProfileConfig>, f64) {
-        let range = vd_range_from_nd(efis.nd_range, efis.arc_mode);
-
-        if status.manual_azim_enabled || vd_path.is_none_or(|p| p.waypoints.is_empty()) {
-            let end = project_wgs84(
-                status.latitude,
-                status.longitude,
-                status.manual_azim_degrees,
-                160.0 * NM_TO_METRES,
-            );
-            (
-                Some(ElevationProfileConfig {
-                    path_width: 1.0,
-                    waypoints: vec![end],
-                    range,
-                    track_changes_significantly_at_distance: -1.0,
-                    fms_path_used: false,
-                }),
-                -1.0,
-            )
-        } else {
-            let path = vd_path.unwrap();
-            let grey_from_x = if path.track_changes_significantly_at_distance >= 0.0 {
-                path.track_changes_significantly_at_distance / range * VD_PROFILE_WIDTH as f64
-            } else {
-                -1.0
-            };
-            (
-                Some(ElevationProfileConfig {
-                    path_width: path.path_width,
-                    waypoints: path.waypoints.clone(),
-                    range,
-                    track_changes_significantly_at_distance: path.track_changes_significantly_at_distance,
-                    fms_path_used: true,
-                }),
-                grey_from_x,
-            )
-        }
-    }
-
     /// One 40 ms animation tick of a running cycle: border stepping and
     /// next-cycle scheduling only — the sweep itself is drawn GPU-side from
     /// `draw_state`.
     fn advance_cycle(&mut self, index: usize, now_ms: u64, status: &AircraftStatus) {
         let state = &mut self.sides[index];
-        let efis = status.efis(state.side).clone();
+        let efis = status.efis(state.side);
 
         if !state.nd_done {
             state.nd_done = state.nd_transition.render();
@@ -809,6 +752,57 @@ impl Runner {
                 .cycle_geometry
                 .unwrap_or_else(|| nd_map_geometry(true, false)),
             screen_with_vd: state.screen_with_vd,
+        }
+    }
+}
+
+/// VD elevation profile configuration: the FMS path, or a single projected
+/// endpoint when manual azimuth is active or no usable path was posted
+/// (`updateRendering` / `updatePathData`). The second value is the x pixel
+/// the profile greys out from (-1 = no grey-out).
+fn vd_profile_config(
+    status: &AircraftStatus,
+    vd_path: Option<&VerticalPathData>,
+    efis: &EfisData,
+) -> (ElevationProfileConfig, f64) {
+    let range = vd_range_from_nd(efis.nd_range, efis.arc_mode);
+
+    match vd_path {
+        Some(path) if !status.manual_azim_enabled && !path.waypoints.is_empty() => {
+            let grey_from_x = if path.track_changes_significantly_at_distance >= 0.0 {
+                path.track_changes_significantly_at_distance / range * VD_PROFILE_WIDTH as f64
+            } else {
+                -1.0
+            };
+            (
+                ElevationProfileConfig {
+                    path_width: path.path_width,
+                    waypoints: path.waypoints.clone(),
+                    range,
+                    track_changes_significantly_at_distance: path
+                        .track_changes_significantly_at_distance,
+                    fms_path_used: true,
+                },
+                grey_from_x,
+            )
+        }
+        _ => {
+            let end = project_wgs84(
+                status.latitude,
+                status.longitude,
+                status.manual_azim_degrees,
+                160.0 * NM_TO_METRES,
+            );
+            (
+                ElevationProfileConfig {
+                    path_width: 1.0,
+                    waypoints: vec![end],
+                    range,
+                    track_changes_significantly_at_distance: -1.0,
+                    fms_path_used: false,
+                },
+                -1.0,
+            )
         }
     }
 }
