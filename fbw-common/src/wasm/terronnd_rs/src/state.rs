@@ -34,7 +34,7 @@ pub enum Side {
     Right,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfisData {
     pub nd_range: f64,
@@ -45,6 +45,20 @@ pub struct EfisData {
     pub efis_mode: u8,
     pub vd_range_lower: f64,
     pub vd_range_upper: f64,
+}
+
+impl EfisData {
+    /// The fields whose change invalidates the current rendering
+    /// (`updateRendering` config diff): a difference resets the side's state
+    /// machine and drops a pending compute that captured the old
+    /// configuration.
+    pub fn render_config_differs(&self, other: &EfisData) -> bool {
+        self.efis_mode != other.efis_mode
+            || self.nd_range != other.nd_range
+            || self.arc_mode != other.arc_mode
+            || self.terr_on_nd != other.terr_on_nd
+            || self.terr_on_vd != other.terr_on_vd
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
