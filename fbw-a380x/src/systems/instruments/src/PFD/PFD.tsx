@@ -12,7 +12,15 @@ import {
   VNode,
 } from '@microsoft/msfs-sdk';
 import { LowerArea } from './LowerArea';
-import { Arinc429LocalVarConsumerSubject, Arinc429Word, ArincEventBus, FailuresConsumer } from '@flybywiresim/fbw-sdk';
+import {
+  Arinc429ConsumerSubject,
+  Arinc429LocalVarConsumerSubject,
+  Arinc429Register,
+  Arinc429WordData,
+  ArincEventBus,
+  FailuresConsumer,
+} from '@flybywiresim/fbw-sdk';
+import { VerticalTape } from './VerticalTape';
 
 import { AttitudeIndicatorWarnings } from '@flybywiresim/pfd';
 import { AttitudeIndicatorWarningsA380 } from './AttitudeIndicatorWarningsA380';
@@ -65,11 +73,11 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
 
   private isAttExcessive = Subject.create(false);
 
-  private pitch = new Arinc429Word(0);
+  private pitch: Arinc429WordData = Arinc429Register.empty();
 
-  private roll = new Arinc429Word(0);
+  private roll: Arinc429WordData = Arinc429Register.empty();
 
-  private ownRadioAltitude = new Arinc429Word(0);
+  private ownRadioAltitude: Arinc429WordData = Arinc429Register.empty();
 
   private filteredRadioAltitude = Subject.create(0);
 
@@ -103,6 +111,20 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
   private previousFlapHandlePosition = 0;
 
   private readonly pitchTrimIndicatorVisible = Subject.create(false);
+
+  // Tape scroll state lives here because the graduation layers are siblings of the main SVG,
+  // while the tape overlays (bugs, bars, readouts) stay inside it. Both scroll off the same value.
+  private readonly speedTapeValue = Subject.create(0);
+
+  private readonly speedTapeVisible = this.speedTapeValue.map((v) => !Number.isNaN(v));
+
+  private readonly altitudeWord = Arinc429ConsumerSubject.create(
+    this.props.bus.getArincSubscriber<Arinc429Values>().on('altitudeAr'),
+  );
+
+  private readonly altitudeTapeValue = this.altitudeWord.map((v) => v.value);
+
+  private readonly altitudeTapeVisible = this.altitudeWord.map((v) => v.isNormalOperation() || v.isFunctionalTest());
 
   private updatePitchTrimVisible(flapsRetracted = false) {
     const gs = this.groundSpeed.get().valueOr(0);
@@ -222,29 +244,79 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
         test={Subject.create(-1)}
         failed={Subject.create(false)}
       >
+        {/* The display background is its own element because the SVG below no longer covers the
+            whole screen, and the HTML layers are transparent. */}
+        <div class="pfd-background" />
+        {/* Tape graduations are their own layers, under the main SVG: scrolling them there only
+            repaints the window-sized clip region instead of re-recording every tick and label in
+            the SVG. Mask2 leaves the tape windows transparent, so the overlays in the SVG still
+            paint on top. Windows match Mask2's cut-outs, which are wider than the grey backgrounds
+            so that the tick stroke caps are not clipped. */}
+        <VerticalTape
+          type="speed"
+          tapeValue={this.speedTapeValue}
+          visible={this.speedTapeVisible}
+          lowerLimit={30}
+          upperLimit={660}
+          valueSpacing={10}
+          displayRange={48}
+          distanceSpacing={10}
+          window={{ x: 1.9058, y: 38.087, width: 27.548, height: 85.473 }}
+          background={{ x: 1.9058, y: 38.087, width: 17.125, height: 85.473 }}
+        />
+        <VerticalTape
+          type="altitude"
+          tapeValue={this.altitudeTapeValue}
+          visible={this.altitudeTapeVisible}
+          lowerLimit={-1500}
+          upperLimit={50000}
+          valueSpacing={100}
+          displayRange={630}
+          distanceSpacing={7.5}
+          window={{ x: 115.14, y: 38.087, width: 20.344, height: 85.473 }}
+          background={{ x: 117.754, y: 38.087, width: 13.096, height: 85.473 }}
+        />
+        {/* Sized to the band its content actually occupies (viewBox y 22.4 to 158): the FMA above
+            and the lower area below are separate layers now, so anything outside this band would
+            only be empty surface that Coherent still has to rasterize on every attitude/tape
+            update. Child coordinates are unchanged — only the viewport is sliced. */}
         <svg
           class="pfd-svg"
           version="1.1"
-          viewBox="0 0 158.75 211.6"
+          viewBox="0 22.4 158.75 135.6"
           xmlns="http://www.w3.org/2000/svg"
           xmlnsXlink="http://www.w3.org/1999/xlink"
         >
-          <Horizon
-            bus={this.props.bus}
-            instrument={this.props.instrument}
-            isAttExcessive={this.isAttExcessive}
-            filteredRadioAlt={this.filteredRadioAltitude}
-          />
-          <AttitudeIndicatorFixedCenter bus={this.props.bus} isAttExcessive={this.isAttExcessive} />
+          <defs>
+            {/* The attitude aperture (same curve as Mask1's first subpath). The horizon group is
+                clipped to it because Mask1 now has transparent holes over the tape windows (the
+                tape graduations are HTML layers UNDER this svg) — without the clip, the horizon's
+                sky/earth overflow would bleed through those holes. */}
+            <clipPath id="PfdAttitudeAperture">
+              {/* eslint-disable-next-line max-len */}
+              <path d="m 32.138 101.25 c 7.4164 13.363 21.492 21.652 36.768 21.652 c 15.277 0 29.352 -8.2886 36.768 -21.652 v -40.859 c -7.4164 -13.363 -21.492 -21.652 -36.768 -21.652 c -15.277 0 -29.352 8.2886 -36.768 21.652 z" />
+            </clipPath>
+          </defs>
+          <g clip-path="url(#PfdAttitudeAperture)">
+            <Horizon
+              bus={this.props.bus}
+              instrument={this.props.instrument}
+              isAttExcessive={this.isAttExcessive}
+              filteredRadioAlt={this.filteredRadioAltitude}
+            />
+            <AttitudeIndicatorFixedCenter bus={this.props.bus} isAttExcessive={this.isAttExcessive} />
+          </g>
           <path
             id="Mask1"
             class="BackgroundFill"
+            // Same as before, plus the two tape-window holes Mask2 has, so the HTML tape layers
+            // underneath this svg stay visible.
             // eslint-disable-next-line max-len
-            d="m 32.138 101.25 c 7.4164 13.363 21.492 21.652 36.768 21.652 c 15.277 0 29.352 -8.2886 36.768 -21.652 v -40.859 c -7.4164 -13.363 -21.492 -21.652 -36.768 -21.652 c -15.277 0 -29.352 8.2886 -36.768 21.652 z m -32.046 110.498 h 158.66 v -211.75 h -158.66 z"
+            d="m 32.138 101.25 c 7.4164 13.363 21.492 21.652 36.768 21.652 c 15.277 0 29.352 -8.2886 36.768 -21.652 v -40.859 c -7.4164 -13.363 -21.492 -21.652 -36.768 -21.652 c -15.277 0 -29.352 8.2886 -36.768 21.652 z m -32.046 110.498 h 158.66 v -211.75 h -158.66 z m 115.14 -88.191 v -85.473 h 20.344 v 85.473 z m -113.33 0 v -85.473 h 27.548 v 85.473 z"
           />
           <HeadingTape bus={this.props.bus} failed={this.headingFailed} />
           <AltitudeIndicator bus={this.props.bus} />
-          <AirspeedIndicator bus={this.props.bus} instrument={this.props.instrument} />
+          <AirspeedIndicator bus={this.props.bus} instrument={this.props.instrument} tapeValue={this.speedTapeValue} />
           <path
             id="Mask2"
             class="BackgroundFill"
@@ -265,10 +337,30 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
           <HeadingOfftape bus={this.props.bus} failed={this.headingFailed} />
           <AltitudeIndicatorOfftape bus={this.props.bus} filteredRadioAltitude={this.filteredRadioAltitude} />
           <LinearDeviationIndicator bus={this.props.bus} />
-
+        </svg>
+        <div class="pfd-mach-layer">
           <MachNumber bus={this.props.bus} />
+        </div>
+        {/* The FMA and the lower area are separate SVG layers on purpose: Coherent dirties and
+            redraws per SVG element, so keeping the change-driven strips out of the main SVG stops
+            the per-frame attitude/tape updates from repainting them (and vice versa). Both layers
+            use a viewBox slice of the main coordinate system, so child coordinates are unchanged. */}
+        <svg
+          class="pfd-fma-layer"
+          version="1.1"
+          viewBox="0 0 158.75 25"
+          xmlns="http://www.w3.org/2000/svg"
+          xmlnsXlink="http://www.w3.org/1999/xlink"
+        >
           <FMA bus={this.props.bus} isAttExcessive={this.isAttExcessive} />
-
+        </svg>
+        <svg
+          class="pfd-lower-area-layer"
+          version="1.1"
+          viewBox="0 156 158.75 55.6"
+          xmlns="http://www.w3.org/2000/svg"
+          xmlnsXlink="http://www.w3.org/1999/xlink"
+        >
           <LowerArea bus={this.props.bus} pitchTrimIndicatorVisible={this.pitchTrimIndicatorVisible} />
         </svg>
         <PitchTrimDisplay bus={this.props.bus} visible={this.pitchTrimIndicatorVisible} />

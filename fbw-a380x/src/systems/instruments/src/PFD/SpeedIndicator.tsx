@@ -16,15 +16,15 @@ import {
 import {
   Arinc429ConsumerSubject,
   Arinc429LocalVarConsumerSubject,
+  Arinc429Register,
   Arinc429RegisterSubject,
-  Arinc429Word,
   Arinc429WordData,
   ArincEventBus,
 } from '@flybywiresim/fbw-sdk';
 import { FmsVars } from '../MsfsAvionicsCommon/providers/FmsDataPublisher';
 import { RateLimiter } from './PFDUtils';
 import { PFDSimvars } from './shared/PFDSimvarPublisher';
-import { VerticalTape } from './VerticalTape';
+import { TapeScrollGroup } from './VerticalTape';
 import { Arinc429Values } from './shared/ArincValueProvider';
 import { SfccEvents } from '../MsfsAvionicsCommon/providers/SfccPublisher';
 import { PrimFeBusBaseEvents } from '@shared/publishers/PrimFePublisher';
@@ -157,7 +157,7 @@ class VAlphaProtBar extends DisplayComponent<{
 
   private VAprotIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private vAlphaProt = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_v_alpha_prot'));
 
@@ -480,11 +480,11 @@ class VMaxBar extends DisplayComponent<{ bus: ArincEventBus }> {
 
   private VMaxIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private readonly vMax = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_v_max'));
 
-  private staticPressure = new Arinc429Word(0);
+  private staticPressure: Arinc429WordData = Arinc429Register.empty();
 
   private setVMaxBarPath() {
     const vMax = this.vMax.get().isNormalOperation() ? this.vMax.get().value : this.computeFallbackVMax();
@@ -553,7 +553,7 @@ class VStallWarnBar extends DisplayComponent<{
 
   private VStallWarnIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private readonly vStallWarn = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_v_alpha_stall_warn'));
 
@@ -608,6 +608,11 @@ class VStallWarnBar extends DisplayComponent<{
 interface AirspeedIndicatorProps {
   readonly bus: ArincEventBus;
   readonly instrument: BaseInstrument;
+  /**
+   * Displayed tape value (NaN when the airspeed is unusable), owned by the PFD so that the
+   * graduation layer — which lives outside this SVG — scrolls off the same value.
+   */
+  readonly tapeValue: Subject<number>;
 }
 
 export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> {
@@ -615,7 +620,7 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
 
   private readonly vFeNextValue = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_v_fe_next'));
 
-  private speedSub = Subject.create<number>(0);
+  private speedSub = this.props.tapeValue;
 
   private speedTapeElements: NodeReference<SVGGElement> = FSComponent.createRef();
 
@@ -629,7 +634,7 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
 
   private onGround = Subject.create(true);
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private leftMainGearCompressed: boolean;
 
@@ -716,24 +721,24 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
   render(): VNode {
     return (
       <>
+        {/* The grey tape background is drawn by the graduation layer (see PFD.tsx), which sits
+            underneath this SVG. */}
         <g id="FailedGroup" ref={this.failedGroup} class="HiddenElement">
-          <path id="SpeedTapeBackground" class="TapeBackground" d="m1.9058 123.56v-85.473h17.125v85.473z" />
           <text id="SpeedFailText" class="Blink9Seconds FontLargest EndAlign Red" x="17.756115" y="83.386398">
             SPD
           </text>
         </g>
 
         <g id="SpeedTapeElementsGroup" ref={this.speedTapeElements}>
-          <path id="SpeedTapeBackground" class="TapeBackground" d="m1.9058 123.56v-85.473h17.125v85.473z" />
           {/* Outline */}
-          <VerticalTape
+          {/* The bugs scroll with the tape but stay in SVG: they overhang the tape window and use
+              shapes the graduation layer cannot clip or draw. */}
+          <TapeScrollGroup
             tapeValue={this.speedSub}
             lowerLimit={30}
             upperLimit={660}
             valueSpacing={ValueSpacing}
-            displayRange={DisplayRange + 6}
             distanceSpacing={DistanceSpacing}
-            type="speed"
           >
             <V1BugElement bus={this.props.bus} />
             <VRBugElement bus={this.props.bus} />
@@ -745,7 +750,7 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
               d="m19.031 81.34h-2.8709m0-1.0079h2.8709"
             />
             <VProtBug bus={this.props.bus} />
-          </VerticalTape>
+          </TapeScrollGroup>
 
           <VMaxBar bus={this.props.bus} />
           <VAlphaProtBar bus={this.props.bus} />
@@ -851,7 +856,7 @@ class VLsBar extends DisplayComponent<{ readonly bus: ArincEventBus }> {
 
   private readonly vStallWarn = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_v_alpha_stall_warn'));
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private readonly vls = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_v_ls'));
 
@@ -912,7 +917,7 @@ class VAlphaLimBar extends DisplayComponent<{
 
   private VAlimIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private readonly vAlphaLim = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_v_alpha_lim'));
 
@@ -1195,7 +1200,7 @@ class SpeedTarget extends DisplayComponent<{ bus: ArincEventBus }> {
 class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
   private shouldShowMargins = false;
 
-  private currentSpeed = Subject.create(Arinc429Word.empty());
+  private currentSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private upperSpeedMarginVisibility = Subject.create<'visible' | 'hidden'>('hidden');
 
@@ -1217,7 +1222,7 @@ class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
     sub
       .on('speedAr')
       .withArinc429Precision(2)
-      .handle((s) => this.currentSpeed.set(s));
+      .handle((s) => (this.currentSpeed = s));
 
     sub.on('upperSpeedMargin').handle(this.updateMargin(this.upperSpeedMarginVisibility, this.upperMarginTransform));
     sub.on('lowerSpeedMargin').handle(this.updateMargin(this.lowerSpeedMarginVisibility, this.lowerMarginTransform));
@@ -1246,7 +1251,7 @@ class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
 
   private updateMargin(visibility: Subject<'visible' | 'hidden'>, transform: Subject<string>) {
     return (speed: number) => {
-      const shouldForceHideMargins = !this.shouldShowMargins || !this.currentSpeed.get().isNormalOperation();
+      const shouldForceHideMargins = !this.shouldShowMargins || !this.currentSpeed.isNormalOperation();
       const marginIsVisible = visibility.get() === 'visible';
 
       if (shouldForceHideMargins) {
@@ -1257,10 +1262,10 @@ class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
         return;
       }
 
-      const isInRange = Math.abs(this.currentSpeed.get().value - speed) < DisplayRange;
+      const isInRange = Math.abs(this.currentSpeed.value - speed) < DisplayRange;
       if (isInRange) {
         const offset = (
-          Math.round((100 * (this.currentSpeed.get().value - speed) * DistanceSpacing) / ValueSpacing) / 100
+          Math.round((100 * (this.currentSpeed.value - speed) * DistanceSpacing) / ValueSpacing) / 100
         ).toFixed(2);
         transform.set(`translate(0 ${offset})`);
       }
@@ -1275,9 +1280,13 @@ class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
 export class MachNumber extends DisplayComponent<{ bus: EventBus }> {
   private machTextSub = Subject.create('');
 
-  private failedRef = FSComponent.createRef<SVGTextElement>();
+  private failedRef = FSComponent.createRef<HTMLSpanElement>();
 
   private showMach = false;
+
+  private machFailedVisible: boolean | undefined = undefined;
+
+  private lastMachPermille = NaN;
 
   private onGround = false;
 
@@ -1290,14 +1299,24 @@ export class MachNumber extends DisplayComponent<{ bus: EventBus }> {
 
     const sub = this.props.bus.getSubscriber<Arinc429Values & PFDSimvars>();
 
+    // machAr fires on effectively every frame; skip all work unless the displayed
+    // permille value or the failed state actually changed
     sub.on('machAr').handle((mach) => {
-      if (!mach.isNormalOperation() && !this.onGround) {
+      const failed = !mach.isNormalOperation() && !this.onGround;
+      if (failed !== this.machFailedVisible) {
+        this.machFailedVisible = failed;
+        this.failedRef.instance.style.display = failed ? 'flex' : 'none';
+      }
+      if (failed) {
         this.machTextSub.set('');
-        this.failedRef.instance.style.display = 'inline';
+        this.lastMachPermille = NaN;
         return;
       }
-      this.failedRef.instance.style.display = 'none';
       const machPermille = Math.round(mach.valueOr(0) * 1000);
+      if (machPermille === this.lastMachPermille) {
+        return;
+      }
+      this.lastMachPermille = machPermille;
       if (this.showMach && machPermille < 450) {
         this.showMach = false;
         this.machTextSub.set('');
@@ -1327,20 +1346,24 @@ export class MachNumber extends DisplayComponent<{ bus: EventBus }> {
   }
 
   render(): VNode {
+    // Rendered into the HTML mach layer (see PFD.tsx), not the main SVG
     return (
       <>
-        <text
+        <span
           ref={this.failedRef}
           id="MachFailText"
-          class="Blink9Seconds FontLargest StartAlign Red"
-          x="5.4257932"
-          y="136.88908"
+          class="Blink9Seconds FontLargest Red"
+          style="position: absolute; left: 26.25px; top: 0; height: 100%; display: flex; align-items: center;"
         >
           MACH
-        </text>
-        <text id="CurrentMachText" class="FontLargest StartAlign Green" x="5.566751" y="137.03004">
+        </span>
+        <span
+          id="CurrentMachText"
+          class="FontLargest Green"
+          style="position: absolute; left: 26.93px; top: 0; height: 100%; display: flex; align-items: center;"
+        >
           {this.machTextSub}
-        </text>
+        </span>
       </>
     );
   }
