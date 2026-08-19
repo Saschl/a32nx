@@ -9,11 +9,120 @@
   font-style: normal;
 }
 
-.pfd-svg {
+// Full-screen ground for all layers. The main SVG used to provide this via its own background,
+// but it no longer spans the whole display.
+.pfd-background {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 768px;
   height: 1024px;
   background: $display-background;
+}
+
+// Tape graduation layers (see VerticalTape.tsx). The window clips the strip natively instead of
+// relying on Mask2's overpaint. The inner SVG keeps the PFD viewBox coordinates, hence the
+// full-size element offset back by the window position. Deliberately NO will-change here:
+// Coherent GT does not support it and renders such layers solid black; plain transforms are fine.
+.pfd-tape-window {
+  position: absolute;
+  overflow: hidden;
+  font-family: "Ecam", monospace !important;
+}
+
+.pfd-tape-background {
+  position: absolute;
+  background: $display-grey;
+}
+
+.pfd-tape-scroller {
+  position: absolute;
+  width: 768px;
+  height: 1023.678px; // 211.6 viewBox units
+}
+
+.pfd-tape-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible; // ticks are laid out around the window and clipped by it, not by the SVG
+}
+
+// Occupies only viewBox y 22.4 - 158 (the band between the FMA and lower-area layers) at the
+// unchanged uniform scale of 768 / 158.75 = 4.8378 px per unit. Content outside the band was
+// previously overpainted by Mask1/Mask2 in the same background colour, so it is now clipped by
+// the viewport instead with an identical result.
+.pfd-svg {
+  position: absolute;
+  top: 108.366px; // 22.4 viewBox units
+  left: 0;
+  width: 768px;
+  height: 656.005px; // 135.6 viewBox units
+  font-family: "Ecam", monospace !important;
+}
+
+// Overlay layers slicing the main 158.75 x 211.6 viewBox at its uniform scale of
+// 768 / 158.75 = 4.8378 px per unit; transparent so the main svg background shows through.
+// The FMA layer is HTML (see FMA.tsx), so it needs HTML equivalents of the SVG font and
+// colour classes: fill/stroke do not apply to HTML text. Font sizes are the SVG sizes
+// multiplied by the layer scale; smaller fonts come later so combined classes resolve to
+// the smaller size, mirroring the SVG rule order.
+.pfd-fma-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 768px;
+  height: 120.95px; // 25 viewBox units
+  font-family: "Ecam", monospace !important;
+}
+
+// HTML layer for the mach readout / MACH failed flag (bottom left, see SpeedIndicator.tsx).
+// Band vertically centered on the SVG text's visual center (baseline ~136.9 viewBox units).
+.pfd-mach-layer {
+  position: absolute;
+  top: 630.4px;
+  left: 0;
+  width: 200px;
+  height: 40px;
+  font-family: "Ecam", monospace !important;
+
+  .FontLargest {
+    font-size: 33.86px;
+  }
+
+  .Green {
+    color: $display-green;
+  }
+
+  .Red {
+    color: $display-red;
+  }
+}
+
+@keyframes fma-amber-color-pulse {
+  0% {
+    color: scale-color($display-amber, $lightness: -30%);
+  }
+
+  50% {
+    color: scale-color($display-amber, $lightness: -30%);
+  }
+
+  51% {
+    color: scale-color($display-amber, $lightness: 30%);
+  }
+
+  100% {
+    color: scale-color($display-amber, $lightness: 30%);
+  }
+}
+
+.pfd-lower-area-layer {
+  position: absolute;
+  top: 754.7px; // 156 viewBox units
+  left: 0;
+  width: 768px;
+  height: 268.98px; // 55.6 viewBox units
   font-family: "Ecam", monospace !important;
 }
 
