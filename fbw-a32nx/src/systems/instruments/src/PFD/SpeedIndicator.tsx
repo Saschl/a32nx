@@ -18,6 +18,7 @@ import {
   Arinc429Word,
   Arinc429WordData,
   Arinc429Register,
+  Arinc429RegisterSubject,
   Arinc429LocalVarConsumerSubject,
 } from '@flybywiresim/fbw-sdk';
 
@@ -172,7 +173,7 @@ export class AirspeedIndicator extends DisplayComponent<AirspeedIndicatorProps> 
 
   private onGround = Subject.create(true);
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private leftMainGearCompressed: boolean;
 
@@ -405,7 +406,7 @@ export class AirspeedIndicatorOfftape extends DisplayComponent<{ bus: ArincEvent
 
   private rightMainGearCompressed = true;
 
-  private airSpeed = Arinc429Word.empty();
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
   private setOutline(): void {
     let airspeedValue: number;
@@ -603,17 +604,17 @@ class VLsBar extends DisplayComponent<{ bus: ArincEventBus }> {
 
   private vlsVisbility = Subject.create<string>('hidden');
 
-  private vAlphaProt = new Arinc429Word(0);
+  private vAlphaProt: Arinc429WordData = Arinc429Register.empty();
 
-  private vStallWarn = new Arinc429Word(0);
+  private vStallWarn: Arinc429WordData = Arinc429Register.empty();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
-  private vls = new Arinc429Word(0);
+  private vls: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc1DiscreteWord1 = new Arinc429Word(0);
+  private fcdc1DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc2DiscreteWord1 = new Arinc429Word(0);
+  private fcdc2DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
   private setVlsPath() {
     if (this.vls.isNormalOperation()) {
@@ -690,13 +691,13 @@ class VLsBar extends DisplayComponent<{ bus: ArincEventBus }> {
 class VAlphaLimBar extends DisplayComponent<{ bus: ArincEventBus }> {
   private VAlimIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
-  private vAlphaLim = new Arinc429Word(0);
+  private vAlphaLim: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc1DiscreteWord1 = new Arinc429Word(0);
+  private fcdc1DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc2DiscreteWord1 = new Arinc429Word(0);
+  private fcdc2DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
   private setAlphaLimBarPath() {
     const normalLawActive =
@@ -755,13 +756,13 @@ class VAlphaLimBar extends DisplayComponent<{ bus: ArincEventBus }> {
 class VAlphaProtBar extends DisplayComponent<{ bus: ArincEventBus }> {
   private VAprotIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
-  private vAlphaProt = new Arinc429Word(0);
+  private vAlphaProt: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc1DiscreteWord1 = new Arinc429Word(0);
+  private fcdc1DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc2DiscreteWord1 = new Arinc429Word(0);
+  private fcdc2DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
   private setAlphaProtBarPath() {
     const normalLawActive =
@@ -831,9 +832,9 @@ class VAlphaProtBar extends DisplayComponent<{ bus: ArincEventBus }> {
 class VMaxBar extends DisplayComponent<{ bus: ArincEventBus }> {
   private VMaxIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
-  private vMax = new Arinc429Word(0);
+  private vMax: Arinc429WordData = Arinc429Register.empty();
 
   private setVMaxBarPath() {
     if (this.airSpeed.value - this.vMax.value < -DisplayRange || !this.vMax.isNormalOperation()) {
@@ -886,13 +887,13 @@ class VMaxBar extends DisplayComponent<{ bus: ArincEventBus }> {
 class VStallWarnBar extends DisplayComponent<{ bus: ArincEventBus }> {
   private VStallWarnIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private airSpeed = new Arinc429Word(0);
+  private airSpeed: Arinc429WordData = Arinc429Register.empty();
 
-  private vStallWarn = new Arinc429Word(0);
+  private vStallWarn: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc1DiscreteWord1 = new Arinc429Word(0);
+  private fcdc1DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc2DiscreteWord1 = new Arinc429Word(0);
+  private fcdc2DiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
   private setVStallWarnBarPath() {
     const normalLawActive =
@@ -1205,11 +1206,13 @@ class SpeedTarget extends DisplayComponent<{ bus: ArincEventBus }> {
 }
 
 class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
-  private currentSpeed = Subject.create(Arinc429Word.empty());
+  // Value-comparing subjects: speedAr carries a reused register, so identity-based Subjects
+  // would never notify again after the first event
+  private readonly currentSpeed = Arinc429RegisterSubject.createEmpty();
 
-  private speedMarginHigh = Subject.create(Arinc429Word.empty());
+  private readonly speedMarginHigh = Arinc429RegisterSubject.createEmpty();
 
-  private speedMarginLow = Subject.create(Arinc429Word.empty());
+  private readonly speedMarginLow = Arinc429RegisterSubject.createEmpty();
 
   private upperSpeedMarginVisibility = MappedSubject.create(
     ([currentSpeed, speedMargin]) => this.computeVisibility(currentSpeed, speedMargin),
@@ -1242,16 +1245,16 @@ class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
     sub
       .on('speedAr')
       .withArinc429Precision(2)
-      .handle((s) => this.currentSpeed.set(s));
+      .handle((s) => this.currentSpeed.setWord(s.rawWord));
 
     sub
       .on('fmgcSpeedMarginHigh')
       .withArinc429Precision(2)
-      .handle((s) => this.speedMarginHigh.set(s));
+      .handle((s) => this.speedMarginHigh.setWord(s.rawWord));
     sub
       .on('fmgcSpeedMarginLow')
       .withArinc429Precision(2)
-      .handle((s) => this.speedMarginLow.set(s));
+      .handle((s) => this.speedMarginLow.setWord(s.rawWord));
   }
 
   render(): VNode {
@@ -1275,7 +1278,7 @@ class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
     );
   }
 
-  private computeVisibility(currentSpeed: Arinc429Word, speedMargin: Arinc429Word) {
+  private computeVisibility(currentSpeed: Arinc429WordData, speedMargin: Arinc429WordData) {
     if (
       Math.abs(currentSpeed.value - speedMargin.value) < DisplayRange &&
       !(speedMargin.isFailureWarning() || speedMargin.isNoComputedData())
@@ -1286,7 +1289,7 @@ class SpeedMargins extends DisplayComponent<{ bus: ArincEventBus }> {
     }
   }
 
-  private computeOffset(currentSpeed: Arinc429Word, speedMargin: Arinc429Word) {
+  private computeOffset(currentSpeed: Arinc429WordData, speedMargin: Arinc429WordData) {
     return Math.round((100 * (currentSpeed.value - speedMargin.value) * DistanceSpacing) / ValueSpacing) / 100;
   }
 }
@@ -1354,9 +1357,9 @@ export class MachNumber extends DisplayComponent<{ bus: ArincEventBus }> {
 class VProtBug extends DisplayComponent<{ bus: ArincEventBus }> {
   private vProtBug = FSComponent.createRef<SVGGElement>();
 
-  private fcdcWord1 = new Arinc429Word(0);
+  private fcdcWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private Vmax = new Arinc429Word(0);
+  private Vmax: Arinc429WordData = Arinc429Register.empty();
 
   private handleVProtBugDisplay() {
     const showVProt = this.Vmax.value > 240 && this.Vmax.isNormalOperation();
@@ -1374,11 +1377,11 @@ class VProtBug extends DisplayComponent<{ bus: ArincEventBus }> {
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
-    const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
+    const sub = this.props.bus.getArincSubscriber<PFDSimvars & Arinc429Values>();
 
     sub
       .on('vMax')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((vm) => {
         this.Vmax = vm;
 
@@ -1387,7 +1390,7 @@ class VProtBug extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('fcdcDiscreteWord1')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((word) => {
         this.fcdcWord1 = word;
 

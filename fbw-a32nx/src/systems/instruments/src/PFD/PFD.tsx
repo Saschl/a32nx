@@ -3,13 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { ClockEvents, ComponentProps, DisplayComponent, FSComponent, Subject, VNode } from '@microsoft/msfs-sdk';
-import {
-  ArincEventBus,
-  Arinc429Register,
-  Arinc429Word,
-  Arinc429WordData,
-  FailuresConsumer,
-} from '@flybywiresim/fbw-sdk';
+import { ArincEventBus, Arinc429Register, Arinc429WordData, FailuresConsumer } from '@flybywiresim/fbw-sdk';
 
 import { A320Failure } from '@failures';
 import { AttitudeIndicatorWarnings } from '@flybywiresim/pfd';
@@ -52,9 +46,9 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
 
   private pitch: Arinc429WordData = Arinc429Register.empty();
 
-  private roll = new Arinc429Word(0);
+  private roll: Arinc429WordData = Arinc429Register.empty();
 
-  private ownRadioAltitude = new Arinc429Word(0);
+  private ownRadioAltitude: Arinc429WordData = Arinc429Register.empty();
 
   private filteredRadioAltitude = Subject.create(0);
 

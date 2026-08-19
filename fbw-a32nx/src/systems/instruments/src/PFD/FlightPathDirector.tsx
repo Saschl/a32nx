@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { ClockEvents, DisplayComponent, FSComponent, Subject, Subscribable, VNode } from '@microsoft/msfs-sdk';
-import { ArincEventBus, Arinc429Word, Arinc429WordData } from '@flybywiresim/fbw-sdk';
+import { Arinc429Register, Arinc429Word, Arinc429WordData, ArincEventBus } from '@flybywiresim/fbw-sdk';
 import { FcuBus } from './shared/FcuBusProvider';
 import { FgBus } from './shared/FgBusProvider';
 
@@ -42,11 +42,11 @@ export class FlightPathDirector extends DisplayComponent<{
     fdOff: false,
   };
 
-  private fcuDiscreteWord1 = new Arinc429Word(0);
+  private fcuDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord2 = new Arinc429Word(0);
+  private fmgcDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord5 = new Arinc429Word(0);
+  private fmgcDiscreteWord5: Arinc429WordData = Arinc429Register.empty();
 
   private needsUpdate = false;
 

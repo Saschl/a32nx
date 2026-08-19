@@ -14,11 +14,12 @@ import {
   VNode,
 } from '@microsoft/msfs-sdk';
 import {
-  ArincEventBus,
-  Arinc429Word,
-  Arinc429RegisterSubject,
-  Arinc429Register,
   Arinc429LocalVarConsumerSubject,
+  Arinc429Register,
+  Arinc429RegisterSubject,
+  Arinc429Word,
+  Arinc429WordData,
+  ArincEventBus,
 } from '@flybywiresim/fbw-sdk';
 
 import { FgBus } from './shared/FgBusProvider';
@@ -58,11 +59,11 @@ abstract class ShowForSecondsComponent<T extends ComponentProps> extends Display
 }
 
 export class FMA extends DisplayComponent<{ bus: ArincEventBus; isAttExcessive: Subscribable<boolean> }> {
-  private fmgcDiscreteWord1 = new Arinc429Word(0);
+  private fmgcDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord2 = new Arinc429Word(0);
+  private fmgcDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord4 = new Arinc429Word(0);
+  private fmgcDiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
   private fmgcDiscreteWord7 = Arinc429RegisterSubject.createEmpty();
 
@@ -355,9 +356,9 @@ class A2Cell extends DisplayComponent<{ bus: ArincEventBus }> {
 
   private autobrakeMode = 0;
 
-  private fcuAtsFmaDiscreteWord = new Arinc429Word(0);
+  private fcuAtsFmaDiscreteWord: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuAtsDiscreteWord = new Arinc429Word(0);
+  private fcuAtsDiscreteWord: Arinc429WordData = Arinc429Register.empty();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
@@ -477,8 +478,8 @@ class Row3 extends DisplayComponent<{
 }
 
 function getA1A2CellText(
-  fcuAtsDiscreteWord: Arinc429Word,
-  fcuAtsFmaDiscreteWord: Arinc429Word,
+  fcuAtsDiscreteWord: Arinc429WordData,
+  fcuAtsFmaDiscreteWord: Arinc429WordData,
   flexTemp: number,
   autoBrakeMode: number,
   autoBrakeActive: boolean,
@@ -592,9 +593,9 @@ interface CellProps extends ComponentProps {
 }
 
 class A1A2Cell extends ShowForSecondsComponent<CellProps> {
-  private fcuAtsFmaDiscreteWord = new Arinc429Word(0);
+  private fcuAtsFmaDiscreteWord: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuAtsDiscreteWord = new Arinc429Word(0);
+  private fcuAtsDiscreteWord: Arinc429WordData = Arinc429Register.empty();
 
   private cellRef = FSComponent.createRef<SVGGElement>();
 
@@ -844,21 +845,21 @@ class B1Cell extends ShowForSecondsComponent<CellProps> {
 
   private fmaTextRef = FSComponent.createRef<SVGTextElement>();
 
-  private selectedVS = new Arinc429Word(0);
+  private selectedVS: Arinc429WordData = Arinc429Register.empty();
 
-  private selectedFPA = new Arinc429Word(0);
+  private selectedFPA: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord1 = new Arinc429Word(0);
+  private fmgcDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord2 = new Arinc429Word(0);
+  private fmgcDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord3 = new Arinc429Word(0);
+  private fmgcDiscreteWord3: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord4 = new Arinc429Word(0);
+  private fmgcDiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord7 = new Arinc429Word(0);
+  private fmgcDiscreteWord7: Arinc429WordData = Arinc429Register.empty();
 
-  private fmAltitudeConstraint = new Arinc429Word(0);
+  private fmAltitudeConstraint: Arinc429WordData = Arinc429Register.empty();
 
   private previousText = '';
 
@@ -1112,9 +1113,9 @@ class B2Cell extends DisplayComponent<CellProps> {
 
   private classSub = Subject.create('');
 
-  private altConstraint = new Arinc429Word(0);
+  private altConstraint: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord3 = new Arinc429Word(0);
+  private fmgcDiscreteWord3: Arinc429WordData = Arinc429Register.empty();
 
   private handleMessage(): void {
     const altAcqArmed = this.fmgcDiscreteWord3.bitValueOr(12, false);
@@ -1190,11 +1191,11 @@ class B2Cell extends DisplayComponent<CellProps> {
 class C1Cell extends ShowForSecondsComponent<CellProps> {
   private readonly sub = this.props.bus.getSubscriber<PFDSimvars>();
 
-  private fmgcDiscreteWord1 = new Arinc429Word(0);
+  private fmgcDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord2 = new Arinc429Word(0);
+  private fmgcDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord3 = new Arinc429Word(0);
+  private fmgcDiscreteWord3: Arinc429WordData = Arinc429Register.empty();
 
   private textSub = Subject.create('');
 
@@ -1312,9 +1313,9 @@ class C1Cell extends ShowForSecondsComponent<CellProps> {
 }
 
 class C2Cell extends DisplayComponent<CellProps> {
-  private fmgcDiscreteWord1 = new Arinc429Word(0);
+  private fmgcDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord3 = new Arinc429Word(0);
+  private fmgcDiscreteWord3: Arinc429WordData = Arinc429Register.empty();
 
   private textSub = Subject.create('');
 
@@ -1374,11 +1375,11 @@ class C2Cell extends DisplayComponent<CellProps> {
 }
 
 class BC1Cell extends ShowForSecondsComponent<CellProps> {
-  private fmgcDiscreteWord1 = new Arinc429Word(0);
+  private fmgcDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord2 = new Arinc429Word(0);
+  private fmgcDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord4 = new Arinc429Word(0);
+  private fmgcDiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
   private textSub = Subject.create('');
 
@@ -1608,9 +1609,9 @@ class BC3Cell extends DisplayComponent<{ BC3Message: Subscribable<string[]> } & 
 }
 
 class D1D2Cell extends ShowForSecondsComponent<CellProps> {
-  private fmgcDiscreteWord4 = new Arinc429Word(0);
+  private fmgcDiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord3 = new Arinc429Word(0);
+  private fmgcDiscreteWord3: Arinc429WordData = Arinc429Register.empty();
 
   private text1Sub = Subject.create('');
 
@@ -1808,9 +1809,9 @@ class D3Cell extends DisplayComponent<{ bus: ArincEventBus }> {
 }
 
 class E1Cell extends ShowForSecondsComponent<CellProps> {
-  private fmgc1DiscreteWord4 = new Arinc429Word(0);
+  private fmgc1DiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgc2DiscreteWord4 = new Arinc429Word(0);
+  private fmgc2DiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
   private textSub = Subject.create('');
 
@@ -1887,11 +1888,11 @@ class E1Cell extends ShowForSecondsComponent<CellProps> {
 }
 
 class E2Cell extends ShowForSecondsComponent<CellProps> {
-  private fmgc1DiscreteWord4 = new Arinc429Word(0);
+  private fmgc1DiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgc2DiscreteWord4 = new Arinc429Word(0);
+  private fmgc2DiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuDiscreteWord2 = new Arinc429Word(0);
+  private fcuDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
   private textSub = Subject.create('');
 

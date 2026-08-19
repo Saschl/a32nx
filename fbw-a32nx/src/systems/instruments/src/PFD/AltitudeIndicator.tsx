@@ -42,7 +42,7 @@ class LandingElevationIndicator extends DisplayComponent<{ bus: ArincEventBus }>
 
   private landingElevationIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private landingElevation = new Arinc429Word(0);
+  private landingElevation: Arinc429WordData = Arinc429Register.empty();
 
   private flightPhase = 0;
 
@@ -65,7 +65,7 @@ class LandingElevationIndicator extends DisplayComponent<{ bus: ArincEventBus }>
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
-    const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
+    const sub = this.props.bus.getArincSubscriber<PFDSimvars & Arinc429Values>();
 
     sub
       .on('fwcFlightPhase')
@@ -82,7 +82,7 @@ class LandingElevationIndicator extends DisplayComponent<{ bus: ArincEventBus }>
 
     sub
       .on('landingElevation')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((le) => {
         this.landingElevation = le;
         this.handleLandingElevation();
@@ -101,7 +101,7 @@ class RadioAltIndicator extends DisplayComponent<{ bus: ArincEventBus; filteredR
 
   private offsetSub = Subject.create('');
 
-  private radioAltitude = new Arinc429Word(0);
+  private radioAltitude: Arinc429WordData = Arinc429Register.empty();
 
   private setOffset() {
     if (
@@ -154,11 +154,11 @@ class MinimumDescentAltitudeIndicator extends DisplayComponent<{ bus: ArincEvent
 
   private inLandingPhases = false;
 
-  private fcuEisDiscreteWord2 = new Arinc429Word(0);
+  private fcuEisDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
   private readonly mda = Arinc429RegisterSubject.createEmpty();
 
-  private landingElevation = new Arinc429Word(0);
+  private landingElevation: Arinc429WordData = Arinc429Register.empty();
 
   private updateIndication(): void {
     this.qnhLandingAltValid =
@@ -310,15 +310,15 @@ export class AltitudeIndicatorOfftape extends DisplayComponent<AltitudeIndicator
 
   private readonly altFlagVisible = this.altitude.map((v) => !v.isNormalOperation() && !v.isFunctionalTest());
 
-  private fcuSelectedAlt = new Arinc429Word(0);
+  private fcuSelectedAlt: Arinc429WordData = Arinc429Register.empty();
 
-  private altConstraint = new Arinc429Word(0);
+  private altConstraint: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord1 = new Arinc429Word(0);
+  private fmgcDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord4 = new Arinc429Word(0);
+  private fmgcDiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
-  private shownTargetAltitude = Subject.create<Arinc429Word>(new Arinc429Word(0));
+  private shownTargetAltitude = Subject.create<Arinc429WordData>(Arinc429Register.empty());
 
   private targetAltitudeColor = Subject.create<TargetAltitudeColor>(TargetAltitudeColor.Cyan);
 
@@ -460,7 +460,7 @@ export class AltitudeIndicatorOfftape extends DisplayComponent<AltitudeIndicator
 
 interface SelectedAltIndicatorProps {
   bus: ArincEventBus;
-  selectedAltitude: Subscribable<Arinc429Word>;
+  selectedAltitude: Subscribable<Arinc429WordData>;
   altitudeColor: Subscribable<TargetAltitudeColor>;
 }
 
@@ -493,7 +493,7 @@ class SelectedAltIndicator extends DisplayComponent<SelectedAltIndicatorProps> {
 
   private altTapeTargetText = FSComponent.createRef<SVGTextElement>();
 
-  private shownTargetAltitude = new Arinc429Word(0);
+  private shownTargetAltitude: Arinc429WordData = Arinc429Register.empty();
 
   private textSub = Subject.create('');
 
@@ -691,9 +691,9 @@ class AltimeterIndicator extends DisplayComponent<AltimeterIndicatorProps> {
 
   private readonly shouldFlash = Subject.create(false);
 
-  private baroInhg = new Arinc429Word(0);
+  private baroInhg: Arinc429WordData = Arinc429Register.empty();
 
-  private baroHpa = new Arinc429Word(0);
+  private baroHpa: Arinc429WordData = Arinc429Register.empty();
 
   private baroInInhg = false;
 
@@ -882,7 +882,7 @@ interface MetricAltIndicatorState {
 
 interface MetricAltIndicatorProps {
   bus: ArincEventBus;
-  targetAlt: Subscribable<Arinc429Word>;
+  targetAlt: Subscribable<Arinc429WordData>;
   altitudeColor: Subscribable<TargetAltitudeColor>;
 }
 
@@ -910,9 +910,9 @@ class MetricAltIndicator extends DisplayComponent<MetricAltIndicatorProps> {
     fcuDiscreteWord1: new Arinc429Word(0),
   };
 
-  private fmgcDiscreteWord1 = new Arinc429Word(0);
+  private fmgcDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord4 = new Arinc429Word(0);
+  private fmgcDiscreteWord4: Arinc429WordData = Arinc429Register.empty();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
