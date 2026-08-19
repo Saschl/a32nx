@@ -5,7 +5,6 @@
 import {
   ClockEvents,
   ComponentProps,
-  ConsumerSubject,
   DisplayComponent,
   FSComponent,
   MappedSubject,
@@ -14,7 +13,12 @@ import {
   Subscribable,
   VNode,
 } from '@microsoft/msfs-sdk';
-import { ArincEventBus, Arinc429Word, Arinc429LocalVarConsumerSubject, Arinc429WordData } from '@flybywiresim/fbw-sdk';
+import {
+  ArincEventBus,
+  Arinc429ConsumerSubject,
+  Arinc429LocalVarConsumerSubject,
+  Arinc429WordData,
+} from '@flybywiresim/fbw-sdk';
 
 import { Arinc429Values } from './shared/ArincValueProvider';
 import { LagFilter } from './PFDUtils';
@@ -67,13 +71,13 @@ interface VerticalSpeedIndicatorProps {
 export class VerticalSpeedIndicator extends DisplayComponent<VerticalSpeedIndicatorProps> {
   private readonly sub = this.props.bus.getArincSubscriber<A32NXTcasBusEvents & Arinc429Values & ClockEvents>();
 
-  private readonly verticalSpeed = ConsumerSubject.create(this.sub.on('vs'), Arinc429Word.empty());
+  private readonly verticalSpeed = Arinc429ConsumerSubject.create(this.sub.on('vs'));
 
   private readonly lagFilter = new LagFilter(2);
 
   private readonly filteredVerticalSpeed = Subject.create(0);
 
-  private readonly ra = ConsumerSubject.create(this.sub.on('chosenRa'), Arinc429Word.empty());
+  private readonly ra = Arinc429ConsumerSubject.create(this.sub.on('chosenRa'));
 
   private readonly verticalResolutionAdvisoryWord = Arinc429LocalVarConsumerSubject.create(
     this.sub.on('a32nx_tcas_vertical_resolution_advisory_word'),

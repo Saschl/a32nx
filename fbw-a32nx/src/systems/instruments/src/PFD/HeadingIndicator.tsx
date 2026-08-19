@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { DisplayComponent, FSComponent, MappedSubject, Subject, Subscribable, VNode } from '@microsoft/msfs-sdk';
-import { Arinc429ConsumerSubject, Arinc429Word, ArincEventBus } from '@flybywiresim/fbw-sdk';
+import { Arinc429ConsumerSubject, Arinc429Register, Arinc429WordData, ArincEventBus } from '@flybywiresim/fbw-sdk';
 
 import { FcuBus } from './shared/FcuBusProvider';
 import { DmcLogicEvents } from '../MsfsAvionicsCommon/providers/DmcPublisher';
@@ -135,11 +135,11 @@ interface SelectedHeadingProps {
 }
 
 class SelectedHeading extends DisplayComponent<SelectedHeadingProps> {
-  private selectedHeading = new Arinc429Word(0);
+  private selectedHeading: Arinc429WordData = Arinc429Register.empty();
 
-  private selectedTrack = new Arinc429Word(0);
+  private selectedTrack: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuDiscreteWord1 = new Arinc429Word(0);
+  private fcuDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
   private heading = 0;
 

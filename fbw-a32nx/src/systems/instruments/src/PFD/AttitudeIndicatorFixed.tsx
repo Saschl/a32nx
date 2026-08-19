@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { DisplayComponent, FSComponent, Subject, Subscribable, VNode } from '@microsoft/msfs-sdk';
-import { ArincEventBus, Arinc429Register, Arinc429Word, Arinc429WordData } from '@flybywiresim/fbw-sdk';
+import { ArincEventBus, Arinc429Register, Arinc429WordData } from '@flybywiresim/fbw-sdk';
 
 import { FlightPathDirector } from './FlightPathDirector';
 import { FlightPathVector } from './FlightPathVector';
@@ -18,7 +18,7 @@ interface AttitudeIndicatorFixedUpperProps {
 }
 
 export class AttitudeIndicatorFixedUpper extends DisplayComponent<AttitudeIndicatorFixedUpperProps> {
-  private roll = new Arinc429Word(0);
+  private roll: Arinc429WordData = Arinc429Register.empty();
 
   private pitch: Arinc429WordData = Arinc429Register.empty();
 
@@ -94,7 +94,7 @@ interface AttitudeIndicatorFixedCenterProps {
 }
 
 export class AttitudeIndicatorFixedCenter extends DisplayComponent<AttitudeIndicatorFixedCenterProps> {
-  private roll = new Arinc429Word(0);
+  private roll: Arinc429WordData = Arinc429Register.empty();
 
   private pitch: Arinc429WordData = Arinc429Register.empty();
 
@@ -188,9 +188,9 @@ export class AttitudeIndicatorFixedCenter extends DisplayComponent<AttitudeIndic
 class FDYawBar extends DisplayComponent<{ bus: ArincEventBus }> {
   private fdEngaged = false;
 
-  private fcuEisDiscreteWord2 = new Arinc429Word(0);
+  private fcuEisDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fdYawCommand = new Arinc429Word(0);
+  private fdYawCommand: Arinc429WordData = Arinc429Register.empty();
 
   private yawRef = FSComponent.createRef<SVGPathElement>();
 
@@ -255,19 +255,19 @@ class FDYawBar extends DisplayComponent<{ bus: ArincEventBus }> {
 class FlightDirector extends DisplayComponent<{ bus: ArincEventBus }> {
   private fdEngaged = false;
 
-  private fcuEisDiscreteWord2 = new Arinc429Word(0);
+  private fcuEisDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuDiscreteWord1 = new Arinc429Word(0);
+  private fcuDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord2 = new Arinc429Word(0);
+  private fmgcDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fmgcDiscreteWord5 = new Arinc429Word(0);
+  private fmgcDiscreteWord5: Arinc429WordData = Arinc429Register.empty();
 
-  private fdRollCommand = new Arinc429Word(0);
+  private fdRollCommand: Arinc429WordData = Arinc429Register.empty();
 
-  private fdPitchCommand = new Arinc429Word(0);
+  private fdPitchCommand: Arinc429WordData = Arinc429Register.empty();
 
-  private fdYawCommand = new Arinc429Word(0);
+  private fdYawCommand: Arinc429WordData = Arinc429Register.empty();
 
   private leftMainGearCompressed = false;
 
@@ -492,17 +492,17 @@ class FlightDirector extends DisplayComponent<{ bus: ArincEventBus }> {
 }
 
 class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
-  private captPitchCommand = new Arinc429Word(0);
+  private captPitchCommand: Arinc429WordData = Arinc429Register.empty();
 
-  private foPitchCommand = new Arinc429Word(0);
+  private foPitchCommand: Arinc429WordData = Arinc429Register.empty();
 
-  private captRollCommand = new Arinc429Word(0);
+  private captRollCommand: Arinc429WordData = Arinc429Register.empty();
 
-  private foRollCommand = new Arinc429Word(0);
+  private foRollCommand: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc1DiscreteWord2 = new Arinc429Word(0);
+  private fcdc1DiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fcdc2DiscreteWord2 = new Arinc429Word(0);
+  private fcdc2DiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
   private onGround = true;
 
@@ -561,7 +561,7 @@ class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
-    const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
+    const sub = this.props.bus.getArincSubscriber<PFDSimvars & Arinc429Values>();
 
     sub
       .on('noseGearCompressed')
@@ -589,7 +589,7 @@ class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('fcdc1DiscreteWord2')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((discreteWord2) => {
         this.fcdc1DiscreteWord2 = discreteWord2;
         this.handleSideStickIndication();
@@ -597,7 +597,7 @@ class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('fcdc2DiscreteWord2')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((discreteWord2) => {
         this.fcdc2DiscreteWord2 = discreteWord2;
         this.handleSideStickIndication();
@@ -605,7 +605,7 @@ class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('fcdcCaptPitchCommand')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((x) => {
         this.captPitchCommand = x;
         this.handleSideStickIndication();
@@ -613,7 +613,7 @@ class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('fcdcFoPitchCommand')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((x) => {
         this.foPitchCommand = x;
         this.handleSideStickIndication();
@@ -621,7 +621,7 @@ class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('fcdcCaptRollCommand')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((y) => {
         this.captRollCommand = y;
         this.handleSideStickIndication();
@@ -629,7 +629,7 @@ class SidestickIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('fcdcFoRollCommand')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((y) => {
         this.foRollCommand = y;
         this.handleSideStickIndication();

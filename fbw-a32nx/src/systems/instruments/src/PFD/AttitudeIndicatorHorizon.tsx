@@ -36,13 +36,13 @@ class HeadingBug extends DisplayComponent<{
   isCaptainSide: boolean;
   yOffset: Subscribable<number>;
 }> {
-  private fcuSelectedHeading = new Arinc429Word(0);
+  private fcuSelectedHeading: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuSelectedTrack = new Arinc429Word(0);
+  private fcuSelectedTrack: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuEisDiscreteWord2 = new Arinc429Word(0);
+  private fcuEisDiscreteWord2: Arinc429WordData = Arinc429Register.empty();
 
-  private fcuDiscreteWord1 = new Arinc429Word(0);
+  private fcuDiscreteWord1: Arinc429WordData = Arinc429Register.empty();
 
   private heading: Arinc429WordData = new Arinc429Word(0);
 
@@ -353,7 +353,7 @@ class TailstrikeIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
   private needsUpdate = false;
 
   private tailStrikeConditions = {
-    altitude: new Arinc429Word(0),
+    altitude: Arinc429Register.empty() as Arinc429WordData,
     speed: 0,
     tla1: 0,
     tla2: 0,
@@ -362,7 +362,7 @@ class TailstrikeIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
-    const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values & ClockEvents>();
+    const sub = this.props.bus.getArincSubscriber<PFDSimvars & Arinc429Values & ClockEvents>();
 
     sub.on('chosenRa').handle((ra) => {
       this.tailStrikeConditions.altitude = ra;
@@ -386,7 +386,7 @@ class TailstrikeIndicator extends DisplayComponent<{ bus: ArincEventBus }> {
 
     sub
       .on('speedAr')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((speed) => {
         this.tailStrikeConditions.speed = speed.value;
         this.needsUpdate = true;
@@ -434,13 +434,13 @@ class RadioAltAndDH extends DisplayComponent<{
 
   private daRaGroup = FSComponent.createRef<SVGGElement>();
 
-  private roll = new Arinc429Word(0);
+  private roll: Arinc429WordData = Arinc429Register.empty();
 
   private readonly dh = Arinc429RegisterSubject.createEmpty();
 
   private filteredRadioAltitude = 0;
 
-  private radioAltitude = new Arinc429Word(0);
+  private radioAltitude: Arinc429WordData = Arinc429Register.empty();
 
   private transAltAr = Arinc429Register.empty();
 
@@ -607,13 +607,13 @@ class SideslipIndicator extends DisplayComponent<SideslipIndicatorProps> {
 
   private rightMainGearCompressed = true;
 
-  private roll = new Arinc429Word(0);
+  private roll: Arinc429WordData = Arinc429Register.empty();
 
-  private beta = new Arinc429Word(0);
+  private beta: Arinc429WordData = Arinc429Register.empty();
 
-  private betaTarget = new Arinc429Word(0);
+  private betaTarget: Arinc429WordData = Arinc429Register.empty();
 
-  private latAcc = new Arinc429Word(0);
+  private latAcc: Arinc429WordData = Arinc429Register.empty();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
