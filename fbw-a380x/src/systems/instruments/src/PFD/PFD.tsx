@@ -345,15 +345,9 @@ export class PFDComponent extends DisplayComponent<PFDProps> {
             redraws per SVG element, so keeping the change-driven strips out of the main SVG stops
             the per-frame attitude/tape updates from repainting them (and vice versa). Both layers
             use a viewBox slice of the main coordinate system, so child coordinates are unchanged. */}
-        <svg
-          class="pfd-fma-layer"
-          version="1.1"
-          viewBox="0 0 158.75 25"
-          xmlns="http://www.w3.org/2000/svg"
-          xmlnsXlink="http://www.w3.org/1999/xlink"
-        >
+        <div class="pfd-fma-layer">
           <FMA bus={this.props.bus} isAttExcessive={this.isAttExcessive} />
-        </svg>
+        </div>
         <svg
           class="pfd-lower-area-layer"
           version="1.1"

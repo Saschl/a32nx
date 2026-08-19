@@ -14,12 +14,7 @@ import {
 } from '@microsoft/msfs-sdk';
 import { Arinc429Values } from './shared/ArincValueProvider';
 import { PFDSimvars } from './shared/PFDSimvarPublisher';
-import {
-  Arinc429ConsumerSubject,
-  Arinc429LocalVarConsumerSubject,
-  Arinc429Word,
-  ArincEventBus,
-} from '@flybywiresim/fbw-sdk';
+import { Arinc429ConsumerSubject, Arinc429LocalVarConsumerSubject, ArincEventBus } from '@flybywiresim/fbw-sdk';
 import { DmcLogicEvents } from '../MsfsAvionicsCommon/providers/DmcPublisher';
 import { PrimFgBusBaseEvents } from '@shared/publishers/PrimFgPublisher';
 import { FlashOneHertz } from '../MsfsAvionicsCommon/FlashingElementUtils';
@@ -41,12 +36,43 @@ import { FcdcBusBaseEvents } from '@shared/publishers/FcdcPublisher';
 import { FcuEfisCpBusEvents } from '../../../shared/src/publishers/EfisCpBusPublisher';
 import { getDisplayIndex } from './PFD';
 
+// The FMA is rendered as an HTML layer (not SVG): all cells are pure text and outline boxes, and
+// keeping them out of the main SVG means neither mode changes nor per-frame tape/attitude redraws
+// dirty each other. Coordinates stay in the PFD's 158.75-unit system and are converted to CSS
+// pixels with the same uniform scale the main SVG renders at.
+const FMA_PX_PER_UNIT = 768 / 158.75;
+
+const px = (units: number) => Math.round(units * FMA_PX_PER_UNIT * 100) / 100;
+
+/** Row bands (top edge / common height), taken from the original mode-change box geometry. */
+const ROW_1_TOP = 1.8143;
+const ROW_2_TOP = 9.0715;
+const ROW_3_TOP = 16.329;
+const ROW_HEIGHT = 6.0476;
+
+/** Equivalent of the SVG 0.16mm NormalStroke at display scale. */
+const BOX_BORDER = '2.9px solid';
+
+/**
+ * Style for a text span vertically centered in a row band, horizontally anchored at x
+ * (mirrors the SVG text-anchor semantics).
+ */
+const textStyle = (x: number, rowTop: number, anchor: 'middle' | 'start' | 'end' = 'middle') =>
+  `position: absolute; left: ${px(x)}px; top: ${px(rowTop)}px; height: ${px(ROW_HEIGHT)}px; ` +
+  `display: flex; align-items: center; white-space: pre;` +
+  (anchor === 'middle' ? ' transform: translateX(-50%);' : anchor === 'end' ? ' transform: translateX(-100%);' : '');
+
+/** Style for an outline box (replaces the SVG rectangle paths). Border color comes from the class. */
+const boxStyle = (x: number, y: number, w: number, h: number) =>
+  `position: absolute; left: ${px(x)}px; top: ${px(y)}px; width: ${px(w)}px; height: ${px(h)}px; ` +
+  `border: ${BOX_BORDER}; box-sizing: border-box;`;
+
 abstract class ShowForSecondsComponent<T extends ComponentProps> extends DisplayComponent<T> {
   private timeout: number = 0;
 
   private readonly displayTimeInSeconds: number;
 
-  protected modeChangedPathRef = FSComponent.createRef<SVGPathElement>();
+  protected modeChangedPathRef = FSComponent.createRef<HTMLDivElement>();
 
   protected isShown = false;
 
@@ -111,19 +137,19 @@ export class FMA extends DisplayComponent<{
 
   private tdReached = ConsumerSubject.create(this.sub.on('tdReached'), false);
 
-  private firstBorderRef = FSComponent.createRef<SVGPathElement>();
+  private firstBorderRef = FSComponent.createRef<HTMLDivElement>();
 
-  private secondBorderRef = FSComponent.createRef<SVGPathElement>();
-
-  // Arinc429ConsumerSubject (value+ssm equality): the provider re-publishes the same mutated
-  // register reference, so a default-equality ConsumerSubject would never notify again
-  private readonly radioHeight = Arinc429ConsumerSubject.create(this.sub.on('chosenRa'));
+  private secondBorderRef = FSComponent.createRef<HTMLDivElement>();
 
   private readonly altitude = Arinc429ConsumerSubject.create(
     this.props.bus.getArincSubscriber<Arinc429Values>().on('altitudeAr'),
   );
 
+  // Arinc429ConsumerSubject (value+ssm equality): the provider re-publishes the same mutated
+  // register reference, so a default-equality ConsumerSubject would never notify again
   private readonly landingElevation = Arinc429ConsumerSubject.create(this.sub.on('landingElevation'));
+
+  private readonly radioHeight = Arinc429ConsumerSubject.create(this.sub.on('chosenRa'));
 
   private readonly fwcFlightPhase = ConsumerSubject.create(this.sub.on('fwcFlightPhase'), 0);
 
@@ -234,24 +260,24 @@ export class FMA extends DisplayComponent<{
       (this.machPresel.get().isNormalOperation() || this.speedPresel.get().isNormalOperation()) &&
       !BC3Message &&
       engineMessage === A3Messages.NONE;
-    let secondBorder: string;
+    let secondBorder: number;
     if (sharedModeActive && !this.props.isAttExcessive.get()) {
-      secondBorder = '';
+      secondBorder = 0;
     } else if (BC3Message) {
-      secondBorder = 'm66.241 0.33732v15.766';
+      secondBorder = 15.766;
     } else {
-      secondBorder = 'm66.241 0.33732v20.864';
+      secondBorder = 20.864;
     }
 
-    let firstBorder: string;
+    let firstBorder: number;
     if (AB3Message && !this.props.isAttExcessive.get()) {
-      firstBorder = 'm33.117 0.33732v15.766';
+      firstBorder = 15.766;
     } else {
-      firstBorder = 'm33.117 0.33732v20.864';
+      firstBorder = 20.864;
     }
 
-    this.firstBorderRef.instance.setAttribute('d', firstBorder);
-    this.secondBorderRef.instance.setAttribute('d', secondBorder);
+    this.firstBorderRef.instance.style.height = `${px(firstBorder)}px`;
+    this.secondBorderRef.instance.style.height = `${px(secondBorder)}px`;
   }
 
   onAfterRender(node: VNode): void {
@@ -280,13 +306,11 @@ export class FMA extends DisplayComponent<{
 
   render(): VNode {
     return (
-      <g id="FMA">
-        <g class="NormalStroke Grey">
-          <path ref={this.firstBorderRef} />
-          <path ref={this.secondBorderRef} />
-          <path d="m102.52 0.33732v20.864" />
-          <path d="m133.72 0.33732v20.864" />
-        </g>
+      <div id="FMA" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+        <div ref={this.firstBorderRef} class="FmaSeparator" style={`left: ${px(33.117) - 1.45}px;`} />
+        <div ref={this.secondBorderRef} class="FmaSeparator" style={`left: ${px(66.241) - 1.45}px;`} />
+        <div class="FmaSeparator" style={`left: ${px(102.52) - 1.45}px; height: ${px(20.864)}px;`} />
+        <div class="FmaSeparator" style={`left: ${px(133.72) - 1.45}px; height: ${px(20.864)}px;`} />
 
         <Row1
           bus={this.props.bus}
@@ -301,7 +325,7 @@ export class FMA extends DisplayComponent<{
           BC3Message={this.BC3Message}
           A3Message={this.A3Message}
         />
-      </g>
+      </div>
     );
   }
 }
@@ -320,7 +344,7 @@ class Row1 extends DisplayComponent<{
 
   private BC1Cell = FSComponent.createRef<BC1Cell>();
 
-  private cellsToHide = FSComponent.createRef<SVGGElement>();
+  private cellsToHide = FSComponent.createRef<HTMLDivElement>();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
@@ -332,7 +356,7 @@ class Row1 extends DisplayComponent<{
         this.c1Cell.instance.displayModeChangedPath(true);
         this.BC1Cell.instance.displayModeChangedPath(true);
       } else {
-        this.cellsToHide.instance.style.display = 'inline';
+        this.cellsToHide.instance.style.display = 'block';
         this.b1Cell.instance.displayModeChangedPath();
         this.c1Cell.instance.displayModeChangedPath();
         this.BC1Cell.instance.displayModeChangedPath();
@@ -342,17 +366,17 @@ class Row1 extends DisplayComponent<{
 
   render(): VNode {
     return (
-      <g>
+      <div>
         <A1A2Cell bus={this.props.bus} A1A2CellMessage={this.props.A1A2CellMessage} />
 
-        <g ref={this.cellsToHide}>
+        <div ref={this.cellsToHide}>
           <B1Cell ref={this.b1Cell} bus={this.props.bus} B1Message={this.props.B1CellMessage} />
           <C1Cell ref={this.c1Cell} bus={this.props.bus} />
           <D1D2Cell ref={this.D1D2Cell} bus={this.props.bus} />
           <BC1Cell ref={this.BC1Cell} bus={this.props.bus} />
-        </g>
+        </div>
         <E1Cell bus={this.props.bus} />
-      </g>
+      </div>
     );
   }
 }
@@ -362,7 +386,7 @@ class Row2 extends DisplayComponent<{
   isAttExcessive: Subscribable<boolean>;
   A1A2CellMessage: Subscribable<number>;
 }> {
-  private cellsToHide = FSComponent.createRef<SVGGElement>();
+  private cellsToHide = FSComponent.createRef<HTMLDivElement>();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
@@ -371,21 +395,21 @@ class Row2 extends DisplayComponent<{
       if (a) {
         this.cellsToHide.instance.style.display = 'none';
       } else {
-        this.cellsToHide.instance.style.display = 'inline';
+        this.cellsToHide.instance.style.display = 'block';
       }
     });
   }
 
   render(): VNode {
     return (
-      <g>
+      <div>
         <A2Cell bus={this.props.bus} A1A2CellMessage={this.props.A1A2CellMessage} />
-        <g ref={this.cellsToHide}>
+        <div ref={this.cellsToHide}>
           <B2Cell bus={this.props.bus} />
           <C2Cell bus={this.props.bus} />
-        </g>
+        </div>
         <E2Cell bus={this.props.bus} />
-      </g>
+      </div>
     );
   }
 }
@@ -393,9 +417,9 @@ class Row2 extends DisplayComponent<{
 class A2Cell extends DisplayComponent<{ bus: EventBus; A1A2CellMessage: Subscribable<A1A2Messages> }> {
   private text = Subject.create('');
 
-  private className = Subject.create('FontMediumSmaller MiddleAlign Cyan');
+  private className = Subject.create('FontMediumSmaller Cyan');
 
-  private autoBrkRef = FSComponent.createRef<SVGTextElement>();
+  private autoBrkRef = FSComponent.createRef<HTMLSpanElement>();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
@@ -454,9 +478,9 @@ class A2Cell extends DisplayComponent<{ bus: EventBus; A1A2CellMessage: Subscrib
 
   render(): VNode {
     return (
-      <text ref={this.autoBrkRef} class={this.className} x="16.782249" y="14.329653" style="white-space: pre">
+      <span ref={this.autoBrkRef} class={this.className} style={textStyle(16.782249, ROW_2_TOP)}>
         {this.text}
-      </text>
+      </span>
     );
   }
 }
@@ -467,7 +491,7 @@ class Row3 extends DisplayComponent<{
   readonly BC3Message: Subscribable<BC3Messages>;
   readonly A3Message: Subscribable<A3Messages>;
 }> {
-  private cellsToHide = FSComponent.createRef<SVGGElement>();
+  private cellsToHide = FSComponent.createRef<HTMLDivElement>();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
@@ -476,22 +500,22 @@ class Row3 extends DisplayComponent<{
       if (a) {
         this.cellsToHide.instance.style.display = 'none';
       } else {
-        this.cellsToHide.instance.style.display = 'inline';
+        this.cellsToHide.instance.style.display = 'block';
       }
     });
   }
 
   render(): VNode {
     return (
-      <g>
+      <div>
         <A3Cell bus={this.props.bus} A3Message={this.props.A3Message} />
-        <g ref={this.cellsToHide}>
+        <div ref={this.cellsToHide}>
           <AB3Cell bus={this.props.bus} A3Message={this.props.A3Message} />
           <D3Cell bus={this.props.bus} />
-        </g>
+        </div>
         <BC3Cell BC3Message={this.props.BC3Message} />
         <E3Cell bus={this.props.bus} />
-      </g>
+      </div>
     );
   }
 }
@@ -507,136 +531,195 @@ interface A1A2CellProps extends CellProps {
 class A1A2Cell extends ShowForSecondsComponent<A1A2CellProps> {
   private readonly sub = this.props.bus.getSubscriber<PFDSimvars>();
 
-  private cellRef = FSComponent.createRef<SVGGElement>();
-
   private flexTemp = ConsumerSubject.create(this.sub.on('flexTemp'), 0);
+
+  private readonly msgBoxRef = FSComponent.createRef<HTMLDivElement>();
+
+  private readonly line1Ref = FSComponent.createRef<HTMLSpanElement>();
+
+  private readonly line2Ref = FSComponent.createRef<HTMLSpanElement>();
+
+  private readonly flxPlusRef = FSComponent.createRef<HTMLSpanElement>();
+
+  private readonly flxTempRef = FSComponent.createRef<HTMLSpanElement>();
 
   constructor(props: A1A2CellProps) {
     super(props, 10);
   }
 
   private setText() {
-    let text: string = '';
     this.isShown = true;
+
+    let line1 = '';
+    let line1Class = 'FontMedium Green';
+    let line1X = 16.782249;
+    let line2: string | null = null;
+    let line2X = 16.869141;
+    let flxTemp: string | null = null;
+    let boxShown = false;
+    let boxX = 0;
+    let boxW = 0;
+    let boxH = 13.506;
+    let boxClass = 'White';
 
     switch (this.props.A1A2CellMessage.get()) {
       case A1A2Messages.MAN_TOGA:
         this.displayModeChangedPath(true);
-        text = `
-                                <path class="NormalStroke White" d="m25.114 1.8143v13.506h-16.952v-13.506z" />
-                                <text class="FontMedium MiddleAlign White" x="17.052249" y="7.1280665">MAN</text>
-                                <text class="FontMedium MiddleAlign White" x="16.869141" y="14.351689">TOGA</text>
-                            `;
+        line1 = 'MAN';
+        line1Class = 'FontMedium White';
+        line1X = 17.052249;
+        line2 = 'TOGA';
+        boxShown = true;
+        boxX = 8.162;
+        boxW = 16.952;
         break;
       case A1A2Messages.MAN_GA_SOFT:
         this.displayModeChangedPath(true);
-        text = `<g>
-                                <path class="NormalStroke White" d="m31.521 1.8143v13.506h-30.217v-13.506z" />
-                                <text class="FontMedium MiddleAlign White" x="17.052249" y="7.1280665">MAN</text>
-                                <text class="FontMedium MiddleAlign White" x="16.869141" y="14.351689">GA SOFT</text>
-                            </g>`;
+        line1 = 'MAN';
+        line1Class = 'FontMedium White';
+        line1X = 17.052249;
+        line2 = 'GA SOFT';
+        boxShown = true;
+        boxX = 1.304;
+        boxW = 30.217;
         break;
-      case A1A2Messages.MAN_FLEX: {
+      case A1A2Messages.MAN_FLEX:
         this.displayModeChangedPath(true);
-        const FlexTemp = Math.round(this.flexTemp.get());
-        const FlexText = FlexTemp.toString();
-        text = `<g>
-                                <path class="NormalStroke White" d="m29.821 1.8143v13.506h-24.517v-13.506z" />
-                                <text class="FontMedium MiddleAlign White" x="17.052249" y="7.1280665">MAN</text>
-                                <text class="FontMedium MiddleAlign White" x="11.669141" y="14.351689">FLX</text>
-                                <text class="FontMedium MiddleAlign Cyan" x="20.599141" y="14.851689">+</text>
-                                <text class="FontMedium MiddleAlign Cyan" x="26.099141" y="14.351689">
-                                ${FlexText}
-                                </text>
-                            </g>`;
-
+        line1 = 'MAN';
+        line1Class = 'FontMedium White';
+        line1X = 17.052249;
+        line2 = 'FLX';
+        line2X = 11.669141;
+        flxTemp = Math.round(this.flexTemp.get()).toString();
+        boxShown = true;
+        boxX = 5.304;
+        boxW = 24.517;
         break;
-      }
       case A1A2Messages.MAN_MCT:
         this.displayModeChangedPath(true);
-        text = `<g>
-                                <path class="NormalStroke White" d="m25.114 1.8143v13.506h-16.952v-13.506z" />
-                                <text class="FontMedium MiddleAlign White" x="17.052249" y="7.1280665">MAN</text>
-                                <text class="FontMedium MiddleAlign White" x="16.869141" y="14.351689">MCT</text>
-                            </g>`;
+        line1 = 'MAN';
+        line1Class = 'FontMedium White';
+        line1X = 17.052249;
+        line2 = 'MCT';
+        boxShown = true;
+        boxX = 8.162;
+        boxW = 16.952;
         break;
       case A1A2Messages.MAN_THR:
         this.displayModeChangedPath(true);
-        text = `<g>
-                                <path class="NormalStroke Amber" d="m25.114 1.8143v13.506h-16.952v-13.506z" />
-                                <text class="FontMedium MiddleAlign White" x="17.052249" y="7.1280665">MAN</text>
-                                <text class="FontMedium MiddleAlign White" x="16.869141" y="14.351689">THR</text>
-                            </g>`;
+        line1 = 'MAN';
+        line1Class = 'FontMedium White';
+        line1X = 17.052249;
+        line2 = 'THR';
+        boxShown = true;
+        boxX = 8.162;
+        boxW = 16.952;
+        boxClass = 'Amber';
         break;
       case A1A2Messages.SPEED:
-        text = '<text  class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">SPEED</text>';
+        line1 = 'SPEED';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.MACH:
-        text = '<text  class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">MACH</text>';
+        line1 = 'MACH';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.THR_MCT:
-        text = '<text  class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">THR MCT</text>';
+        line1 = 'THR MCT';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.THR_CLB:
-        text = '<text  class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">THR CLB</text>';
+        line1 = 'THR CLB';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.THR_LVR:
-        text = '<text  class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">THR LVR</text>';
+        line1 = 'THR LVR';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.THR_IDLE:
-        text = '<text class="FontMediumSmaller MiddleAlign Green" x="16.782249" y="7.1280665">THR IDLE</text>';
+        line1 = 'THR IDLE';
+        line1Class = 'FontMediumSmaller Green';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.A_FLOOR:
         this.displayModeChangedPath(true);
-        text = `<g>
-                                <path class="NormalStroke Amber BlinkInfinite" d="m0.70556 1.8143h30.927v6.0476h-30.927z" />
-                                <text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">A.FLOOR</text>
-                            </g>`;
+        line1 = 'A.FLOOR';
+        boxShown = true;
+        boxX = 0.70556;
+        boxW = 30.927;
+        boxH = ROW_HEIGHT;
+        boxClass = 'Amber BlinkInfinite';
         break;
       case A1A2Messages.TOGA_LK:
         this.displayModeChangedPath(true);
-        text = `<g>
-                                <path class="NormalStroke Amber BlinkInfinite" d="m0.70556 1.8143h30.927v6.0476h-30.927z" />
-                                <text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">TOGA LK</text>
-                            </g>`;
+        line1 = 'TOGA LK';
+        boxShown = true;
+        boxX = 0.70556;
+        boxW = 30.927;
+        boxH = ROW_HEIGHT;
+        boxClass = 'Amber BlinkInfinite';
         break;
       case A1A2Messages.BTV:
-        text = '<text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">BTV</text>';
+        line1 = 'BTV';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.BRK_LO:
-        text = '<text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">BRK LO</text>';
+        line1 = 'BRK LO';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.BRK_2:
-        text = '<text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">BRK 2 </text>';
+        line1 = 'BRK 2 ';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.BRK_3:
-        text = '<text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">BRK 3 </text>';
+        line1 = 'BRK 3 ';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.BRK_HI:
-        text = '<text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">BRK HI </text>';
+        line1 = 'BRK HI ';
         this.displayModeChangedPath();
         break;
       case A1A2Messages.BRK_RTO:
-        text = '<text class="FontMedium MiddleAlign Green" x="16.782249" y="7.1280665">BRK RTO</text>';
+        line1 = 'BRK RTO';
         this.displayModeChangedPath();
         break;
       default:
-        text = '';
+        line1 = '';
         this.isShown = false;
         this.displayModeChangedPath(true);
     }
 
-    this.cellRef.instance.innerHTML = text;
+    const line1El = this.line1Ref.instance;
+    line1El.textContent = line1;
+    line1El.className = line1Class;
+    line1El.style.left = `${px(line1X)}px`;
+
+    const line2El = this.line2Ref.instance;
+    if (line2 !== null) {
+      line2El.textContent = line2;
+      line2El.style.left = `${px(line2X)}px`;
+      line2El.style.display = 'flex';
+    } else {
+      line2El.style.display = 'none';
+    }
+
+    const flxDisplay = flxTemp !== null ? 'flex' : 'none';
+    this.flxPlusRef.instance.style.display = flxDisplay;
+    this.flxTempRef.instance.style.display = flxDisplay;
+    if (flxTemp !== null) {
+      this.flxTempRef.instance.textContent = flxTemp;
+    }
+
+    const boxEl = this.msgBoxRef.instance;
+    if (boxShown) {
+      boxEl.style.left = `${px(boxX)}px`;
+      boxEl.style.width = `${px(boxW)}px`;
+      boxEl.style.height = `${px(boxH)}px`;
+      boxEl.className = boxClass;
+      boxEl.style.display = 'block';
+    } else {
+      boxEl.style.display = 'none';
+    }
   }
 
   onAfterRender(node: VNode): void {
@@ -654,13 +737,26 @@ class A1A2Cell extends ShowForSecondsComponent<A1A2CellProps> {
   render(): VNode {
     return (
       <>
-        <path
+        <div
           ref={this.modeChangedPathRef}
-          visibility="hidden"
-          class="NormalStroke White"
-          d="m3.3 1.8143h27.127v6.0476h-27.127z"
+          class="White"
+          style={`${boxStyle(3.3, ROW_1_TOP, 27.127, ROW_HEIGHT)} visibility: hidden;`}
         />
-        <g ref={this.cellRef} />
+        <div ref={this.msgBoxRef} style={`${boxStyle(0, ROW_1_TOP, 1, ROW_HEIGHT)} display: none;`} />
+        <span ref={this.line1Ref} style={textStyle(16.782249, ROW_1_TOP)} />
+        <span
+          ref={this.line2Ref}
+          class="FontMedium White"
+          style={`${textStyle(16.869141, ROW_2_TOP)} display: none;`}
+        />
+        <span ref={this.flxPlusRef} class="FontMedium Cyan" style={`${textStyle(20.599141, ROW_2_TOP)} display: none;`}>
+          +
+        </span>
+        <span
+          ref={this.flxTempRef}
+          class="FontMedium Cyan"
+          style={`${textStyle(26.099141, ROW_2_TOP)} display: none;`}
+        />
       </>
     );
   }
@@ -708,7 +804,7 @@ class A3Cell extends DisplayComponent<A3CellProps> {
     }
 
     this.textSub.set(text);
-    this.classSub.set(`MiddleAlign ${className}`);
+    this.classSub.set(className);
   }
 
   private readonly shouldFlash = this.props.A3Message.map(
@@ -726,9 +822,9 @@ class A3Cell extends DisplayComponent<A3CellProps> {
   render(): VNode {
     return (
       <FlashOneHertz bus={this.props.bus} flashDuration={Infinity} flashing={this.shouldFlash}>
-        <text class={this.classSub} x="16.989958" y="21.641243">
+        <span class={this.classSub} style={textStyle(16.989958, ROW_3_TOP)}>
           {this.textSub}
-        </text>
+        </span>
       </FlashOneHertz>
     );
   }
@@ -764,9 +860,9 @@ class AB3Cell extends DisplayComponent<AB3CellProps> {
 
   render(): VNode {
     return (
-      <text class="FontMedium MiddleAlign Cyan" x="35.434673" y="21.656223">
+      <span class="FontMedium Cyan" style={textStyle(35.434673, ROW_3_TOP)}>
         {this.textSub}
-      </text>
+      </span>
     );
   }
 }
@@ -787,8 +883,6 @@ class B1Cell extends ShowForSecondsComponent<B1CellProps> {
   private primFgSelectedVs = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_selected_vertical_speed'));
 
   private primFgSelectedFpa = Arinc429LocalVarConsumerSubject.create(this.sub.on('prim_selected_flight_path_angle'));
-
-  private readonly fmaTextRef = FSComponent.createRef<SVGTextElement>();
 
   private readonly tcasLargeBoxDemand = this.primFgDiscreteWord6.map((word) => word.bitValueOr(11, false));
 
@@ -892,14 +986,14 @@ class B1Cell extends ShowForSecondsComponent<B1CellProps> {
   );
 
   private readonly boxClassSub = this.inSpeedProtection.map((inSpeedProtection) =>
-    inSpeedProtection ? 'NormalStroke None' : 'NormalStroke White',
+    inSpeedProtection ? 'None' : 'White',
   );
 
-  private readonly boxPathStringSub = MappedSubject.create(
+  private readonly boxHeightSub = MappedSubject.create(
     ([tcasLargeBoxDemand, primFgDiscreteWord3]) => {
       return tcasLargeBoxDemand && primFgDiscreteWord3.bitValueOr(25, false)
-        ? 'm35.756 1.8143h27.918v13.506h-27.918z'
-        : 'm35.756 1.8143h27.918v6.0476h-27.918z';
+        ? `${px(13.506)}px`
+        : `${px(ROW_HEIGHT)}px`;
     },
     this.tcasLargeBoxDemand,
     this.primFgDiscreteWord3,
@@ -916,8 +1010,8 @@ class B1Cell extends ShowForSecondsComponent<B1CellProps> {
     const altAcqMode = word.bitValueOr(19, false);
 
     return vsMode || fpaMode || (altAcqMode && !altCstrApplicable && altIsCrzAlt)
-      ? 'FontMediumSmaller MiddleAlign Green'
-      : 'FontMedium MiddleAlign Green';
+      ? 'FontMediumSmaller Green'
+      : 'FontMedium Green';
   });
 
   constructor(props: B1CellProps) {
@@ -934,21 +1028,28 @@ class B1Cell extends ShowForSecondsComponent<B1CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <path ref={this.modeChangedPathRef} class={this.boxClassSub} visibility="hidden" d={this.boxPathStringSub} />
+      <div>
+        <div
+          ref={this.modeChangedPathRef}
+          class={this.boxClassSub}
+          style={{
+            position: 'absolute',
+            left: `${px(35.756)}px`,
+            top: `${px(ROW_1_TOP)}px`,
+            width: `${px(27.918)}px`,
+            height: this.boxHeightSub,
+            border: BOX_BORDER,
+            'box-sizing': 'border-box',
+            visibility: 'hidden',
+          }}
+        />
 
         <FlashOneHertz bus={this.props.bus} flashDuration={Infinity} visible={this.inSpeedProtection}>
-          <path class="NormalStroke Amber" d="m34.656 1.8143h29.918v6.0476h-29.918z" />
+          <div class="Amber" style={boxStyle(34.656, ROW_1_TOP, 29.918, ROW_HEIGHT)} />
         </FlashOneHertz>
 
-        <text
-          ref={this.fmaTextRef}
-          style="white-space: pre"
-          class={this.activeVerticalModeClassSub}
-          x="49.921795"
-          y="7.1040988"
-        >
-          <tspan>{this.text}</tspan>
+        <span class={this.activeVerticalModeClassSub} style={textStyle(49.921795, ROW_1_TOP)}>
+          <span>{this.text}</span>
           <FlashOneHertz
             bus={this.props.bus}
             flashDuration={Infinity}
@@ -956,10 +1057,10 @@ class B1Cell extends ShowForSecondsComponent<B1CellProps> {
             className1={'Cyan'}
             className2={'DimmedCyan Fill'}
           >
-            <tspan xml:space="preserve">{this.additionalText}</tspan>
+            <span style="white-space: pre">{this.additionalText}</span>
           </FlashOneHertz>
-        </text>
-      </g>
+        </span>
+      </div>
     );
   }
 }
@@ -977,9 +1078,7 @@ class B2Cell extends DisplayComponent<CellProps> {
 
       const altCstrApplicable = primFgDiscreteWord3.bitValueOr(28, false);
 
-      return altAcqArmed && altCstrApplicable
-        ? 'FontMediumSmaller MiddleAlign Magenta'
-        : 'FontMediumSmaller MiddleAlign Cyan';
+      return altAcqArmed && altCstrApplicable ? 'FontMediumSmaller Magenta' : 'FontMediumSmaller Cyan';
     },
     this.primFgDiscreteWord2,
     this.primFgDiscreteWord3,
@@ -1037,14 +1136,14 @@ class B2Cell extends DisplayComponent<CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <text class={this.classSub} style="white-space: pre" x="40.777474" y="13.629653">
+      <div>
+        <span class={this.classSub} style={textStyle(40.777474, ROW_2_TOP)}>
           {this.text1Sub}
-        </text>
-        <text style="white-space: pre" class="FontMediumSmaller MiddleAlign Cyan" x="56.19803" y="13.629653">
+        </span>
+        <span class="FontMediumSmaller Cyan" style={textStyle(56.19803, ROW_2_TOP)}>
           {this.text2Sub}
-        </text>
-      </g>
+        </span>
+      </div>
     );
   }
 }
@@ -1105,17 +1204,16 @@ class C1Cell extends ShowForSecondsComponent<CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <path
+      <div>
+        <div
           ref={this.modeChangedPathRef}
-          class="NormalStroke White"
-          visibility="hidden"
-          d="m99.87 1.8143v6.0476h-31.075l1e-6 -6.0476z"
+          class="White"
+          style={`${boxStyle(68.795, ROW_1_TOP, 31.075, ROW_HEIGHT)} visibility: hidden;`}
         />
-        <text class="FontMedium MiddleAlign Green" x="84.856567" y="6.9873109">
+        <span class="FontMedium Green" style={textStyle(84.856567, ROW_1_TOP)}>
           {this.text}
-        </text>
-      </g>
+        </span>
+      </div>
     );
   }
 }
@@ -1152,9 +1250,9 @@ class C2Cell extends DisplayComponent<CellProps> {
 
   render(): VNode {
     return (
-      <text style="white-space: pre" class="FontMediumSmaller MiddleAlign Cyan" x="84.234184" y="13.629653">
+      <span class="FontMediumSmaller Cyan" style={textStyle(84.234184, ROW_2_TOP)}>
         {this.text}
-      </text>
+      </span>
     );
   }
 }
@@ -1205,17 +1303,16 @@ class BC1Cell extends ShowForSecondsComponent<CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <path
+      <div>
+        <div
           ref={this.modeChangedPathRef}
-          class="NormalStroke White"
-          visibility="hidden"
-          d="m50.178 1.8143h35.174v6.0476h-35.174z"
+          class="White"
+          style={`${boxStyle(50.178, ROW_1_TOP, 35.174, ROW_HEIGHT)} visibility: hidden;`}
         />
-        <text class="FontMedium MiddleAlign Green" x="67.9795" y="6.8893085">
+        <span class="FontMedium Green" style={textStyle(67.9795, ROW_1_TOP)}>
           {this.text}
-        </text>
-      </g>
+        </span>
+      </div>
     );
   }
 }
@@ -1223,7 +1320,7 @@ class BC1Cell extends ShowForSecondsComponent<CellProps> {
 class BC3Cell extends DisplayComponent<{
   readonly BC3Message: Subscribable<BC3Messages>;
 }> {
-  private bc3Cell = FSComponent.createRef<SVGTextElement>();
+  private bc3Cell = FSComponent.createRef<HTMLSpanElement>();
 
   private classNameSub = Subject.create('');
 
@@ -1301,12 +1398,8 @@ class BC3Cell extends DisplayComponent<{
 
   private fillBC3Cell() {
     const [text, className] = this.getBC3MessageText(this.props.BC3Message.get());
-    this.classNameSub.set(`FontMedium MiddleAlign ${className}`);
-    if (text !== null) {
-      this.bc3Cell.instance.innerHTML = text;
-    } else {
-      this.bc3Cell.instance.innerHTML = '';
-    }
+    this.classNameSub.set(`FontMedium ${className}`);
+    this.bc3Cell.instance.textContent = text ?? '';
   }
 
   onAfterRender(node: VNode): void {
@@ -1318,15 +1411,11 @@ class BC3Cell extends DisplayComponent<{
   }
 
   render(): VNode {
-    return <text ref={this.bc3Cell} class={this.classNameSub} x="68.087875" y="21.627102" style="white-space: pre" />;
+    return <span ref={this.bc3Cell} class={this.classNameSub} style={textStyle(68.087875, ROW_3_TOP)} />;
   }
 }
 
 class D1D2Cell extends ShowForSecondsComponent<CellProps> {
-  private static readonly FiveCharactersPerLineSingleLineModeChangePath = 'm108.1 1.8143h19.994v6.0476h-19.994z';
-  private static readonly SixCharactersPerLineTwoLinesModeChangePath = 'm107.1 1.8143h22.994v13.506h-22.994z';
-  private static readonly FourCharactersPerLineTwoLinesModeChangePath = 'm110.1 1.8143h15.994v13.506h-15.994z';
-
   private sub = this.props.bus.getSubscriber<
     PrimFgBusBaseEvents & FcdcBusBaseEvents & FcuEfisCpBusEvents & PFDSimvars
   >();
@@ -1407,24 +1496,25 @@ class D1D2Cell extends ShowForSecondsComponent<CellProps> {
     }
   });
 
-  private readonly modeChangePath = this.D1D2Message.map((message) => {
+  /** [left, width, height] of the mode-change box in viewBox units, per message. */
+  private readonly modeChangeBoxGeometry = this.D1D2Message.map((message): [number, number, number] => {
     if (
       message == D1D2Messages.LAND_1 ||
       message == D1D2Messages.APPR_1 ||
       message == D1D2Messages.LAND_2 ||
       message == D1D2Messages.F_APP
     ) {
-      return D1D2Cell.FiveCharactersPerLineSingleLineModeChangePath;
+      return [108.1, 19.994, ROW_HEIGHT];
     } else if (
       message == D1D2Messages.LAND_3_DUAL ||
       message == D1D2Messages.LAND_3_SINGLE ||
       message == D1D2Messages.F_APP_RAW
     ) {
-      return D1D2Cell.SixCharactersPerLineTwoLinesModeChangePath;
+      return [107.1, 22.994, 13.506];
     } else if (message == D1D2Messages.RAW_ONLY) {
-      return D1D2Cell.FourCharactersPerLineTwoLinesModeChangePath;
+      return [110.1, 15.994, 13.506];
     } else {
-      return '';
+      return [108.1, 19.994, ROW_HEIGHT];
     }
   });
 
@@ -1448,15 +1538,28 @@ class D1D2Cell extends ShowForSecondsComponent<CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <text class="FontMedium MiddleAlign White" x="118.45866" y="7.125926">
+      <div>
+        <span class="FontMedium White" style={textStyle(118.45866, ROW_1_TOP)}>
           {this.text1Sub}
-        </text>
-        <text class="FontMedium MiddleAlign White" x="118.39752" y="14.289783">
+        </span>
+        <span class="FontMedium White" style={textStyle(118.39752, ROW_2_TOP)}>
           {this.text2Sub}
-        </text>
-        <path ref={this.modeChangedPathRef} d={this.modeChangePath} class="NormalStroke White" visibility="hidden" />
-      </g>
+        </span>
+        <div
+          ref={this.modeChangedPathRef}
+          class="White"
+          style={{
+            position: 'absolute',
+            left: this.modeChangeBoxGeometry.map(([x]) => `${px(x)}px`),
+            top: `${px(ROW_1_TOP)}px`,
+            width: this.modeChangeBoxGeometry.map(([, w]) => `${px(w)}px`),
+            height: this.modeChangeBoxGeometry.map(([, , h]) => `${px(h)}px`),
+            border: BOX_BORDER,
+            'box-sizing': 'border-box',
+            visibility: 'hidden',
+          }}
+        />
+      </div>
     );
   }
 }
@@ -1470,8 +1573,6 @@ enum MdaMode {
 
 class D3Cell extends DisplayComponent<{ bus: ArincEventBus }> {
   private readonly sub = this.props.bus.getArincSubscriber<PFDSimvars & Arinc429Values>();
-
-  private readonly textRef = FSComponent.createRef<SVGTextElement>();
 
   /** bit 29 is NO DH selection */
   private readonly fmEisDiscrete2 = Arinc429LocalVarConsumerSubject.create(this.sub.on('fmEisDiscreteWord2Raw'));
@@ -1518,38 +1619,40 @@ class D3Cell extends DisplayComponent<{ bus: ArincEventBus }> {
     this.dh,
     this.mda,
   );
-  private readonly DhModexPos = MappedSubject.create(
-    ([noDhSelected]) => (noDhSelected ? 118.38384 : 103.47),
-    this.noDhSelected,
-  );
-
-  onAfterRender(node: VNode): void {
-    super.onAfterRender(node);
-  }
 
   render(): VNode {
     return (
-      <text
-        ref={this.textRef}
-        class={{
-          FontSmallest: this.noDhSelected.map(SubscribableMapFunctions.not()),
-          StartAlign: this.noDhSelected.map(SubscribableMapFunctions.not()),
-          FontMedium: this.noDhSelected,
-          MiddleAlign: this.noDhSelected,
-          White: true,
-        }}
-        x={this.DhModexPos}
-        y="21.104172"
-      >
-        <tspan>{this.mdaDhMode}</tspan>
-        <tspan
-          class={{ EndAlign: true, Cyan: true, HiddenElement: this.mdaDhValueText.map((v) => v.length <= 0) }}
-          x="133.425"
-          y="21.104172"
+      <div>
+        <span
+          class={{
+            FontSmallest: this.noDhSelected.map(SubscribableMapFunctions.not()),
+            FontMedium: this.noDhSelected,
+            White: true,
+          }}
+          style={{
+            position: 'absolute',
+            left: this.noDhSelected.map((noDh) => `${px(noDh ? 118.38384 : 103.47)}px`),
+            top: `${px(ROW_3_TOP)}px`,
+            height: `${px(ROW_HEIGHT)}px`,
+            display: 'flex',
+            'align-items': 'center',
+            'white-space': 'pre',
+            transform: this.noDhSelected.map((noDh) => (noDh ? 'translateX(-50%)' : 'none')),
+          }}
+        >
+          {this.mdaDhMode}
+        </span>
+        <span
+          class={{
+            FontSmallest: true,
+            Cyan: true,
+            HiddenElement: this.mdaDhValueText.map((v) => v.length <= 0),
+          }}
+          style={textStyle(133.425, ROW_3_TOP, 'end')}
         >
           {this.mdaDhValueText}
-        </tspan>
-      </text>
+        </span>
+      </div>
     );
   }
 }
@@ -1595,17 +1698,16 @@ class E1Cell extends ShowForSecondsComponent<CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <path
+      <div>
+        <div
           ref={this.modeChangedPathRef}
-          visibility="hidden"
-          class="NormalStroke White"
-          d="m156.13 1.8143v6.0476h-20.81v-6.0476z"
+          class="White"
+          style={`${boxStyle(135.32, ROW_1_TOP, 20.81, ROW_HEIGHT)} visibility: hidden;`}
         />
-        <text class="FontMedium MiddleAlign White" x="145.61546" y="6.9559975">
+        <span class="FontMedium White" style={textStyle(145.61546, ROW_1_TOP)}>
           {this.textSub}
-        </text>
-      </g>
+        </span>
+      </div>
     );
   }
 }
@@ -1653,17 +1755,16 @@ class E2Cell extends ShowForSecondsComponent<CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <path
+      <div>
+        <div
           ref={this.modeChangedPathRef}
-          d="m156.13 9.0715v6.0476h-20.81v-6.0476z"
-          visibility="hidden"
-          class="NormalStroke White"
+          class="White"
+          style={`${boxStyle(135.32, ROW_2_TOP, 20.81, ROW_HEIGHT)} visibility: hidden;`}
         />
-        <text class="FontMedium MiddleAlign White" x="145.95045" style="word-spacing: -1.9844px" y="14.417698">
+        <span class="FontMedium White" style={`${textStyle(145.95045, ROW_2_TOP)} word-spacing: -9.6px;`}>
           {this.textSub}
-        </text>
-      </g>
+        </span>
+      </div>
     );
   }
 }
@@ -1682,9 +1783,9 @@ class E3Cell extends ShowForSecondsComponent<CellProps> {
       this.isShown = true;
       if (athrEngaged && athrActive) {
         this.isShown = false;
-        return 'FontMedium MiddleAlign White';
+        return 'FontMedium White';
       } else if (athrEngaged) {
-        return 'FontMedium MiddleAlign Cyan';
+        return 'FontMedium Cyan';
       } else {
         this.isShown = false;
         return 'HiddenElement';
@@ -1708,17 +1809,16 @@ class E3Cell extends ShowForSecondsComponent<CellProps> {
 
   render(): VNode {
     return (
-      <g>
-        <path
+      <div>
+        <div
           ref={this.modeChangedPathRef}
-          class="NormalStroke White"
-          visibility="hidden"
-          d="m135.32 16.329h20.81v6.0476h-20.81z"
+          class="White"
+          style={`${boxStyle(135.32, ROW_3_TOP, 20.81, ROW_HEIGHT)} visibility: hidden;`}
         />
-        <text class={this.classSub} x="145.75578" y="21.434536">
+        <span class={this.classSub} style={textStyle(145.75578, ROW_3_TOP)}>
           A/THR
-        </text>
-      </g>
+        </span>
+      </div>
     );
   }
 }

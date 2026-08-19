@@ -74,6 +74,82 @@
   width: 768px;
   height: 120.95px; // 25 viewBox units
   font-family: "Ecam", monospace !important;
+
+  .FontLarge {
+    font-size: 31.45px;
+  }
+
+  .FontMedium {
+    font-size: 29.03px;
+  }
+
+  .FontIntermediate {
+    font-size: 26.61px;
+  }
+
+  .FontMediumSmaller {
+    font-size: 26.12px;
+  }
+
+  .FontSmall {
+    font-size: 24.19px;
+  }
+
+  .FontSmallest {
+    font-size: 21.77px;
+  }
+
+  .White {
+    color: $display-white;
+    border-color: $display-white;
+  }
+
+  .Green {
+    color: $display-green;
+    border-color: $display-green;
+  }
+
+  .Cyan {
+    color: $display-cyan;
+    border-color: $display-cyan;
+  }
+
+  .Amber {
+    color: $display-amber;
+    border-color: $display-amber;
+  }
+
+  .Magenta {
+    color: $display-magenta;
+    border-color: $display-magenta;
+  }
+
+  .DimmedCyan {
+    color: scale-color($display-cyan, $lightness: -30%);
+  }
+
+  .None {
+    border-color: transparent;
+  }
+
+  .FmaSeparator {
+    position: absolute;
+    top: 1.63px; // 0.33732 viewBox units
+    width: 2.9px;
+    background-color: $display-grey;
+  }
+
+  // colour-based variant of the SVG fill-pulsing animation
+  .PulseAmber9Seconds {
+    animation: fma-amber-color-pulse 1s 9;
+  }
+
+  // The FMA text spans carry `display: flex` in their inline style (for vertical centering),
+  // which would beat the global class rule — !important is required so class-based hiding
+  // (including FlashOneHertz's flash-off state) still works on them
+  .HiddenElement {
+    display: none !important;
+  }
 }
 
 // HTML layer for the mach readout / MACH failed flag (bottom left, see SpeedIndicator.tsx).
