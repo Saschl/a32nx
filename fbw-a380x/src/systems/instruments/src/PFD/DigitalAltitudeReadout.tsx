@@ -323,6 +323,7 @@ class Drum extends DisplayComponent<DrumProperties> {
       highestValue -= this.props.valueSpacing;
     }
 
+    const colorChanged = this.color !== this.appliedColor;
     for (let i = 0; i < this.props.amount; i++) {
       let elementVal = highestValue - i * this.props.valueSpacing;
       const elementPosition = highestPosition - i * this.props.valueSpacing;
@@ -337,8 +338,12 @@ class Drum extends DisplayComponent<DrumProperties> {
       if (this.digitRefElements[i].instance.textContent !== text) {
         this.digitRefElements[i].instance.textContent = text;
       }
-      this.digitRefElements[i].instance.classList.replace('Green', this.color);
-      this.digitRefElements[i].instance.classList.replace('Amber', this.color);
+      if (colorChanged) {
+        this.digitRefElements[i].instance.classList.replace(this.appliedColor, this.color);
+      }
+    }
+    if (colorChanged) {
+      this.appliedColor = this.color;
     }
   }
 
@@ -347,6 +352,8 @@ class Drum extends DisplayComponent<DrumProperties> {
   private value = 0;
 
   private color = 'Green';
+
+  private appliedColor = 'Green';
 
   private showZero = true;
 

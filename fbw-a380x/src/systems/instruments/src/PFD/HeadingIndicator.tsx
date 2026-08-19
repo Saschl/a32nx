@@ -230,19 +230,24 @@ interface GroundTrackBugProps {
 class GroundTrackBug extends DisplayComponent<GroundTrackBugProps> {
   private trackIndicator = FSComponent.createRef<SVGGElement>();
 
+  private lastOffset = NaN;
+
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
     const sub = this.props.bus.getSubscriber<Arinc429Values>();
 
+    // groundTrackAr fires on effectively every frame; only write the transform when the
+    // rounded position actually changed
     sub.on('groundTrackAr').handle((groundTrack) => {
-      //  if (groundTrack.isNormalOperation()) {
-      const offset = (getSmallestAngle(groundTrack.value, this.props.heading.get()) * DistanceSpacing) / ValueSpacing;
-      this.trackIndicator.instance.style.display = 'inline';
-      this.trackIndicator.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
-      //   } else {
-      //       this.trackIndicator.instance.style.display = 'none';
-      //   }
+      const offset =
+        Math.round(
+          ((getSmallestAngle(groundTrack.value, this.props.heading.get()) * DistanceSpacing) / ValueSpacing) * 100,
+        ) / 100;
+      if (offset !== this.lastOffset) {
+        this.lastOffset = offset;
+        this.trackIndicator.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
+      }
     });
   }
 
@@ -277,67 +282,52 @@ class QFUIndicator extends DisplayComponent<{
 
   private text = Subject.create('');
 
+  private lastPointerOffset = NaN;
+
+  // Runs on every heading change (effectively every frame while LS is shown), so DOM writes
+  // are deduped against the previous state
+  private updatePointer() {
+    if (this.ilsCourse < 0) {
+      this.qfuContainer.instance.classList.add('HiddenElement');
+    } else if (this.lsPressed) {
+      this.qfuContainer.instance.classList.remove('HiddenElement');
+      const delta = getSmallestAngle(this.ilsCourse, this.heading);
+      if (Math.abs(delta) > DisplayRange) {
+        if (delta > 0) {
+          this.ilsCourseRight.instance.classList.remove('HiddenElement');
+          this.ilsCourseLeft.instance.classList.add('HiddenElement');
+          this.ilsCoursePointer.instance.classList.add('HiddenElement');
+        } else {
+          this.ilsCourseLeft.instance.classList.remove('HiddenElement');
+          this.ilsCourseRight.instance.classList.add('HiddenElement');
+          this.ilsCoursePointer.instance.classList.add('HiddenElement');
+        }
+      } else {
+        const offset = Math.round(((delta * DistanceSpacing) / ValueSpacing) * 100) / 100;
+        if (offset !== this.lastPointerOffset) {
+          this.lastPointerOffset = offset;
+          this.ilsCoursePointer.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
+        }
+        this.ilsCoursePointer.instance.classList.remove('HiddenElement');
+        this.ilsCourseRight.instance.classList.add('HiddenElement');
+        this.ilsCourseLeft.instance.classList.add('HiddenElement');
+      }
+    }
+  }
+
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
     this.props.heading.sub((h) => {
       this.heading = h;
-
-      const delta = getSmallestAngle(this.ilsCourse, this.heading);
-      this.text.set(Math.round(this.ilsCourse).toString().padStart(3, '0'));
-
-      if (this.ilsCourse < 0) {
-        this.qfuContainer.instance.classList.add('HiddenElement');
-      } else if (this.lsPressed) {
-        this.qfuContainer.instance.classList.remove('HiddenElement');
-        if (Math.abs(delta) > DisplayRange) {
-          if (delta > 0) {
-            this.ilsCourseRight.instance.classList.remove('HiddenElement');
-            this.ilsCourseLeft.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          } else {
-            this.ilsCourseLeft.instance.classList.remove('HiddenElement');
-            this.ilsCourseRight.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          }
-        } else {
-          const offset = (getSmallestAngle(this.ilsCourse, this.heading) * DistanceSpacing) / ValueSpacing;
-          this.ilsCoursePointer.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
-          this.ilsCoursePointer.instance.classList.remove('HiddenElement');
-          this.ilsCourseRight.instance.classList.add('HiddenElement');
-          this.ilsCourseLeft.instance.classList.add('HiddenElement');
-        }
-      }
+      this.updatePointer();
     });
 
     this.props.ILSCourse.sub((c) => {
       this.ilsCourse = c;
-
-      const delta = getSmallestAngle(this.ilsCourse, this.heading);
+      // the QFU readout only depends on the course, not on the heading
       this.text.set(Math.round(this.ilsCourse).toString().padStart(3, '0'));
-
-      if (c < 0) {
-        this.qfuContainer.instance.classList.add('HiddenElement');
-      } else if (this.lsPressed) {
-        this.qfuContainer.instance.classList.remove('HiddenElement');
-        if (Math.abs(delta) > DisplayRange) {
-          if (delta > 0) {
-            this.ilsCourseRight.instance.classList.remove('HiddenElement');
-            this.ilsCourseLeft.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          } else {
-            this.ilsCourseLeft.instance.classList.remove('HiddenElement');
-            this.ilsCourseRight.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          }
-        } else {
-          const offset = (getSmallestAngle(this.ilsCourse, this.heading) * DistanceSpacing) / ValueSpacing;
-          this.ilsCoursePointer.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
-          this.ilsCoursePointer.instance.classList.remove('HiddenElement');
-          this.ilsCourseRight.instance.classList.add('HiddenElement');
-          this.ilsCourseLeft.instance.classList.add('HiddenElement');
-        }
-      }
+      this.updatePointer();
     });
 
     this.props.lsPressed.sub((ls) => {

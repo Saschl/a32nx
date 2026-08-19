@@ -5,8 +5,9 @@ import { getDisplayIndex } from '../PFD';
 
 import {
   Arinc429LocalVarConsumerSubject,
+  Arinc429Register,
   Arinc429RegisterSubject,
-  Arinc429Word,
+  Arinc429WordData,
   MathUtils,
 } from '@flybywiresim/fbw-sdk';
 import {
@@ -23,43 +24,46 @@ import { PFDSimvars } from './PFDSimvarPublisher';
 import { FcuEfisCpBusEvents } from '@shared/publishers/EfisCpBusPublisher';
 
 export interface Arinc429Values {
-  pitchAr: Arinc429Word;
-  rollAr: Arinc429Word;
+  pitchAr: Arinc429WordData;
+  rollAr: Arinc429WordData;
 
   /** The "displayed altitude" in feet. It's baro corrected for QFE/QNH modes, otherwise pressure alt. */
-  altitudeAr: Arinc429Word;
+  altitudeAr: Arinc429WordData;
 
-  groundTrackAr: Arinc429Word;
-  headingAr: Arinc429Word;
-  speedAr: Arinc429Word;
-  machAr: Arinc429Word;
-  vs: Arinc429Word;
-  gs: Arinc429Word;
-  chosenRa: Arinc429Word;
-  fpa: Arinc429Word;
-  da: Arinc429Word;
-  landingElevation: Arinc429Word;
-  staticPressure: Arinc429Word;
+  groundTrackAr: Arinc429WordData;
+  headingAr: Arinc429WordData;
+  speedAr: Arinc429WordData;
+  machAr: Arinc429WordData;
+  vs: Arinc429WordData;
+  chosenRa: Arinc429WordData;
+  fpa: Arinc429WordData;
+  da: Arinc429WordData;
+  landingElevation: Arinc429WordData;
+  staticPressure: Arinc429WordData;
   fmEisDiscreteWord1Raw: number;
   fmEisDiscreteWord2Raw: number;
   fmMdaRaw: number;
   fmDhRaw: number;
   fmTransAltRaw: number;
   fmTransLvlRaw: number;
-  lgciuDiscreteWord1: Arinc429Word;
+  lgciuDiscreteWord1: Arinc429WordData;
 }
 export class ArincValueProvider implements Instrument {
   private readonly sub = this.bus.getSubscriber<FcuEfisCpBusEvents & ClockEvents & PFDSimvars>();
 
-  private roll = new Arinc429Word(0);
+  // The registers below are mutated in place and published by reference on every incoming raw
+  // event: allocating a fresh Arinc429Word per frame for each continuous topic causes GC pauses
+  // in Coherent. Consumers must not rely on payload object identity (use Arinc429ConsumerSubject
+  // or the .withArinc429Precision()/.whenArinc429Changed() filters, which compare by value).
+  private readonly roll = Arinc429Register.empty();
 
-  private pitch = new Arinc429Word(0);
+  private readonly pitch = Arinc429Register.empty();
 
-  private groundTrack = new Arinc429Word(0);
+  private readonly groundTrack = Arinc429Register.empty();
 
-  private heading = new Arinc429Word(0);
+  private readonly heading = Arinc429Register.empty();
 
-  private speed = new Arinc429Word(0);
+  private readonly speed = Arinc429Register.empty();
 
   /** Displayed altitude. */
   private readonly altitude = Arinc429RegisterSubject.createEmpty();
@@ -75,31 +79,29 @@ export class ArincValueProvider implements Instrument {
 
   private readonly fcuEisDiscreteWord2 = Arinc429LocalVarConsumerSubject.create(null);
 
-  private mach = new Arinc429Word(0);
+  private readonly mach = Arinc429Register.empty();
 
-  private vsInert = new Arinc429Word(0);
+  private readonly vsInert = Arinc429Register.empty();
 
-  private vsBaro = new Arinc429Word(0);
+  private readonly vsBaro = Arinc429Register.empty();
 
-  private groundSpeed = new Arinc429Word(0);
+  private readonly radioAltitude1 = Arinc429Register.empty();
 
-  private radioAltitude1 = new Arinc429Word(0);
+  private readonly radioAltitude2 = Arinc429Register.empty();
 
-  private radioAltitude2 = new Arinc429Word(0);
+  private readonly radioAltitude3 = Arinc429Register.empty();
 
-  private radioAltitude3 = new Arinc429Word(0);
+  private readonly fpa = Arinc429Register.empty();
 
-  private fpa = new Arinc429Word(0);
+  private readonly da = Arinc429Register.empty();
 
-  private da = new Arinc429Word(0);
+  private readonly ownLandingElevation = Arinc429Register.empty();
 
-  private ownLandingElevation = new Arinc429Word(0);
+  private readonly oppLandingElevation = Arinc429Register.empty();
 
-  private oppLandingElevation = new Arinc429Word(0);
+  private readonly staticPressure = Arinc429Register.empty();
 
-  private staticPressure = new Arinc429Word(0);
-
-  private lgciuDiscreteWord1 = new Arinc429Word(0);
+  private readonly lgciuDiscreteWord1 = Arinc429Register.empty();
 
   private readonly fm1Healthy = ConsumerSubject.create(null, 0);
 
@@ -129,24 +131,24 @@ export class ArincValueProvider implements Instrument {
     const subscriber = this.bus.getSubscriber<PFDSimvars>();
 
     subscriber.on('pitch').handle((p) => {
-      this.pitch = new Arinc429Word(p);
+      this.pitch.set(p);
       publisher.pub('pitchAr', this.pitch);
     });
     subscriber.on('roll').handle((p) => {
-      this.roll = new Arinc429Word(p);
+      this.roll.set(p);
       publisher.pub('rollAr', this.roll);
     });
     subscriber.on('groundTrack').handle((gt) => {
-      this.groundTrack = new Arinc429Word(gt);
+      this.groundTrack.set(gt);
       publisher.pub('groundTrackAr', this.groundTrack);
     });
     subscriber.on('heading').handle((h) => {
-      this.heading = new Arinc429Word(h);
+      this.heading.set(h);
       publisher.pub('headingAr', this.heading);
     });
 
     subscriber.on('speed').handle((s) => {
-      this.speed = new Arinc429Word(s);
+      this.speed.set(s);
       publisher.pub('speedAr', this.speed);
     });
 
@@ -164,12 +166,12 @@ export class ArincValueProvider implements Instrument {
     }, true);
 
     subscriber.on('mach').handle((m) => {
-      this.mach = new Arinc429Word(m);
+      this.mach.set(m);
       publisher.pub('machAr', this.mach);
     });
 
     subscriber.on('vsInert').handle((ivs) => {
-      this.vsInert = new Arinc429Word(ivs);
+      this.vsInert.set(ivs);
 
       if (this.vsInert.isNormalOperation()) {
         publisher.pub('vs', this.vsInert);
@@ -177,58 +179,53 @@ export class ArincValueProvider implements Instrument {
     });
 
     subscriber.on('vsBaro').handle((vsb) => {
-      this.vsBaro = new Arinc429Word(vsb);
+      this.vsBaro.set(vsb);
       if (!this.vsInert.isNormalOperation()) {
         publisher.pub('vs', this.vsBaro);
       }
     });
 
-    subscriber.on('groundSpeed').handle((gs) => {
-      this.groundSpeed = new Arinc429Word(gs);
-      publisher.pub('gs', this.groundSpeed);
-    });
-
     subscriber.on('radioAltitude1').handle((ra) => {
-      this.radioAltitude1 = new Arinc429Word(ra);
+      this.radioAltitude1.set(ra);
       this.determineAndPublishChosenRadioAltitude(publisher);
     });
 
     subscriber.on('radioAltitude2').handle((ra) => {
-      this.radioAltitude2 = new Arinc429Word(ra);
+      this.radioAltitude2.set(ra);
       this.determineAndPublishChosenRadioAltitude(publisher);
     });
 
     subscriber.on('radioAltitude3').handle((ra) => {
-      this.radioAltitude3 = new Arinc429Word(ra);
+      this.radioAltitude3.set(ra);
       this.determineAndPublishChosenRadioAltitude(publisher);
     });
 
     subscriber.on('fpaRaw').handle((fpa) => {
-      this.fpa = new Arinc429Word(fpa);
+      this.fpa.set(fpa);
       publisher.pub('fpa', this.fpa);
     });
 
     subscriber.on('daRaw').handle((da) => {
-      this.da = new Arinc429Word(da);
+      this.da.set(da);
       publisher.pub('da', this.da);
     });
 
     subscriber.on('landingElevation1Raw').handle((elevation) => {
       if (getDisplayIndex() === 1) {
-        this.ownLandingElevation = new Arinc429Word(elevation);
+        this.ownLandingElevation.set(elevation);
       } else {
-        this.oppLandingElevation = new Arinc429Word(elevation);
+        this.oppLandingElevation.set(elevation);
       }
       this.determineAndPublishChosenLandingElevation(publisher);
     });
 
     subscriber.on('staticPressureRaw').handle((sp) => {
-      this.staticPressure = new Arinc429Word(sp);
+      this.staticPressure.set(sp);
       publisher.pub('staticPressure', this.staticPressure);
     });
 
     subscriber.on('lgciuDiscreteWord1Raw').handle((word) => {
-      this.lgciuDiscreteWord1 = new Arinc429Word(word);
+      this.lgciuDiscreteWord1.set(word);
       publisher.pub('lgciuDiscreteWord1', this.lgciuDiscreteWord1);
     });
 
@@ -267,68 +264,79 @@ export class ArincValueProvider implements Instrument {
     this.altitude.setValueSsm(this.altitudeFilter.last() ?? 0, this.unfilteredAltitude.get().ssm);
   }
 
-  private determineAndPublishChosenRadioAltitude(publisher: Publisher<Arinc429Values>) {
-    const validRaMap = [this.radioAltitude1, this.radioAltitude2, this.radioAltitude3].map(
-      (ra) => !ra.isFailureWarning() && !ra.isNoComputedData(),
-    );
-    const validCount = validRaMap.filter((x) => !!x).length;
+  /** Value-median of the three radio altimeters; ties resolve like a stable sort (prefers RA2, then RA3). */
+  private medianRadioAltitude(): Arinc429Register {
+    const v1 = this.radioAltitude1.value;
+    const v2 = this.radioAltitude2.value;
+    const v3 = this.radioAltitude3.value;
 
-    let chosenRas = [this.radioAltitude1, this.radioAltitude2]; // Default: 1 gets 1, 2 gets 2
+    if ((v2 >= v1 && v2 <= v3) || (v2 <= v1 && v2 >= v3)) {
+      return this.radioAltitude2;
+    }
+    if ((v3 >= v1 && v3 <= v2) || (v3 <= v1 && v3 >= v2)) {
+      return this.radioAltitude3;
+    }
+    return this.radioAltitude1;
+  }
+
+  private determineAndPublishChosenRadioAltitude(publisher: Publisher<Arinc429Values>) {
+    // Runs on every RA event below ~5000 ft AGL, so it is kept allocation-free on purpose
+    const ra1Valid = !this.radioAltitude1.isFailureWarning() && !this.radioAltitude1.isNoComputedData();
+    const ra2Valid = !this.radioAltitude2.isFailureWarning() && !this.radioAltitude2.isNoComputedData();
+    const ra3Valid = !this.radioAltitude3.isFailureWarning() && !this.radioAltitude3.isNoComputedData();
+    const validCount = (ra1Valid ? 1 : 0) + (ra2Valid ? 1 : 0) + (ra3Valid ? 1 : 0);
+
+    // Default: PFD 1 gets RA 1, PFD 2 gets RA 2
+    let chosenRaCapt: Arinc429Register = this.radioAltitude1;
+    let chosenRaFo: Arinc429Register = this.radioAltitude2;
     if (validCount === 3) {
       // pick the median
-      const heights = [this.radioAltitude1, this.radioAltitude2, this.radioAltitude3].sort((a, b) => a.value - b.value);
-      chosenRas = [heights[1], heights[1]];
+      const median = this.medianRadioAltitude();
+      chosenRaCapt = median;
+      chosenRaFo = median;
     } else if (validCount === 2) {
-      if (!validRaMap[0]) {
+      if (!ra1Valid) {
         // fail PFD 1 to RA 3
-        chosenRas = [this.radioAltitude3, this.radioAltitude2];
-      } else if (!validRaMap[1]) {
+        chosenRaCapt = this.radioAltitude3;
+      } else if (!ra2Valid) {
         // fail PFD 2 to RA 3
-        chosenRas = [this.radioAltitude1, this.radioAltitude3];
+        chosenRaFo = this.radioAltitude3;
       }
       // otherwise stick with the default (PFD 1 to 1, PFD 2 to 2)
     } else if (validCount === 1) {
-      if (validRaMap[0]) {
-        // both get RA 1
-        chosenRas = [this.radioAltitude1, this.radioAltitude1];
-      } else if (validRaMap[1]) {
-        // both get RA 2
-        chosenRas = [this.radioAltitude2, this.radioAltitude2];
-      } else {
-        // both get RA 3
-        chosenRas = [this.radioAltitude3, this.radioAltitude3];
-      }
+      // both get the only valid RA
+      const onlyValid = ra1Valid ? this.radioAltitude1 : ra2Valid ? this.radioAltitude2 : this.radioAltitude3;
+      chosenRaCapt = onlyValid;
+      chosenRaFo = onlyValid;
     } else {
       // at this point all have either NCD or FW
       // try to fail back a bit more intelligently around FWs to prioritize NCDs
-      const nonFailedMap = [this.radioAltitude1, this.radioAltitude2, this.radioAltitude3].map(
-        (ra) => !ra.isFailureWarning(),
-      );
-      const nonFailedCount = nonFailedMap.filter((x) => !!x).length;
+      const ra1NotFailed = !this.radioAltitude1.isFailureWarning();
+      const ra2NotFailed = !this.radioAltitude2.isFailureWarning();
+      const ra3NotFailed = !this.radioAltitude3.isFailureWarning();
+      const nonFailedCount = (ra1NotFailed ? 1 : 0) + (ra2NotFailed ? 1 : 0) + (ra3NotFailed ? 1 : 0);
       if (nonFailedCount === 2) {
-        if (!nonFailedMap[0]) {
+        if (!ra1NotFailed) {
           // fail PFD 1 to RA 3
-          chosenRas = [this.radioAltitude3, this.radioAltitude2];
-        } else if (!nonFailedMap[1]) {
+          chosenRaCapt = this.radioAltitude3;
+        } else if (!ra2NotFailed) {
           // fail PFD 2 to RA 3
-          chosenRas = [this.radioAltitude1, this.radioAltitude3];
+          chosenRaFo = this.radioAltitude3;
         }
       } else if (nonFailedCount === 1) {
-        if (nonFailedMap[0]) {
-          // both get RA 1
-          chosenRas = [this.radioAltitude1, this.radioAltitude1];
-        } else if (nonFailedMap[1]) {
-          // both get RA 2
-          chosenRas = [this.radioAltitude2, this.radioAltitude2];
-        } else {
-          // both get RA 3
-          chosenRas = [this.radioAltitude3, this.radioAltitude3];
-        }
+        // both get the only non-failed RA
+        const onlyNotFailed = ra1NotFailed
+          ? this.radioAltitude1
+          : ra2NotFailed
+            ? this.radioAltitude2
+            : this.radioAltitude3;
+        chosenRaCapt = onlyNotFailed;
+        chosenRaFo = onlyNotFailed;
       }
       // don't do anything in case of 3 FWs or 0 FWs and stick to the default
     }
 
-    publisher.pub('chosenRa', getDisplayIndex() === 1 ? chosenRas[0] : chosenRas[1]);
+    publisher.pub('chosenRa', getDisplayIndex() === 1 ? chosenRaCapt : chosenRaFo);
   }
 
   private determineAndPublishChosenLandingElevation(publisher: Publisher<Arinc429Values>) {
