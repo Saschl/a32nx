@@ -142,7 +142,11 @@ class LandingSystemInfo extends DisplayComponent<{ bus: EventBus; isVisible: Sub
 
   private dmeVisibilitySub = Subject.create('hidden');
 
-  private destRef = FSComponent.createRef<SVGTextElement>();
+  private lastDistDisplayed = NaN;
+
+  private readonly dmeDistLeadingRef = FSComponent.createRef<SVGTSpanElement>();
+
+  private readonly dmeDistTrailingRef = FSComponent.createRef<SVGTSpanElement>();
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
@@ -154,7 +158,7 @@ class LandingSystemInfo extends DisplayComponent<{ bus: EventBus; isVisible: Sub
       .whenChanged()
       .handle((hasDme) => {
         this.hasDme = hasDme;
-        this.updateContents();
+        this.updateDmeText();
       });
 
     sub
@@ -162,7 +166,6 @@ class LandingSystemInfo extends DisplayComponent<{ bus: EventBus; isVisible: Sub
       .whenChanged()
       .handle((navIdent) => {
         this.identText.set(navIdent);
-        this.updateContents();
       });
 
     sub
@@ -170,7 +173,7 @@ class LandingSystemInfo extends DisplayComponent<{ bus: EventBus; isVisible: Sub
       .whenChanged()
       .handle((navFreq) => {
         this.navFreq = navFreq;
-        this.updateContents();
+        this.updateFreqText();
       });
 
     sub
@@ -178,11 +181,11 @@ class LandingSystemInfo extends DisplayComponent<{ bus: EventBus; isVisible: Sub
       .whenChanged()
       .handle((dme) => {
         this.dme = dme;
-        this.updateContents();
+        this.updateDmeText();
       });
   }
 
-  private updateContents() {
+  private updateFreqText() {
     const freqTextSplit = (Math.round(this.navFreq * 1000) / 1000).toString().split('.');
     this.freqTextLeading.set(freqTextSplit[0] === '0' ? '' : freqTextSplit[0]);
     if (freqTextSplit[1]) {
@@ -190,26 +193,28 @@ class LandingSystemInfo extends DisplayComponent<{ bus: EventBus; isVisible: Sub
     } else {
       this.freqTextTrailing.set('');
     }
+  }
 
-    let distLeading = '';
-    let distTrailing = '';
+  // dme changes on effectively every frame while receiving; only rebuild the text when the
+  // displayed (0.1 NM) value changed
+  private updateDmeText() {
     if (this.hasDme) {
       this.dmeVisibilitySub.set('display: inline');
       const dist = Math.round(this.dme * 10) / 10;
-
-      if (dist < 20) {
-        const distSplit = dist.toString().split('.');
-
-        distLeading = distSplit[0];
-        distTrailing = `.${distSplit.length > 1 ? distSplit[1] : '0'}`;
-      } else {
-        distLeading = Math.round(dist).toString();
-        distTrailing = '';
+      if (dist !== this.lastDistDisplayed) {
+        this.lastDistDisplayed = dist;
+        if (dist < 20) {
+          const distSplit = dist.toString().split('.');
+          this.dmeDistLeadingRef.instance.textContent = distSplit[0];
+          this.dmeDistTrailingRef.instance.textContent = `.${distSplit.length > 1 ? distSplit[1] : '0'}`;
+        } else {
+          this.dmeDistLeadingRef.instance.textContent = Math.round(dist).toString();
+          this.dmeDistTrailingRef.instance.textContent = '';
+        }
       }
-      // eslint-disable-next-line max-len
-      this.destRef.instance.innerHTML = `<tspan id="ILSDistLeading" class="FontLarge StartAlign">${distLeading}</tspan><tspan id="ILSDistTrailing" class="FontSmallest StartAlign">${distTrailing}</tspan>`;
     } else {
       this.dmeVisibilitySub.set('display: none');
+      this.lastDistDisplayed = NaN;
     }
   }
 
@@ -227,7 +232,10 @@ class LandingSystemInfo extends DisplayComponent<{ bus: EventBus; isVisible: Sub
         </text>
 
         <g id="ILSDistGroup" style={this.dmeVisibilitySub}>
-          <text ref={this.destRef} class="Magenta AlignLeft" x="1.3685881" y="155.26602" />
+          <text class="Magenta AlignLeft" x="1.3685881" y="155.26602">
+            <tspan ref={this.dmeDistLeadingRef} id="ILSDistLeading" class="FontLarge StartAlign" />
+            <tspan ref={this.dmeDistTrailingRef} id="ILSDistTrailing" class="FontSmallest StartAlign" />
+          </text>
           <text class="Cyan FontSmallest AlignLeft" x="17.159119" y="155.22606">
             NM
           </text>
@@ -248,23 +256,29 @@ class LocalizerIndicator extends DisplayComponent<{ bus: EventBus; instrument: B
 
   private diamondGroup = FSComponent.createRef<SVGGElement>();
 
+  private lastDiamondState: 'right' | 'left' | 'center' | undefined = undefined;
+
+  private lastDiamondOffset = NaN;
+
+  // Runs on every navRadialError event (effectively every frame while LOC is received);
+  // class and transform writes are deduped against the previous state
   private handleNavRadialError(radialError: number): void {
     const deviation = this.lagFilter.step(radialError, this.props.instrument.deltaTime / 1000);
     const dots = deviation / 0.8;
 
-    if (dots > 2) {
-      this.rightDiamond.instance.classList.remove('HiddenElement');
-      this.leftDiamond.instance.classList.add('HiddenElement');
-      this.locDiamond.instance.classList.add('HiddenElement');
-    } else if (dots < -2) {
-      this.rightDiamond.instance.classList.add('HiddenElement');
-      this.leftDiamond.instance.classList.remove('HiddenElement');
-      this.locDiamond.instance.classList.add('HiddenElement');
-    } else {
-      this.locDiamond.instance.classList.remove('HiddenElement');
-      this.rightDiamond.instance.classList.add('HiddenElement');
-      this.leftDiamond.instance.classList.add('HiddenElement');
-      this.locDiamond.instance.style.transform = `translate3d(${(dots * 30.221) / 2}px, 0px, 0px)`;
+    const state = dots > 2 ? 'right' : dots < -2 ? 'left' : 'center';
+    if (state !== this.lastDiamondState) {
+      this.lastDiamondState = state;
+      this.rightDiamond.instance.classList.toggle('HiddenElement', state !== 'right');
+      this.leftDiamond.instance.classList.toggle('HiddenElement', state !== 'left');
+      this.locDiamond.instance.classList.toggle('HiddenElement', state !== 'center');
+    }
+    if (state === 'center') {
+      const offset = Math.round(((dots * 30.221) / 2) * 100) / 100;
+      if (offset !== this.lastDiamondOffset) {
+        this.lastDiamondOffset = offset;
+        this.locDiamond.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
+      }
     }
   }
 
@@ -348,23 +362,29 @@ class GlideSlopeIndicator extends DisplayComponent<{ bus: EventBus; instrument: 
 
   private hasGlideSlope = false;
 
+  private lastDiamondState: 'upper' | 'lower' | 'center' | undefined = undefined;
+
+  private lastDiamondOffset = NaN;
+
+  // Runs on every glideSlopeError event (effectively every frame while GS is received);
+  // class and transform writes are deduped against the previous state
   private handleGlideSlopeError(glideSlopeError: number): void {
     const deviation = this.lagFilter.step(glideSlopeError, this.props.instrument.deltaTime / 1000);
     const dots = deviation / 0.4;
 
-    if (dots > 2) {
-      this.upperDiamond.instance.classList.remove('HiddenElement');
-      this.lowerDiamond.instance.classList.add('HiddenElement');
-      this.glideSlopeDiamond.instance.classList.add('HiddenElement');
-    } else if (dots < -2) {
-      this.upperDiamond.instance.classList.add('HiddenElement');
-      this.lowerDiamond.instance.classList.remove('HiddenElement');
-      this.glideSlopeDiamond.instance.classList.add('HiddenElement');
-    } else {
-      this.upperDiamond.instance.classList.add('HiddenElement');
-      this.lowerDiamond.instance.classList.add('HiddenElement');
-      this.glideSlopeDiamond.instance.classList.remove('HiddenElement');
-      this.glideSlopeDiamond.instance.style.transform = `translate3d(0px, ${(dots * 30.238) / 2}px, 0px)`;
+    const state = dots > 2 ? 'upper' : dots < -2 ? 'lower' : 'center';
+    if (state !== this.lastDiamondState) {
+      this.lastDiamondState = state;
+      this.upperDiamond.instance.classList.toggle('HiddenElement', state !== 'upper');
+      this.lowerDiamond.instance.classList.toggle('HiddenElement', state !== 'lower');
+      this.glideSlopeDiamond.instance.classList.toggle('HiddenElement', state !== 'center');
+    }
+    if (state === 'center') {
+      const offset = Math.round(((dots * 30.238) / 2) * 100) / 100;
+      if (offset !== this.lastDiamondOffset) {
+        this.lastDiamondOffset = offset;
+        this.glideSlopeDiamond.instance.style.transform = `translate3d(0px, ${offset}px, 0px)`;
+      }
     }
   }
 

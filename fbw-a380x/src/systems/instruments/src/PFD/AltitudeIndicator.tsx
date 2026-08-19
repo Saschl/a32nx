@@ -15,12 +15,11 @@ import {
   Arinc429LocalVarConsumerSubject,
   Arinc429Register,
   Arinc429RegisterSubject,
-  Arinc429Word,
+  Arinc429WordData,
   ArincEventBus,
 } from '@flybywiresim/fbw-sdk';
 import { PFDSimvars } from './shared/PFDSimvarPublisher';
 import { DigitalAltitudeReadout } from './DigitalAltitudeReadout';
-import { VerticalTape } from './VerticalTape';
 import { Arinc429Values } from './shared/ArincValueProvider';
 import { FmgcFlightPhase } from '@shared/flightphase';
 import { FcuEfisCpBusEvents } from '@shared/publishers/EfisCpBusPublisher';
@@ -39,53 +38,61 @@ class LandingElevationIndicator extends DisplayComponent<{ bus: ArincEventBus }>
 
   private landingElevationIndicator = FSComponent.createRef<SVGPathElement>();
 
-  private landingElevation = new Arinc429Word(0);
+  private landingElevation: Arinc429WordData = Arinc429Register.empty();
 
   private flightPhase = 0;
 
   private delta = 0;
 
+  private isHidden: boolean | undefined = undefined;
+
+  private lastOffset = NaN;
+
   private handleLandingElevation() {
     const landingElevationValid =
       !this.landingElevation.isFailureWarning() && !this.landingElevation.isNoComputedData();
     const delta = this.altitude.get().value - this.landingElevation.value;
-    const offset = ((delta - DisplayRange) * DistanceSpacing) / ValueSpacing;
     this.delta = delta;
-    if (delta > DisplayRange || (this.flightPhase !== 9 && this.flightPhase !== 10) || !landingElevationValid) {
-      this.landingElevationIndicator.instance.classList.add('HiddenElement');
-    } else {
-      this.landingElevationIndicator.instance.classList.remove('HiddenElement');
+
+    const hidden =
+      delta > DisplayRange || (this.flightPhase !== 9 && this.flightPhase !== 10) || !landingElevationValid;
+    if (hidden !== this.isHidden) {
+      this.isHidden = hidden;
+      this.landingElevationIndicator.instance.classList.toggle('HiddenElement', hidden);
     }
-    this.landingElevationIndicator.instance.setAttribute('d', `m130.85 123.56h-13.096v${offset}h13.096z`);
+
+    if (!hidden) {
+      // rounded to 0.01 viewBox units (~0.05 px) so unchanged positions skip the DOM write
+      const offset = Math.round(((delta - DisplayRange) * DistanceSpacing * 100) / ValueSpacing) / 100;
+      if (offset !== this.lastOffset) {
+        this.lastOffset = offset;
+        this.landingElevationIndicator.instance.setAttribute('d', `m130.85 123.56h-13.096v${offset}h13.096z`);
+      }
+    }
   }
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
-    const sub = this.props.bus.getSubscriber<PFDSimvars & Arinc429Values>();
+    const sub = this.props.bus.getArincSubscriber<PFDSimvars & Arinc429Values>();
 
     sub
       .on('fwcFlightPhase')
       .whenChanged()
       .handle((fp) => {
         this.flightPhase = fp;
-
-        if ((fp !== 9 && fp !== 10) || this.delta > DisplayRange) {
-          this.landingElevationIndicator.instance.classList.add('HiddenElement');
-        } else {
-          this.landingElevationIndicator.instance.classList.remove('HiddenElement');
-        }
+        this.handleLandingElevation();
       });
 
     sub
       .on('landingElevation')
-      .whenChanged()
+      .whenArinc429Changed()
       .handle((le) => {
         this.landingElevation = le;
         this.handleLandingElevation();
       });
 
-    this.altitude.sub(() => this.handleLandingElevation.bind(this), true);
+    this.altitude.sub(() => this.handleLandingElevation(), true);
   }
 
   render(): VNode {
@@ -98,7 +105,7 @@ class RadioAltIndicator extends DisplayComponent<{ bus: EventBus; filteredRadioA
 
   private offsetSub = Subject.create('');
 
-  private radioAltitude = new Arinc429Word(0);
+  private radioAltitude: Arinc429WordData = Arinc429Register.empty();
 
   private setOffset() {
     if (
@@ -157,7 +164,7 @@ class MinimumDescentAltitudeIndicator extends DisplayComponent<{ bus: ArincEvent
 
   private readonly mda = Arinc429RegisterSubject.createEmpty();
 
-  private landingElevation = new Arinc429Word(0);
+  private landingElevation: Arinc429WordData = Arinc429Register.empty();
 
   private updateIndication(): void {
     const isQnh = this.fcuEisDiscreteWord2.get().bitValueOr(12, false);
@@ -241,38 +248,14 @@ interface AltitudeIndicatorProps {
 }
 
 export class AltitudeIndicator extends DisplayComponent<AltitudeIndicatorProps> {
-  private readonly altitude = Arinc429ConsumerSubject.create(
-    this.props.bus.getArincSubscriber<Arinc429Values>().on('altitudeAr'),
-  );
-
   render(): VNode {
+    // The graduations and the grey tape background are drawn by the altitude graduation layer
+    // (see PFD.tsx), which sits underneath this SVG.
     return (
       <g id="AltitudeTape">
-        <AltTapeBackground />
         <LandingElevationIndicator bus={this.props.bus} />
-        <g
-          style={{
-            display: this.altitude.map((v) => (v.isNormalOperation() || v.isFunctionalTest() ? 'inline' : 'none')),
-          }}
-        >
-          <VerticalTape
-            displayRange={DisplayRange + 30}
-            valueSpacing={ValueSpacing}
-            distanceSpacing={DistanceSpacing}
-            lowerLimit={-1500}
-            upperLimit={50000}
-            tapeValue={this.altitude.map((v) => v.value)}
-            type="altitude"
-          />
-        </g>
       </g>
     );
-  }
-}
-
-class AltTapeBackground extends DisplayComponent<any> {
-  render(): VNode {
-    return <path id="AltTapeBackground" d="m130.85 123.56h-13.096v-85.473h13.096z" class="TapeBackground" />;
   }
 }
 

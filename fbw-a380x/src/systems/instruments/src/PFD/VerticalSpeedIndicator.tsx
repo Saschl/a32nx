@@ -8,7 +8,7 @@ import {
   Subscribable,
   VNode,
 } from '@microsoft/msfs-sdk';
-import { Arinc429Word, ArincEventBus } from '@flybywiresim/fbw-sdk';
+import { Arinc429Register, Arinc429WordData, ArincEventBus } from '@flybywiresim/fbw-sdk';
 import { Arinc429Values } from './shared/ArincValueProvider';
 import { PFDSimvars } from './shared/PFDSimvarPublisher';
 import { LagFilter } from './PFDUtils';
@@ -33,7 +33,7 @@ export class VerticalSpeedIndicator extends DisplayComponent<VerticalSpeedIndica
 
   private needleColour = Subject.create('Green');
 
-  private radioAlt = new Arinc429Word(0);
+  private radioAlt: Arinc429WordData = Arinc429Register.empty();
 
   private vsFailed = FSComponent.createRef<SVGGElement>();
 
@@ -282,27 +282,43 @@ class VSpeedText extends DisplayComponent<{
 
   private groupRef = FSComponent.createRef<SVGGElement>();
 
+  private lastVisible: boolean | undefined = undefined;
+
+  private lastVsHundreds = NaN;
+
+  private lastTextOffset = NaN;
+
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
     const sub = this.props.bus.getSubscriber<Arinc429Values>();
 
+    // vs fires on effectively every frame; only touch the DOM when the displayed
+    // (rounded) value or position actually changed
     sub.on('vs').handle((vs) => {
       const absVSpeed = Math.abs(vs.value);
 
-      if (absVSpeed < 200) {
-        this.groupRef.instance.setAttribute('visibility', 'hidden');
+      const visible = absVSpeed >= 200;
+      if (visible !== this.lastVisible) {
+        this.lastVisible = visible;
+        this.groupRef.instance.setAttribute('visibility', visible ? 'visible' : 'hidden');
+      }
+      if (!visible) {
         return;
       }
-      this.groupRef.instance.setAttribute('visibility', 'visible');
 
       const sign = Math.sign(vs.value);
+      const vsHundreds = Math.round(absVSpeed / 100);
+      if (vsHundreds !== this.lastVsHundreds) {
+        this.lastVsHundreds = vsHundreds;
+        this.vsTextRef.instance.textContent = (vsHundreds < 10 ? '0' : '') + vsHundreds.toString();
+      }
 
-      const textOffset = this.props.yOffset.get() - sign * 2.4;
-
-      const text = (Math.round(absVSpeed / 100) < 10 ? '0' : '') + Math.round(absVSpeed / 100).toString();
-      this.vsTextRef.instance.textContent = text;
-      this.groupRef.instance.setAttribute('transform', `translate(0 ${textOffset})`);
+      const textOffset = Math.round((this.props.yOffset.get() - sign * 2.4) * 100) / 100;
+      if (textOffset !== this.lastTextOffset) {
+        this.lastTextOffset = textOffset;
+        this.groupRef.instance.setAttribute('transform', `translate(0 ${textOffset})`);
+      }
     });
 
     this.props.textColour.sub((colour) => {
