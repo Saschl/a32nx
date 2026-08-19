@@ -1,7 +1,7 @@
 // Copyright (c) 2024-2025 FlyByWire Simulations
 // SPDX-License-Identifier: GPL-3.0
 
-import { Subject, Subscribable } from '@microsoft/msfs-sdk';
+import { MappedSubscribable, Subject, Subscribable } from '@microsoft/msfs-sdk';
 import {
   AbnormalProcedure,
   ChecklistAction,
@@ -85,6 +85,16 @@ export class ProcedureLinesGenerator {
       return;
     }
     this.items = this.procedure.items;
+  }
+
+  /**
+   * The generator takes ownership of the `procedureIsActive` subscribable passed to the
+   * constructor: if it is a mapped/piped subscribable, it stays subscribed to its source until
+   * destroyed. Call this when discarding a generator, or its source keeps notifying a dead object.
+   */
+  public destroy(): void {
+    const procedureIsActive = this.procedureIsActive as Partial<MappedSubscribable<boolean>>;
+    procedureIsActive.destroy?.();
   }
 
   static readonly nonSelectableItemStyles = [

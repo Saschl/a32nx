@@ -4,6 +4,7 @@ import {
   FSComponent,
   Subscribable,
   Subject,
+  Subscription,
   VNode,
   MappedSubject,
   SubscribableUtils,
@@ -552,68 +553,81 @@ export class ThrustTransientComponent extends DisplayComponent<ThrustTransientCo
     this.update();
   }
 
-  private sweepHorizontal(radius: number) {
-    const valueIdleDir = valueRadianAngleConverter(
+  private thrustActualSub: Subscription | undefined;
+
+  private thrustTargetSub: Subscription | undefined;
+
+  private sweepHorizontal(
+    actualDir: { x: number; y: number },
+    targetDir: { x: number; y: number },
+    diffAngle: number,
+    radius: number,
+  ) {
+    return (
+      `M ${this.props.x + actualDir.x * radius},${this.props.y + actualDir.y * radius} ` +
+      `A ${radius} ${radius} 0 ${Math.abs(diffAngle) > 180 ? '1' : '0'} ${diffAngle < 0 ? '0' : '1'} ${this.props.x + targetDir.x * radius} ${this.props.y + targetDir.y * radius}`
+    );
+  }
+
+  onAfterRender(node: VNode): void {
+    super.onAfterRender(node);
+
+    // Start paused: the visible subscription below resumes them (with an immediate refresh) only
+    // while the indicator is shown, so the path strings are not rebuilt every frame while hidden
+    this.thrustActualSub = this.props.thrustActual.sub(
+      (a) => {
+        this.thrustActual = a;
+        this.update();
+      },
+      false,
+      true,
+    );
+
+    this.thrustTargetSub = this.props.thrustTarget.sub(
+      (a) => {
+        this.thrustTarget = a;
+        this.update();
+      },
+      false,
+      true,
+    );
+
+    this.props.visible.sub((visible) => {
+      if (visible) {
+        this.thrustActualSub?.resume(true);
+        this.thrustTargetSub?.resume(true);
+      } else {
+        this.thrustActualSub?.pause();
+        this.thrustTargetSub?.pause();
+      }
+    }, true);
+  }
+
+  update(): void {
+    const actualDir = valueRadianAngleConverter(
       this.thrustActual,
       this.props.min,
       this.props.max,
       this.props.endAngle,
       this.props.startAngle,
     );
-    const valueIdleEnd = {
-      x: this.props.x + valueIdleDir.x * radius,
-      y: this.props.y + valueIdleDir.y * radius,
-    };
-    const valueMaxDir = valueRadianAngleConverter(
+    const targetDir = valueRadianAngleConverter(
       this.thrustTarget,
       this.props.min,
       this.props.max,
       this.props.endAngle,
       this.props.startAngle,
     );
-    const valueMaxEnd = {
-      x: this.props.x + valueMaxDir.x * radius,
-      y: this.props.y + valueMaxDir.y * radius,
-    };
+    const diffAngle = targetDir.angle - actualDir.angle;
 
-    const diffAngle = valueMaxDir.angle - valueIdleDir.angle;
-
-    return [
-      `M ${valueIdleEnd.x},${valueIdleEnd.y}`,
-      `A ${radius} ${radius} 0 ${Math.abs(diffAngle) > 180 ? '1' : '0'} ${diffAngle < 0 ? '0' : '1'} ${valueMaxEnd.x} ${valueMaxEnd.y}`,
-    ].join(' ');
-  }
-
-  onAfterRender(node: VNode): void {
-    super.onAfterRender(node);
-
-    this.props.thrustActual.sub((a) => {
-      this.thrustActual = a;
-      this.update();
-    });
-
-    this.props.thrustTarget.sub((a) => {
-      this.thrustTarget = a;
-      this.update();
-    });
-  }
-
-  update(): void {
-    const thrustEnd = valueRadianAngleConverter(
-      this.thrustTarget,
-      this.props.min,
-      this.props.max,
-      this.props.endAngle,
-      this.props.startAngle,
-    );
     this.endPath.set(
-      `M ${this.props.x} ${this.props.y} L ${this.props.x + thrustEnd.x * 0.8 * this.props.radius} ${this.props.y + thrustEnd.y * 0.8 * this.props.radius}`,
+      `M ${this.props.x} ${this.props.y} L ${this.props.x + targetDir.x * 0.8 * this.props.radius} ${this.props.y + targetDir.y * 0.8 * this.props.radius}`,
     );
 
-    this.sweep1.set(this.sweepHorizontal(0.8 * this.props.radius));
-    this.sweep2.set(this.sweepHorizontal(0.65 * this.props.radius));
-    this.sweep3.set(this.sweepHorizontal(0.5 * this.props.radius));
-    this.sweep4.set(this.sweepHorizontal(0.35 * this.props.radius));
+    this.sweep1.set(this.sweepHorizontal(actualDir, targetDir, diffAngle, 0.8 * this.props.radius));
+    this.sweep2.set(this.sweepHorizontal(actualDir, targetDir, diffAngle, 0.65 * this.props.radius));
+    this.sweep3.set(this.sweepHorizontal(actualDir, targetDir, diffAngle, 0.5 * this.props.radius));
+    this.sweep4.set(this.sweepHorizontal(actualDir, targetDir, diffAngle, 0.35 * this.props.radius));
   }
 
   render(): VNode {

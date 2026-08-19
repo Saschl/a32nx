@@ -1639,6 +1639,46 @@ export class FmcAircraftInterface {
     }
   }
 
+  private lastTransmittedTargetProfile: VerticalPathCheckpoint[] | null = null;
+  private lastTransmittedConstraints: VdAltitudeConstraint[] | null = null;
+  private lastTransmittedActualProfile: VerticalPathCheckpoint[] | null = null;
+  private lastTransmittedDescentProfile: VerticalPathCheckpoint[] | null = null;
+  private lastTransmittedTrackChangeDistance: number | null | undefined = undefined;
+
+  private static isSameVerticalProfile(a: VerticalPathCheckpoint[] | null, b: VerticalPathCheckpoint[]): boolean {
+    if (a === null || a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].distanceFromAircraft !== b[i].distanceFromAircraft || a[i].altitude !== b[i].altitude) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static isSameVdConstraints(a: VdAltitudeConstraint[] | null, b: VdAltitudeConstraint[]): boolean {
+    if (a === null || a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (
+        a[i].isAltitudeConstraintMet !== b[i].isAltitudeConstraintMet ||
+        a[i].altitudeConstraint?.altitudeDescriptor !== b[i].altitudeConstraint?.altitudeDescriptor ||
+        a[i].altitudeConstraint?.altitude1 !== b[i].altitudeConstraint?.altitude1 ||
+        a[i].altitudeConstraint?.altitude2 !== b[i].altitudeConstraint?.altitude2
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Publishes the vertical profiles for the VD to all instruments. Each topic is only re-published
+   * when its content changed: these are synced topics serialized into every Coherent view at the
+   * FMS cycle rate, so unguarded re-publishes of unchanged (e.g. empty) arrays are pure GC/bridge load.
+   */
   public transmitVerticalPath(
     targetProfile: VerticalPathCheckpoint[],
     vdAltitudeConstraints: VdAltitudeConstraint[],
@@ -1648,11 +1688,26 @@ export class FmcAircraftInterface {
   ) {
     const pub = this.bus.getPublisher<MfdSurvEvents>();
 
-    pub.pub('a32nx_fms_vertical_target_profile', targetProfile, true);
-    pub.pub('a32nx_fms_vertical_constraints', vdAltitudeConstraints, true);
-    pub.pub('a32nx_fms_vertical_actual_profile', actualProfile, true);
-    pub.pub('a32nx_fms_vertical_descent_profile', descentProfile, true);
-    pub.pub('a32nx_fms_vd_track_change_distance', trackChangeDistance, true);
+    if (!FmcAircraftInterface.isSameVerticalProfile(this.lastTransmittedTargetProfile, targetProfile)) {
+      this.lastTransmittedTargetProfile = targetProfile;
+      pub.pub('a32nx_fms_vertical_target_profile', targetProfile, true);
+    }
+    if (!FmcAircraftInterface.isSameVdConstraints(this.lastTransmittedConstraints, vdAltitudeConstraints)) {
+      this.lastTransmittedConstraints = vdAltitudeConstraints;
+      pub.pub('a32nx_fms_vertical_constraints', vdAltitudeConstraints, true);
+    }
+    if (!FmcAircraftInterface.isSameVerticalProfile(this.lastTransmittedActualProfile, actualProfile)) {
+      this.lastTransmittedActualProfile = actualProfile;
+      pub.pub('a32nx_fms_vertical_actual_profile', actualProfile, true);
+    }
+    if (!FmcAircraftInterface.isSameVerticalProfile(this.lastTransmittedDescentProfile, descentProfile)) {
+      this.lastTransmittedDescentProfile = descentProfile;
+      pub.pub('a32nx_fms_vertical_descent_profile', descentProfile, true);
+    }
+    if (trackChangeDistance !== this.lastTransmittedTrackChangeDistance) {
+      this.lastTransmittedTrackChangeDistance = trackChangeDistance;
+      pub.pub('a32nx_fms_vd_track_change_distance', trackChangeDistance, true);
+    }
   }
 
   //-----------------------------------------------------------------------------------

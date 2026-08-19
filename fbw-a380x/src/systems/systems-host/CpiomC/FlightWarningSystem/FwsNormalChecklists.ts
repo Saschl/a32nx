@@ -126,6 +126,7 @@ export class FwsNormalChecklists {
           this.activeProcedure = procGen;
           this.activeProcedure.selectedItemIndex.pipe(this.selectedLine);
         } else if (deferredProcedureIds.includes(id)) {
+          this.deferredProcedures.forEach((p) => p.destroy());
           this.deferredProcedures = [];
 
           const currentDeferredType =
@@ -532,6 +533,8 @@ export class FwsNormalChecklists {
 
   destroy() {
     this.subscriptions.forEach((s) => s.destroy());
+    this.deferredProcedures.forEach((p) => p.destroy());
+    this.deferredProcedures.length = 0;
   }
 
   public sensedItems: FwsNormalChecklistsDict = {

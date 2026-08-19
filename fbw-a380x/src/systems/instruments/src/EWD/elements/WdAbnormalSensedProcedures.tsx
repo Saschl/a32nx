@@ -55,9 +55,12 @@ export class WdAbnormalSensedProcedures extends WdAbstractChecklistComponent {
 
     if (!this.props.fwsAvail || this.props.fwsAvail.get()) {
       this.procedures.get().forEach((procState, index) => {
+        // Snapshot instead of a mapped subscribable: this component fully rebuilds on every
+        // activeProcedureId change, and a mapped subscribable created here would leak its
+        // subscription on each rebuild
         const procGen = new ProcedureLinesGenerator(
           procState.id,
-          this.activeProcedureId.map((id) => id === procState.id),
+          Subject.create(this.activeProcedureId.get() === procState.id),
           ProcedureType.Abnormal,
           procState,
           undefined,

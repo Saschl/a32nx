@@ -12,7 +12,7 @@ import {
 } from '@microsoft/msfs-sdk';
 import { FwsCore } from './FwsCore';
 
-interface EwdMemoItem {
+export interface EwdMemoItem {
   flightPhaseInhib: number[];
   /** warning is active */
   simVarIsActive: MappedSubscribable<boolean> | Subscribable<boolean>;

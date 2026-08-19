@@ -155,8 +155,9 @@ export class ThrustGauge extends DisplayComponent<ThrustGaugeProps> {
     this.thrustLimitRev,
   );
 
-  private thrustPercentSplit1 = this.thrustPercent.map((thr) => splitDecimals(thr)[0]);
-  private thrustPercentSplit2 = this.thrustPercent.map((thr) => splitDecimals(thr)[1]);
+  private readonly thrustPercentSplit = this.thrustPercent.map((thr) => splitDecimals(thr));
+  private readonly thrustPercentSplit1 = this.thrustPercentSplit.map((split) => split[0]);
+  private readonly thrustPercentSplit2 = this.thrustPercentSplit.map((split) => split[1]);
 
   private readonly availVisible = MappedSubject.create(
     ([n1, thrustLimitIdle, engineState]) => n1 > Math.floor(thrustLimitIdle) && engineState === 2,

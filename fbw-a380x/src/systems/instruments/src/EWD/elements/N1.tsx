@@ -52,8 +52,9 @@ export class N1 extends DisplayComponent<N1Props> {
 
   private readonly n1Idle = ConsumerSubject.create(this.sub.on('n1Idle').withPrecision(1).whenChanged(), 0);
 
-  private n1PercentSplit1 = this.n1.map((n1) => splitDecimals(n1)[0]);
-  private n1PercentSplit2 = this.n1.map((n1) => splitDecimals(n1)[1]);
+  private readonly n1PercentSplit = this.n1.map((n1) => splitDecimals(n1));
+  private readonly n1PercentSplit1 = this.n1PercentSplit.map((split) => split[0]);
+  private readonly n1PercentSplit2 = this.n1PercentSplit.map((split) => split[1]);
 
   private radius = 64;
   private startAngle = 230;

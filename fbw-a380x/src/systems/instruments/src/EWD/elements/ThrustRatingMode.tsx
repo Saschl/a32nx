@@ -54,6 +54,8 @@ export class N1Limit extends DisplayComponent<{
     this.thrustLimitMax,
   );
 
+  private readonly thrustLimitTHRSplit = this.thrustLimitTHR.map((l) => splitDecimals(l));
+
   private readonly activeHiddenElement = this.props.active.map((v) => !v);
 
   public onAfterRender(node: VNode): void {
@@ -83,7 +85,7 @@ export class N1Limit extends DisplayComponent<{
           x={this.props.x + 69}
           y={this.props.y - 2}
         >
-          {this.thrustLimitTHR.map((l) => splitDecimals(l)[0])}
+          {this.thrustLimitTHRSplit.map((split) => split[0])}
         </text>
         <text
           class={{ F26: true, End: true, Green: true, HiddenElement: this.activeHiddenElement }}
@@ -97,7 +99,7 @@ export class N1Limit extends DisplayComponent<{
           x={this.props.x + 101}
           y={this.props.y - 2}
         >
-          {this.thrustLimitTHR.map((l) => splitDecimals(l)[1])}
+          {this.thrustLimitTHRSplit.map((split) => split[1])}
         </text>
         <text
           class={{ F20: true, End: true, Cyan: true, HiddenElement: this.activeHiddenElement }}
