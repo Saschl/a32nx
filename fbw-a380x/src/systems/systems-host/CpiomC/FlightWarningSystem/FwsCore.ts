@@ -62,7 +62,7 @@ import { ProcedureLinesGenerator } from '../../../instruments/src/MsfsAvionicsCo
 import PitchTrimUtils from '@shared/PitchTrimUtils';
 // FIXME should not import from instruments
 import { ChecklistState, FwsEvents } from '../../../instruments/src/MsfsAvionicsCommon/providers/FwsPublisher';
-import { FwsMemos } from './FwsMemos';
+import { EwdMemoItem, FwsMemos } from './FwsMemos';
 import { FwsNormalChecklists } from './FwsNormalChecklists';
 import { EwdAbnormalDict, EwdAbnormalItem, FwsAbnormalSensed } from './FwsAbnormalSensed';
 import { FwsAbnormalNonSensed } from './FwsAbnormalNonSensed';
@@ -77,9 +77,9 @@ import { FuelSystemEvents } from '../../../instruments/src/MsfsAvionicsCommon/pr
 // FIXME should not import from instruments
 import { FmsMessageVars } from '../../../instruments/src/MsfsAvionicsCommon/providers/FmsMessagePublisher';
 import { FwsSystemDisplayLogic } from './FwsSystemDisplayLogic';
-import { FwsInopSys, FwsInopSysPhases } from './FwsInopSys';
-import { FwsInformation } from './FwsInformation';
-import { FwsLimitations, FwsLimitationsPhases } from './FwsLimitations';
+import { FwsInopSys, FwsInopSysItem, FwsInopSysPhases } from './FwsInopSys';
+import { FwsInfoItem, FwsInformation } from './FwsInformation';
+import { FwsLimitations, FwsLimitationsItem, FwsLimitationsPhases } from './FwsLimitations';
 // FIXME should not import from instruments
 import { FGVars } from '../../../instruments/src/MsfsAvionicsCommon/providers/FGDataPublisher';
 import { FqmsBusEvents } from '@shared/publishers/FqmsBusPublisher';
@@ -260,6 +260,19 @@ export class FwsCore {
   /* PSEUDO FWC VARIABLES */
 
   private readonly publisher = this.bus.getPublisher<FwsEvents & OisDebugDataEvents>();
+
+  private readonly lastSyncedPubValues = new Map<keyof FwsEvents, FwsEvents[keyof FwsEvents]>();
+
+  /**
+   * Publishes a synced topic only when its value differs from the last published one. Unconditional
+   * synced publishes cross the Coherent bridge into every instrument on every update cycle.
+   */
+  private pubSyncedIfChanged<K extends keyof FwsEvents & string>(topic: K, value: (FwsEvents & OisDebugDataEvents)[K]) {
+    if (this.lastSyncedPubValues.get(topic) !== value) {
+      this.lastSyncedPubValues.set(topic, value);
+      this.publisher.pub(topic, value, true);
+    }
+  }
 
   /** Keys/IDs of all failures currently active, irrespective they are already cleared or not */
   public readonly allCurrentFailures: string[] = [];
@@ -2327,6 +2340,20 @@ export class FwsCore {
   public ewdAbnormal: EwdAbnormalDict;
   public allEwdDeferredProcs: EwdAbnormalDict;
   public allSuppressableItems: FwsSuppressableItemDict;
+
+  // The dictionaries above and the memo/INOP SYS/INFO/LIMITATIONS dictionaries are static after
+  // construction. Their entries are cached here once, as materializing them with Object.entries()
+  // on every update cycle allocates hundreds of short-lived arrays and causes GC pauses in Coherent.
+  private readonly ewdAbnormalEntries: [string, EwdAbnormalItem][];
+  private readonly ewdDeferredProcsEntries: [string, EwdAbnormalItem][];
+  private readonly ewdMemosValues: EwdMemoItem[];
+  private readonly ewdToLdgMemosValues: EwdMemoItem[];
+  private readonly inopSysEntries: [string, FwsInopSysItem][];
+  private readonly infoEntries: [string, FwsInfoItem][];
+  private readonly limitationsEntries: [string, FwsLimitationsItem][];
+  private readonly memoOrderLeft: string[] = [];
+  private readonly memoOrderRight: string[] = [];
+
   private readonly failureActivationTime = new Map<keyof FwsSuppressableItemDict, number>();
 
   constructor(
@@ -2354,6 +2381,22 @@ export class FwsCore {
       this.information.info,
       this.limitations.limitations,
     );
+
+    this.ewdAbnormalEntries = Object.entries(this.ewdAbnormal);
+    this.ewdDeferredProcsEntries = Object.entries(this.allEwdDeferredProcs);
+    this.ewdMemosValues = Object.values(this.memos.ewdMemos);
+    this.ewdToLdgMemosValues = Object.values(this.memos.ewdToLdgMemos);
+    this.inopSysEntries = Object.entries(this.inopSys.inopSys);
+    this.infoEntries = Object.entries(this.information.info);
+    this.limitationsEntries = Object.entries(this.limitations.limitations);
+
+    for (const memo of this.ewdToLdgMemosValues) {
+      if (memo.leftSide) {
+        this.memoOrderLeft.push(...memo.codesToReturn);
+      } else {
+        this.memoOrderRight.push(...memo.codesToReturn);
+      }
+    }
 
     for (const [key, item] of Object.entries(this.allSuppressableItems)) {
       item.simVarIsActive.sub((v) => {
@@ -2660,6 +2703,9 @@ export class FwsCore {
         (s) => this.publisher.pub('fws_show_failure_pending', s, true),
         true,
       ),
+      this.abnormalNonSensed.abnProcShown.sub((s) => this.publisher.pub('fws_show_abn_non_sensed', s, true), true),
+      this.abnormalSensed.abnormalShown.sub((s) => this.publisher.pub('fws_show_abn_sensed', s, true), true),
+      this.normalChecklists.checklistShown.sub((s) => this.publisher.pub('fws_show_normal_checklists', s, true), true),
     );
 
     this.subs.push(
@@ -5521,24 +5567,23 @@ export class FwsCore {
       return !shouldBeSuppressed;
     };
 
-    // Update memos and failures list in case failure has been resolved
-    for (const [key, value] of Object.entries(this.ewdAbnormal)) {
-      if (!itemIsActiveConsideringFaultSuppression(value, key, 0.6)) {
-        failureKeys = failureKeys.filter((e) => e !== key);
-        recallFailureKeys = recallFailureKeys.filter((e) => e !== key);
-      }
-    }
+    // Update failures list in case a failure has been resolved. Only the keys currently in the
+    // lists need to be checked, and filtering the (usually short) lists directly avoids allocating
+    // two fresh arrays per inactive dictionary entry.
+    const failureStillPresented = (key: string) => {
+      const item = this.ewdAbnormal[key];
+      return !item || itemIsActiveConsideringFaultSuppression(item, key, 0.6);
+    };
+    failureKeys = failureKeys.filter(failureStillPresented);
+    recallFailureKeys = recallFailureKeys.filter(failureStillPresented);
 
     this.recallFailures.length = 0;
     this.recallFailures.push(...recallFailureKeys);
     this.nonCancellableWarningCount = 0;
 
     // Abnormal sensed procedures
-    const ewdAbnormalEntries: [string, EwdAbnormalItem][] = Object.entries(this.ewdAbnormal);
-    const ewdDeferredEntries = [
-      ...Object.entries(this.abnormalSensed.ewdDeferredProcs),
-      ...Object.entries(this.abnormalNonSensed.ewdDeferredProcs),
-    ];
+    const ewdAbnormalEntries = this.ewdAbnormalEntries;
+    const ewdDeferredEntries = this.ewdDeferredProcsEntries;
     this.abnormalUpdatedItems.clear();
     this.deferredUpdatedItems.clear();
     for (const [key, value] of ewdAbnormalEntries) {
@@ -5850,7 +5895,7 @@ export class FwsCore {
     this.presentedFailures.push(...failureKeys);
 
     // MEMOs (except T.O and LDG)
-    for (const [, value] of Object.entries(this.memos.ewdMemos)) {
+    for (const value of this.ewdMemosValues) {
       if (
         value.simVarIsActive.get() &&
         !value.memoInhibit() &&
@@ -5868,7 +5913,7 @@ export class FwsCore {
     }
 
     // T.O and LDG MEMOs
-    for (const [, value] of Object.entries(this.memos.ewdToLdgMemos)) {
+    for (const value of this.ewdToLdgMemosValues) {
       if (
         value.simVarIsActive.get() &&
         !value.memoInhibit() &&
@@ -5885,24 +5930,13 @@ export class FwsCore {
       }
     }
 
-    const memoOrderLeft: string[] = [];
-    const memoOrderRight: string[] = [];
-
-    for (const [, value] of Object.entries(this.memos.ewdToLdgMemos)) {
-      if (value.leftSide) {
-        memoOrderLeft.push(...value.codesToReturn);
-      } else {
-        memoOrderRight.push(...value.codesToReturn);
-      }
-    }
-
-    const orderedMemoArrayLeft = this.mapOrder(tempMemoArrayLeft, memoOrderLeft);
-    const orderedMemoArrayRight: string[] = this.mapOrder(tempMemoArrayRight, memoOrderRight).sort(
+    const orderedMemoArrayLeft = this.mapOrder(tempMemoArrayLeft, this.memoOrderLeft);
+    const orderedMemoArrayRight: string[] = this.mapOrder(tempMemoArrayRight, this.memoOrderRight).sort(
       (a, b) => this.messagePriority(EcamMemos[a]) - this.messagePriority(EcamMemos[b]),
     );
 
     // INOP SYS
-    for (const [key, value] of Object.entries(this.inopSys.inopSys)) {
+    for (const [key, value] of this.inopSysEntries) {
       if (itemIsActiveConsideringFaultSuppression(value, key, 1.0)) {
         if (
           !value.redundancyLoss &&
@@ -5923,14 +5957,14 @@ export class FwsCore {
     }
 
     // INFO
-    for (const [key, value] of Object.entries(this.information.info)) {
+    for (const [key, value] of this.infoEntries) {
       if (itemIsActiveConsideringFaultSuppression(value, key, 1.0) && !stsInfoKeys.includes(key)) {
         stsInfoKeys.push(key);
       }
     }
 
     // LIMITATIONS
-    for (const [key, value] of Object.entries(this.limitations.limitations)) {
+    for (const [key, value] of this.limitationsEntries) {
       if (itemIsActiveConsideringFaultSuppression(value, key, 1.0)) {
         if (value.phase === FwsLimitationsPhases.AllPhases && !ewdLimitationsAllPhasesKeys.includes(key)) {
           ewdLimitationsAllPhasesKeys.push(key);
@@ -6101,8 +6135,8 @@ export class FwsCore {
       this.normalChecklists.checklistShown.set(false);
       this.abnormalSensed.abnormalShown.set(false);
 
-      this.publisher.pub('fws_active_item', this.abnormalNonSensed.selectedItem.get(), true);
-      this.publisher.pub('fws_show_from_line', this.abnormalNonSensed.showFromLine.get(), true);
+      this.pubSyncedIfChanged('fws_active_item', this.abnormalNonSensed.selectedItem.get());
+      this.pubSyncedIfChanged('fws_show_from_line', this.abnormalNonSensed.showFromLine.get());
       this.ecamEwdShowFailurePendingIndication.set(false);
     } else if (this.normalChecklists.showChecklistRequested.get()) {
       // ECL always shown
@@ -6110,12 +6144,12 @@ export class FwsCore {
       this.normalChecklists.checklistShown.set(true);
       this.abnormalSensed.abnormalShown.set(false);
 
-      this.publisher.pub('fws_active_item', this.normalChecklists.selectedLine.get(), true);
+      this.pubSyncedIfChanged('fws_active_item', this.normalChecklists.selectedLine.get());
       const activeDeferredProcedureId = this.normalChecklists.activeDeferredProcedureId.get();
       if (activeDeferredProcedureId) {
-        this.publisher.pub('fws_active_procedure', activeDeferredProcedureId, true);
+        this.pubSyncedIfChanged('fws_active_procedure', activeDeferredProcedureId);
       }
-      this.publisher.pub('fws_show_from_line', this.normalChecklists.showFromLine.get(), true);
+      this.pubSyncedIfChanged('fws_show_from_line', this.normalChecklists.showFromLine.get());
       this.ecamEwdShowFailurePendingIndication.set(this.abnormalSensed.showAbnormalSensedRequested.get());
     } else if (this.abnormalSensed.showAbnormalSensedRequested.get()) {
       this.abnormalNonSensed.abnProcShown.set(false);
@@ -6124,10 +6158,10 @@ export class FwsCore {
 
       const activeProcedureId = this.abnormalSensed.activeProcedureId.get();
       if (activeProcedureId) {
-        this.publisher.pub('fws_active_item', this.abnormalSensed.selectedItemIndex.get(), true);
-        this.publisher.pub('fws_active_procedure', activeProcedureId, true);
+        this.pubSyncedIfChanged('fws_active_item', this.abnormalSensed.selectedItemIndex.get());
+        this.pubSyncedIfChanged('fws_active_procedure', activeProcedureId);
       }
-      this.publisher.pub('fws_show_from_line', this.abnormalSensed.showFromLine.get(), true);
+      this.pubSyncedIfChanged('fws_show_from_line', this.abnormalSensed.showFromLine.get());
       this.ecamEwdShowFailurePendingIndication.set(false);
     } else {
       this.abnormalNonSensed.abnProcShown.set(false);
@@ -6135,9 +6169,6 @@ export class FwsCore {
       this.abnormalSensed.abnormalShown.set(false);
       this.ecamEwdShowFailurePendingIndication.set(false);
     }
-    this.publisher.pub('fws_show_abn_non_sensed', this.abnormalNonSensed.abnProcShown.get(), true);
-    this.publisher.pub('fws_show_abn_sensed', this.abnormalSensed.abnormalShown.get(), true);
-    this.publisher.pub('fws_show_normal_checklists', this.normalChecklists.checklistShown.get(), true);
 
     // Reset all buffered inputs
     this.toConfigInputBuffer.write(false, true);

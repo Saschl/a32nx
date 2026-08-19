@@ -179,7 +179,10 @@ export class FwsAbnormalSensed {
             }
           } else if (type === SubscribableMapEventType.Deleted) {
             const procGenIndex = this.procedures.findIndex((v) => v.procedureId === key);
-            this.procedures.splice(procGenIndex, 1);
+            if (procGenIndex !== -1) {
+              this.procedures[procGenIndex].destroy();
+              this.procedures.splice(procGenIndex, 1);
+            }
           }
 
           sortedAbnormalsFlattened.forEach((val) => {
@@ -340,6 +343,8 @@ export class FwsAbnormalSensed {
 
   destroy() {
     this.subscriptions.forEach((s) => s.destroy());
+    this.procedures.forEach((p) => p.destroy());
+    this.procedures.length = 0;
 
     for (const key in this.ewdAbnormalSensed) {
       const element = this.ewdAbnormalSensed[key];

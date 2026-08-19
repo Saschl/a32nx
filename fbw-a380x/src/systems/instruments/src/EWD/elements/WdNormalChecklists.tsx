@@ -151,9 +151,12 @@ export class WdNormalChecklists extends WdAbstractChecklistComponent {
         .get()
         .filter((v) => currentDeferredType !== null && EcamDeferredProcedures[v.id].type === currentDeferredType);
       visibleDeferred.forEach((proc, index) => {
+        // Snapshot instead of a mapped subscribable: this component fully rebuilds on every
+        // activeDeferredProcedureId change, and a mapped subscribable created here would leak its
+        // subscription on each rebuild
         const procGen = new ProcedureLinesGenerator(
           proc.id,
-          this.activeDeferredProcedureId.map((id) => proc.id === id),
+          Subject.create(this.activeDeferredProcedureId.get() === proc.id),
           ProcedureType.Deferred,
           proc,
           undefined,
