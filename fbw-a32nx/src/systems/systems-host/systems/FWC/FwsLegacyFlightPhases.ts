@@ -1,5 +1,5 @@
 import {
-  Arinc429Word,
+  Arinc429Register,
   NXLogicConfirmNode,
   NXLogicMemoryNode,
   NXLogicTriggeredMonostableNode,
@@ -9,6 +9,11 @@ import {
 export class FwsLegacyFlightPhases {
   // persistent
   private flightPhase: number | null = null;
+
+  // reused ARINC registers; allocating a fresh Arinc429Word per read every update causes GC churn
+  private readonly radioHeight1Word = Arinc429Register.empty();
+
+  private readonly radioHeight2Word = Arinc429Register.empty();
 
   // ESDL 1. 0. 60
   private readonly gndMemo = new NXLogicConfirmNode(1); // outptuts ZGND
@@ -44,8 +49,8 @@ export class FwsLegacyFlightPhases {
   }
 
   _updateFlightPhase(_deltaTime: number) {
-    const radioHeight1 = Arinc429Word.fromSimVarValue('L:A32NX_RA_1_RADIO_ALTITUDE');
-    const radioHeight2 = Arinc429Word.fromSimVarValue('L:A32NX_RA_2_RADIO_ALTITUDE');
+    const radioHeight1 = this.radioHeight1Word.setFromSimVar('L:A32NX_RA_1_RADIO_ALTITUDE');
+    const radioHeight2 = this.radioHeight2Word.setFromSimVar('L:A32NX_RA_2_RADIO_ALTITUDE');
     const radioHeight =
       radioHeight1.isFailureWarning() || radioHeight1.isNoComputedData() ? radioHeight2 : radioHeight1;
     const eng1N1 = SimVar.GetSimVarValue('ENG N1 RPM:1', 'Percent');

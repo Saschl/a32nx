@@ -26,7 +26,6 @@ import {
   Arinc429Register,
   Arinc429RegisterSubject,
   Arinc429SignStatusMatrix,
-  Arinc429Word,
   NXDataStore,
   NXLogicClockNode,
   NXLogicConfirmNode,
@@ -2044,10 +2043,70 @@ export class PseudoFWC {
     this.keyEventManager!.interceptKey('AUTO_THROTTLE_ARM', true);
   }
 
+  // hoisted so sorting does not allocate a fresh comparator closure on every update cycle
+  private static readonly ewdMessageCodeComparator = (a: string, b: string): number =>
+    (EwdMessageCodeOrder.get(a) ?? Infinity) - (EwdMessageCodeOrder.get(b) ?? Infinity);
+
+  // hoisted from update(), where it was re-created as a closure on every cycle
+  private phase6WithOtherGenOff(
+    phase6: boolean,
+    offConfirmOrPhase6: boolean,
+    otherGenOffPart1: boolean,
+    otherGenNotOperating: boolean,
+  ): boolean {
+    return offConfirmOrPhase6 || (phase6 && (otherGenOffPart1 || otherGenNotOperating));
+  }
+
   mapOrder(array: string[]): string[] {
-    array.sort((a, b) => (EwdMessageCodeOrder.get(a) ?? Infinity) - (EwdMessageCodeOrder.get(b) ?? Infinity));
+    array.sort(PseudoFWC.ewdMessageCodeComparator);
     return array;
   }
+
+  // Reused ARINC registers for words read from simvars inside update(); allocating a fresh
+  // Arinc429Word per read causes GC churn at the FWC update rate
+  private readonly adr3MaxCasWord = Arinc429Register.empty();
+  private readonly adr1Discrete1Word = Arinc429Register.empty();
+  private readonly adr2Discrete1Word = Arinc429Register.empty();
+  private readonly adr3Discrete1Word = Arinc429Register.empty();
+  private readonly fm1Discrete2Word = Arinc429Register.empty();
+  private readonly fm2Discrete2Word = Arinc429Register.empty();
+  private readonly fm1Discrete3Word = Arinc429Register.empty();
+  private readonly fm2Discrete3Word = Arinc429Register.empty();
+  private readonly outflowValveOpenWord = Arinc429Register.empty();
+  private readonly cabinDeltaPressureWord = Arinc429Register.empty();
+  private readonly fcdc1Discrete1Word = Arinc429Register.empty();
+  private readonly fcdc2Discrete1Word = Arinc429Register.empty();
+  private readonly fcdc1Discrete2Word = Arinc429Register.empty();
+  private readonly fcdc2Discrete2Word = Arinc429Register.empty();
+  private readonly fcdc1Discrete3Word = Arinc429Register.empty();
+  private readonly fcdc2Discrete3Word = Arinc429Register.empty();
+  private readonly fcdc1Discrete4Word = Arinc429Register.empty();
+  private readonly fcdc2Discrete4Word = Arinc429Register.empty();
+  private readonly fcdc1Discrete5Word = Arinc429Register.empty();
+  private readonly fcdc2Discrete5Word = Arinc429Register.empty();
+  private readonly flapsPosWord = Arinc429Register.empty();
+  private readonly slatsPosWord = Arinc429Register.empty();
+  private readonly fcdc1Stab1PosWord = Arinc429Register.empty();
+  private readonly fcdc2Stab1PosWord = Arinc429Register.empty();
+  private readonly fm1PitchTrimWord = Arinc429Register.empty();
+  private readonly fm2PitchTrimWord = Arinc429Register.empty();
+  private readonly fac1RudderTrimPosWord = Arinc429Register.empty();
+  private readonly fac2RudderTrimPosWord = Arinc429Register.empty();
+
+  // hoisted flight-phase sets and simvar names, previously array/template literals rebuilt on
+  // every update cycle
+  private static readonly FLIGHT_PHASES_1_10: readonly number[] = [1, 10];
+  private static readonly FLIGHT_PHASES_3_10: readonly number[] = [3, 10];
+  private static readonly FLIGHT_PHASES_1_2_3: readonly number[] = [1, 2, 3];
+  private static readonly FLIGHT_PHASES_8_9_10: readonly number[] = [8, 9, 10];
+  private static readonly CPC_OUTFLOW_VALVE_VARS = [
+    'L:A32NX_PRESS_CPC_1_OUTFLOW_VALVE_OPEN_PERCENTAGE',
+    'L:A32NX_PRESS_CPC_2_OUTFLOW_VALVE_OPEN_PERCENTAGE',
+  ];
+  private static readonly CPC_CABIN_DELTA_PRESSURE_VARS = [
+    'L:A32NX_PRESS_CPC_1_CABIN_DELTA_PRESSURE',
+    'L:A32NX_PRESS_CPC_2_CABIN_DELTA_PRESSURE',
+  ];
 
   private readonly ecpClear1Pulse = new NXLogicPulseNode(true);
   private readonly ecpClear2Pulse = new NXLogicPulseNode(true);
@@ -2484,10 +2543,10 @@ export class PseudoFWC {
     this.height1Failed.set(radioHeight1.isFailureWarning());
     this.height2Failed.set(radioHeight2.isFailureWarning());
     // overspeed
-    const adr3MaxCas = Arinc429Word.fromSimVarValue('L:A32NX_ADIRS_ADR_3_MAX_AIRSPEED');
-    const adr1Discrete1 = Arinc429Word.fromSimVarValue('L:A32NX_ADIRS_ADR_1_DISCRETE_WORD_1');
-    const adr2Discrete1 = Arinc429Word.fromSimVarValue('L:A32NX_ADIRS_ADR_2_DISCRETE_WORD_1');
-    const adr3Discrete1 = Arinc429Word.fromSimVarValue('L:A32NX_ADIRS_ADR_3_DISCRETE_WORD_1');
+    const adr3MaxCas = this.adr3MaxCasWord.setFromSimVar('L:A32NX_ADIRS_ADR_3_MAX_AIRSPEED');
+    const adr1Discrete1 = this.adr1Discrete1Word.setFromSimVar('L:A32NX_ADIRS_ADR_1_DISCRETE_WORD_1');
+    const adr2Discrete1 = this.adr2Discrete1Word.setFromSimVar('L:A32NX_ADIRS_ADR_2_DISCRETE_WORD_1');
+    const adr3Discrete1 = this.adr3Discrete1Word.setFromSimVar('L:A32NX_ADIRS_ADR_3_DISCRETE_WORD_1');
 
     /* LANDING GEAR AND LIGHTS acquisition */
 
@@ -3050,8 +3109,8 @@ export class PseudoFWC {
     );
 
     /* 22 - AUTOFLIGHT */
-    const fm1DiscreteWord3 = Arinc429Word.fromSimVarValue('L:A32NX_FM1_DISCRETE_WORD_3');
-    const fm2DiscreteWord3 = Arinc429Word.fromSimVarValue('L:A32NX_FM2_DISCRETE_WORD_3');
+    const fm1DiscreteWord3 = this.fm1Discrete3Word.setFromSimVar('L:A32NX_FM1_DISCRETE_WORD_3');
+    const fm2DiscreteWord3 = this.fm2Discrete3Word.setFromSimVar('L:A32NX_FM2_DISCRETE_WORD_3');
 
     if (!this.flightPhase23.get()) {
       this.toConfigCheckedInPhase2Or3 = false;
@@ -3133,8 +3192,8 @@ export class PseudoFWC {
     );
 
     // FMS takeoff flap settings
-    const fm1DiscreteWord2 = Arinc429Word.fromSimVarValue('L:A32NX_FM1_DISCRETE_WORD_2');
-    const fm2DiscreteWord2 = Arinc429Word.fromSimVarValue('L:A32NX_FM2_DISCRETE_WORD_2');
+    const fm1DiscreteWord2 = this.fm1Discrete2Word.setFromSimVar('L:A32NX_FM1_DISCRETE_WORD_2');
+    const fm2DiscreteWord2 = this.fm2Discrete2Word.setFromSimVar('L:A32NX_FM2_DISCRETE_WORD_2');
 
     /** MCDU TO CONF 0 selected */
     const mcduToFlapPos0 = fm1DiscreteWord2.bitValueOr(13, false) || fm2DiscreteWord2.bitValueOr(13, false);
@@ -3253,13 +3312,13 @@ export class PseudoFWC {
     this.cabAltSetResetState1.set(
       this.cabAltSetReset1.write(
         (pressureAltitude ?? 0) > 10000 && this.excessPressure.get(),
-        this.excessPressure.get() && [3, 10].includes(this.fwcFlightPhase.get()),
+        this.excessPressure.get() && PseudoFWC.FLIGHT_PHASES_3_10.includes(this.fwcFlightPhase.get()),
       ),
     );
     this.cabAltSetResetState2.set(
       this.cabAltSetReset2.write(
         (pressureAltitude ?? 0) > 16000 && this.excessPressure.get(),
-        this.excessPressure.get() && [3, 10].includes(this.fwcFlightPhase.get()),
+        this.excessPressure.get() && PseudoFWC.FLIGHT_PHASES_3_10.includes(this.fwcFlightPhase.get()),
       ),
     );
     this.packOffBleedAvailable1.write((eng1Bleed === 1 && !eng1BleedPbFault) || !crossbleedFullyClosed, deltaTime);
@@ -3287,14 +3346,14 @@ export class PseudoFWC {
       'percent',
     );
     this.outflowValveOpenAmount.set(
-      Arinc429Word.fromSimVarValue(`L:A32NX_PRESS_CPC_${activeCpcNumber}_OUTFLOW_VALVE_OPEN_PERCENTAGE`).valueOr(
-        manOutflowValueOpenPercentage,
-      ),
+      this.outflowValveOpenWord
+        .setFromSimVar(PseudoFWC.CPC_OUTFLOW_VALVE_VARS[activeCpcNumber - 1])
+        .valueOr(manOutflowValueOpenPercentage),
     );
     this.outflowValveNotOpenOutput.set(
       this.outflowValveNotOpenSetReset.write(
         this.outflowValveNotOpen.write(
-          this.outflowValveOpenAmount.get() < 85 && [8, 9, 10].includes(this.fwcFlightPhase.get()),
+          this.outflowValveOpenAmount.get() < 85 && PseudoFWC.FLIGHT_PHASES_8_9_10.includes(this.fwcFlightPhase.get()),
           deltaTime,
         ),
         this.outflowValveOpenAmount.get() > 95 ||
@@ -3305,15 +3364,15 @@ export class PseudoFWC {
     const safetyValveNotClosed = SimVar.GetSimVarValue('L:A32NX_PRESS_SAFETY_VALVE_OPEN_PERCENTAGE', 'percent') > 0;
     this.safetyValveNotClosedAir.write(safetyValveNotClosed, deltaTime);
     this.safetyValveNotClosedOutput.set(
-      (safetyValveNotClosed && [1, 2, 3].includes(this.fwcFlightPhase.get())) ||
+      (safetyValveNotClosed && PseudoFWC.FLIGHT_PHASES_1_2_3.includes(this.fwcFlightPhase.get())) ||
         (this.safetyValveNotClosedAir.read() && this.fwcFlightPhase.get() === 6),
     );
 
     const manCabinDeltaPressure = SimVar.GetSimVarValue('L:A32NX_PRESS_MAN_CABIN_DELTA_PRESSURE', 'percent');
     this.cabinDeltaPressure.set(
-      Arinc429Word.fromSimVarValue(`L:A32NX_PRESS_CPC_${activeCpcNumber}_CABIN_DELTA_PRESSURE`).valueOr(
-        manCabinDeltaPressure,
-      ),
+      this.cabinDeltaPressureWord
+        .setFromSimVar(PseudoFWC.CPC_CABIN_DELTA_PRESSURE_VARS[activeCpcNumber - 1])
+        .valueOr(manCabinDeltaPressure),
     );
 
     /* ELEC STUFF USED BY A LOT OF LOGIC */
@@ -3378,16 +3437,16 @@ export class PseudoFWC {
     this.rightFuelLow.set(this.rightFuelLowConfirm.write(rightFuelLow && !this.lrTankLow.get(), deltaTime));
 
     /* F/CTL */
-    const fcdc1DiscreteWord1 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_1_DISCRETE_WORD_1');
-    const fcdc2DiscreteWord1 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_2_DISCRETE_WORD_1');
-    const fcdc1DiscreteWord2 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_1_DISCRETE_WORD_2');
-    const fcdc2DiscreteWord2 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_2_DISCRETE_WORD_2');
-    const fcdc1DiscreteWord3 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_1_DISCRETE_WORD_3');
-    const fcdc2DiscreteWord3 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_2_DISCRETE_WORD_3');
-    const fcdc1DiscreteWord4 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_1_DISCRETE_WORD_4');
-    const fcdc2DiscreteWord4 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_2_DISCRETE_WORD_4');
-    const fcdc1DiscreteWord5 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_1_DISCRETE_WORD_5');
-    const fcdc2DiscreteWord5 = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_2_DISCRETE_WORD_5');
+    const fcdc1DiscreteWord1 = this.fcdc1Discrete1Word.setFromSimVar('L:A32NX_FCDC_1_DISCRETE_WORD_1');
+    const fcdc2DiscreteWord1 = this.fcdc2Discrete1Word.setFromSimVar('L:A32NX_FCDC_2_DISCRETE_WORD_1');
+    const fcdc1DiscreteWord2 = this.fcdc1Discrete2Word.setFromSimVar('L:A32NX_FCDC_1_DISCRETE_WORD_2');
+    const fcdc2DiscreteWord2 = this.fcdc2Discrete2Word.setFromSimVar('L:A32NX_FCDC_2_DISCRETE_WORD_2');
+    const fcdc1DiscreteWord3 = this.fcdc1Discrete3Word.setFromSimVar('L:A32NX_FCDC_1_DISCRETE_WORD_3');
+    const fcdc2DiscreteWord3 = this.fcdc2Discrete3Word.setFromSimVar('L:A32NX_FCDC_2_DISCRETE_WORD_3');
+    const fcdc1DiscreteWord4 = this.fcdc1Discrete4Word.setFromSimVar('L:A32NX_FCDC_1_DISCRETE_WORD_4');
+    const fcdc2DiscreteWord4 = this.fcdc2Discrete4Word.setFromSimVar('L:A32NX_FCDC_2_DISCRETE_WORD_4');
+    const fcdc1DiscreteWord5 = this.fcdc1Discrete5Word.setFromSimVar('L:A32NX_FCDC_1_DISCRETE_WORD_5');
+    const fcdc2DiscreteWord5 = this.fcdc2Discrete5Word.setFromSimVar('L:A32NX_FCDC_2_DISCRETE_WORD_5');
 
     // ELAC 1 FAULT computation
     const se1f =
@@ -3395,7 +3454,7 @@ export class PseudoFWC {
       (fcdc1DiscreteWord1.bitValueOr(20, false) || fcdc2DiscreteWord1.bitValueOr(20, false));
     const elac1FaultCondition =
       !(
-        [1, 10].includes(this.fwcFlightPhase.get()) &&
+        PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()) &&
         (fcdc1DiscreteWord3.bitValueOr(19, false) || fcdc2DiscreteWord3.bitValueOr(19, false))
       ) &&
       !this.sdac00411Word.bitValue(29) &&
@@ -3417,7 +3476,7 @@ export class PseudoFWC {
       (fcdc1DiscreteWord1.bitValueOr(22, false) || fcdc2DiscreteWord1.bitValueOr(22, false));
     const elac2FaultCondition =
       !(
-        [1, 10].includes(this.fwcFlightPhase.get()) &&
+        PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()) &&
         (fcdc1DiscreteWord3.bitValueOr(20, false) || fcdc2DiscreteWord3.bitValueOr(20, false))
       ) &&
       !this.sdac00410Word.bitValue(29) &&
@@ -3437,7 +3496,7 @@ export class PseudoFWC {
     const ss1f = fcdc1DiscreteWord1.bitValueOr(25, false) || fcdc2DiscreteWord1.bitValueOr(25, false);
     this.sec1FaultCondition.set(
       !(
-        [1, 10].includes(this.fwcFlightPhase.get()) &&
+        PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()) &&
         (fcdc1DiscreteWord3.bitValueOr(27, false) || fcdc2DiscreteWord3.bitValueOr(27, false))
       ) &&
         !this.sdac00411Word.bitValue(29) &&
@@ -3451,7 +3510,7 @@ export class PseudoFWC {
     const ss2f = fcdc1DiscreteWord1.bitValueOr(26, false) || fcdc2DiscreteWord1.bitValueOr(26, false);
     this.sec2FaultCondition.set(
       !(
-        [1, 10].includes(this.fwcFlightPhase.get()) &&
+        PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()) &&
         (fcdc1DiscreteWord3.bitValueOr(28, false) || fcdc2DiscreteWord3.bitValueOr(28, false))
       ) &&
         !this.sdac00410Word.bitValue(29) &&
@@ -3465,7 +3524,7 @@ export class PseudoFWC {
     const ss3f = fcdc1DiscreteWord1.bitValueOr(29, false) || fcdc2DiscreteWord1.bitValueOr(29, false);
     this.sec3FaultCondition.set(
       !(
-        [1, 10].includes(this.fwcFlightPhase.get()) &&
+        PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()) &&
         (fcdc1DiscreteWord3.bitValueOr(29, false) || fcdc2DiscreteWord3.bitValueOr(29, false))
       ) &&
         !this.sdac00410Word.bitValue(29) &&
@@ -3492,13 +3551,19 @@ export class PseudoFWC {
     // ALTN LAW 2 computation
     const SPA2 = fcdc1DiscreteWord1.bitValueOr(13, false) || fcdc2DiscreteWord1.bitValueOr(13, false);
     this.altn2LawConfirmNodeOutput.set(
-      this.altn2LawConfirmNode.write(SPA2 && ![1, 10].includes(this.fwcFlightPhase.get()), deltaTime),
+      this.altn2LawConfirmNode.write(
+        SPA2 && !PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()),
+        deltaTime,
+      ),
     );
 
     // ALTN LAW 1 computation
     const SPA1 = fcdc1DiscreteWord1.bitValueOr(12, false) || fcdc2DiscreteWord1.bitValueOr(12, false);
     this.altn1LawConfirmNodeOutput.set(
-      this.altn1LawConfirmNode.write(SPA1 && ![1, 10].includes(this.fwcFlightPhase.get()), deltaTime),
+      this.altn1LawConfirmNode.write(
+        SPA1 && !PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()),
+        deltaTime,
+      ),
     );
 
     // DIRECT LAW computation
@@ -3506,7 +3571,7 @@ export class PseudoFWC {
       (this.lgDownlocked.get() && this.elecEmergency.get() && SFCDC12FT) ||
       fcdc1DiscreteWord1.bitValueOr(15, false) ||
       fcdc2DiscreteWord1.bitValueOr(15, false);
-    this.directLawCondition.set(SPBUL && ![1, 10].includes(this.fwcFlightPhase.get()));
+    this.directLawCondition.set(SPBUL && !PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()));
 
     // L+R ELEV FAULT computation
     const lhElevBlueFail =
@@ -3526,7 +3591,7 @@ export class PseudoFWC {
         lhElevGreenFail &&
         rhElevBlueFail &&
         rhElevGreenFail &&
-        ![1, 10].includes(this.fwcFlightPhase.get()),
+        !PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()),
     );
 
     // GND SPLRS FAULT status
@@ -3548,8 +3613,8 @@ export class PseudoFWC {
     this.slatsAngle.set(SimVar.GetSimVarValue('L:A32NX_SLATS_IPPU_ANGLE', 'degrees'));
 
     // TODO: add switching between SFCC_1 and SFCC_2
-    const flapsPos = Arinc429Word.fromSimVarValue('L:A32NX_SFCC_1_FLAP_ACTUAL_POSITION_WORD');
-    const slatsPos = Arinc429Word.fromSimVarValue('L:A32NX_SFCC_1_SLAT_ACTUAL_POSITION_WORD');
+    const flapsPos = this.flapsPosWord.setFromSimVar('L:A32NX_SFCC_1_FLAP_ACTUAL_POSITION_WORD');
+    const slatsPos = this.slatsPosWord.setFromSimVar('L:A32NX_SFCC_1_SLAT_ACTUAL_POSITION_WORD');
 
     // WARNING these vary for other variants... A320 CFM LEAP values here
     // flap/slat internal signals
@@ -3639,8 +3704,8 @@ export class PseudoFWC {
     );
 
     // pitch trim not takeoff
-    const fcdc1Stab1Pos = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_1_ELEVATOR_TRIM_POS');
-    const fcdc2Stab1Pos = Arinc429Word.fromSimVarValue('L:A32NX_FCDC_2_ELEVATOR_TRIM_POS');
+    const fcdc1Stab1Pos = this.fcdc1Stab1PosWord.setFromSimVar('L:A32NX_FCDC_1_ELEVATOR_TRIM_POS');
+    const fcdc2Stab1Pos = this.fcdc2Stab1PosWord.setFromSimVar('L:A32NX_FCDC_2_ELEVATOR_TRIM_POS');
     const fcdc1Stab2Pos = fcdc1Stab1Pos;
     const fcdc2Stab2Pos = fcdc2Stab1Pos;
 
@@ -3673,8 +3738,8 @@ export class PseudoFWC {
 
     // pitch trim/mcdu disagree
     // we don't check the trim calculated from CG as it's not available yet
-    const fm1PitchTrim = Arinc429Word.fromSimVarValue('L:A32NX_FM1_TO_PITCH_TRIM');
-    const fm2PitchTrim = Arinc429Word.fromSimVarValue('L:A32NX_FM2_TO_PITCH_TRIM');
+    const fm1PitchTrim = this.fm1PitchTrimWord.setFromSimVar('L:A32NX_FM1_TO_PITCH_TRIM');
+    const fm2PitchTrim = this.fm2PitchTrimWord.setFromSimVar('L:A32NX_FM2_TO_PITCH_TRIM');
     const fmPitchTrim =
       !fm1PitchTrim.isNormalOperation() && fm2PitchTrim.isNormalOperation() ? fm2PitchTrim : fm1PitchTrim;
     this.trimDisagreeMcduStab1Conf.write(
@@ -3691,8 +3756,8 @@ export class PseudoFWC {
     );
 
     // rudder trim not takeoff
-    const fac1RudderTrimPosition = Arinc429Word.fromSimVarValue('L:A32NX_FAC_1_RUDDER_TRIM_POS');
-    const fac2RudderTrimPosition = Arinc429Word.fromSimVarValue('L:A32NX_FAC_2_RUDDER_TRIM_POS');
+    const fac1RudderTrimPosition = this.fac1RudderTrimPosWord.setFromSimVar('L:A32NX_FAC_1_RUDDER_TRIM_POS');
+    const fac2RudderTrimPosition = this.fac2RudderTrimPosWord.setFromSimVar('L:A32NX_FAC_2_RUDDER_TRIM_POS');
 
     const rudderTrimConfig =
       (!this.ltp['07C'] && Math.abs(fac1RudderTrimPosition.valueOr(0)) > 3.6) ||
@@ -4124,16 +4189,10 @@ export class PseudoFWC {
 
     const gen1OffConfirmOrPhase6 = this.engine1RunningAndNotPhase6.read() || phase6For60Seconds;
     const gen2OffConfirmOrPhase6 = this.engine2RunningAndNotPhase6.read() || phase6For60Seconds;
-    const phase6WithOtherGenOff = (
-      offConfirmOrPhase6: boolean,
-      otherGenOffPart1: boolean,
-      otherGenNotOperating: boolean,
-    ): boolean => offConfirmOrPhase6 || (phase6 && (otherGenOffPart1 || otherGenNotOperating));
-
     const gen1OffOut =
-      gen1OffPart1 && phase6WithOtherGenOff(gen1OffConfirmOrPhase6, gen2OffPart1, gen2NotOperatingBase);
+      gen1OffPart1 && this.phase6WithOtherGenOff(phase6, gen1OffConfirmOrPhase6, gen2OffPart1, gen2NotOperatingBase);
     const gen2OffOut =
-      gen2OffPart1 && phase6WithOtherGenOff(gen2OffConfirmOrPhase6, gen1OffPart1, gen1NotOperatingBase);
+      gen2OffPart1 && this.phase6WithOtherGenOff(phase6, gen2OffConfirmOrPhase6, gen1OffPart1, gen1NotOperatingBase);
 
     const gen1NotOperating = gen1NotOperatingBase || gen1OffOut;
     const gen2NotOperating = gen2NotOperatingBase || gen2OffOut;
@@ -4185,8 +4244,8 @@ export class PseudoFWC {
     );
 
     // Use fresh genNotOperating values for this cycle
-    const gen1OffPart2 = phase6WithOtherGenOff(gen1OffConfirmOrPhase6, gen2OffPart1, gen2NotOperating);
-    const gen2OffPart2 = phase6WithOtherGenOff(gen2OffConfirmOrPhase6, gen1OffPart1, gen1NotOperating);
+    const gen1OffPart2 = this.phase6WithOtherGenOff(phase6, gen1OffConfirmOrPhase6, gen2OffPart1, gen2NotOperating);
+    const gen2OffPart2 = this.phase6WithOtherGenOff(phase6, gen2OffConfirmOrPhase6, gen1OffPart1, gen1NotOperating);
 
     const gen1OffWarningPart1 = gen1OffPart1 && gen1OffPart2;
     const gen1OffWarningPart2 = this.gen12NotOperatingPhase3Pulse.read();
@@ -4631,19 +4690,24 @@ export class PseudoFWC {
 
     // fire always forces the master warning and SC aural on
     this.fireActive.set(
-      [this.eng1FireTest.get(), this.eng2FireTest.get(), this.apuFireTest.get(), this.cargoFireTest.get()].some(
-        (e) => e,
-      ),
+      this.eng1FireTest.get() || this.eng2FireTest.get() || this.apuFireTest.get() || this.cargoFireTest.get(),
     );
 
     let tempMemoArrayLeft: string[] = [];
     let tempMemoArrayRight: string[] = [];
     const allFailureKeys: string[] = [];
     let tempFailureArrayLeft: string[] = [];
-    let failureKeysLeft: string[] = [...this.failuresLeft];
-    let recallFailureKeys: string[] = [...this.recallFailures];
+    // Update failure lists in case failures have been resolved. Only the keys currently in the
+    // lists need to be checked; filtering the (usually short) lists directly avoids allocating
+    // three fresh arrays per inactive dictionary entry on every update cycle
+    const failureStillPresented = (key: string) => {
+      const item = this.ewdMessageFailures[key];
+      return !item || item.simVarIsActive.get();
+    };
+    const failureKeysLeft: string[] = this.failuresLeft.filter(failureStillPresented);
+    const recallFailureKeys: string[] = this.recallFailures.filter(failureStillPresented);
+    const failureKeysRight: string[] = this.failuresRight.filter(failureStillPresented);
     let tempFailureArrayRight: string[] = [];
-    let failureKeysRight: string[] = [...this.failuresRight];
     const failureSysPageItems: { order: number; sysPage: EcamSysPage }[] = [];
     const auralCrcKeys: string[] = [];
     const auralScKeys: string[] = [];
@@ -4652,28 +4716,19 @@ export class PseudoFWC {
     let activeMasterWarningFailureCount = 0;
     let activeMasterCautionFailureCount = 0;
 
-    // Update failure lists in case failures have been resolved
-    for (const [key, value] of Object.entries(this.ewdMessageFailures)) {
-      if (!value.simVarIsActive.get()) {
-        failureKeysLeft = failureKeysLeft.filter((e) => e !== key);
-        failureKeysRight = failureKeysRight.filter((e) => e !== key);
-        recallFailureKeys = recallFailureKeys.filter((e) => e !== key);
-      }
-    }
-
     this.recallFailures.length = 0;
     this.recallFailures.push(...recallFailureKeys);
     this.nonCancellableWarningCount = 0;
 
     // Failures first
-    for (const [key, value] of Object.entries(this.ewdMessageFailures)) {
+    for (const [key, value] of this.ewdMessageFailuresEntries) {
       // new warning?
       const newWarning =
         (value.side === undefined && !this.specialCodes.includes(key)) ||
         (value.side === 'LEFT' && !this.failuresLeft.includes(key) && !recallFailureKeys.includes(key)) ||
         (value.side === 'RIGHT' && !this.failuresRight.includes(key));
 
-      if (newWarning && value.flightPhaseInhib.some((e) => e === flightPhase)) {
+      if (newWarning && value.flightPhaseInhib.includes(flightPhase)) {
         continue;
       }
       const auralWarning = value.auralWarning?.get();
@@ -4819,15 +4874,13 @@ export class PseudoFWC {
     this.failuresRight.length = 0;
     this.failuresRight.push(...failureKeysRight);
     if (tempFailureArrayLeft.length > 0) {
-      this.ewdMessageLinesLeft.forEach((l, i) => l.set(orderedFailureArrayLeft[i]));
+      for (let i = 0; i < this.ewdMessageLinesLeft.length; i++) {
+        this.ewdMessageLinesLeft[i].set(orderedFailureArrayLeft[i]);
+      }
     }
 
-    for (const [, value] of Object.entries(this.ewdMessageMemos)) {
-      if (
-        value.simVarIsActive.get() &&
-        !value.memoInhibit?.() &&
-        !value.flightPhaseInhib.some((e) => e === flightPhase)
-      ) {
+    for (const value of this.ewdMessageMemosValues) {
+      if (value.simVarIsActive.get() && !value.memoInhibit?.() && !value.flightPhaseInhib.includes(flightPhase)) {
         const newCode: string[] = [];
         const codeToReturn = value.whichCodeToReturn !== undefined ? value.whichCodeToReturn() : undefined;
         if (codeToReturn !== undefined) {
@@ -4868,7 +4921,9 @@ export class PseudoFWC {
     let orderedMemoArrayRight: string[] = this.mapOrder(tempMemoArrayRight);
 
     if (!failLeft) {
-      this.ewdMessageLinesLeft.forEach((l, i) => l.set(orderedMemoArrayLeft[i]));
+      for (let i = 0; i < this.ewdMessageLinesLeft.length; i++) {
+        this.ewdMessageLinesLeft[i].set(orderedMemoArrayLeft[i]);
+      }
     }
 
     if (activeMasterCautionFailureCount === 0) {
@@ -4886,7 +4941,9 @@ export class PseudoFWC {
       orderedMemoArrayRight = this.mapOrder([...orderedMemoArrayRight, ...orderedFailureArrayRight]);
     }
 
-    this.ewdMessageLinesRight.forEach((l, i) => l.set(orderedMemoArrayRight[i]));
+    for (let i = 0; i < this.ewdMessageLinesRight.length; i++) {
+      this.ewdMessageLinesRight[i].set(orderedMemoArrayRight[i]);
+    }
 
     const chimeRequested =
       (this.auralSingleChimePending || this.requestSingleChimeFromAThrOff) && !this.auralCrcActive.get();
@@ -6533,7 +6590,7 @@ export class PseudoFWC {
       whichCodeToReturn: () => [
         0,
         SimVar.GetSimVarValue('L:A32NX_OVHD_VENT_CAB_FANS_PB_IS_ON', 'bool') === 1 ? 2 : null,
-        [1, 10].includes(this.fwcFlightPhase.get()) && !this.cargoFireAgentDisch.get() ? 3 : null,
+        PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()) && !this.cargoFireAgentDisch.get() ? 3 : null,
         !this.cargoFireAgentDisch.get() ? 4 : null,
         !this.aircraftOnGround.get() ? 5 : null,
         !this.aircraftOnGround.get() ? 6 : null,
@@ -6788,7 +6845,7 @@ export class PseudoFWC {
       whichCodeToReturn: () => [
         0,
         !this.aircraftOnGround.get() ? 1 : null,
-        [1, 10].includes(this.fwcFlightPhase.get()) ? 2 : null,
+        PseudoFWC.FLIGHT_PHASES_1_10.includes(this.fwcFlightPhase.get()) ? 2 : null,
         !this.aircraftOnGround.get() ? 3 : null,
         [1, 2].includes(this.fwcFlightPhase.get()) && !this.brakeFan.get() ? 4 : null,
         this.aircraftOnGround.get() ? 5 : null,
@@ -7580,4 +7637,12 @@ export class PseudoFWC {
       side: 'RIGHT',
     },
   };
+
+  // The failure/memo dictionaries above are static after construction. Their entries are cached
+  // here once (fields initialize in declaration order), as materializing them with
+  // Object.entries() on every update cycle allocates hundreds of short-lived arrays and causes
+  // GC pauses in Coherent.
+  private readonly ewdMessageFailuresEntries: [string, EWDFailureItem][] = Object.entries(this.ewdMessageFailures);
+
+  private readonly ewdMessageMemosValues: EWDMemoItem[] = Object.values(this.ewdMessageMemos);
 }
