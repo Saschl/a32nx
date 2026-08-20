@@ -67,6 +67,8 @@ export class HeadingOfftape extends DisplayComponent<{ bus: ArincEventBus; faile
 
   private lsPressed = Subject.create(false);
 
+  private lastNormalOperation: boolean | undefined = undefined;
+
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
@@ -78,14 +80,13 @@ export class HeadingOfftape extends DisplayComponent<{ bus: ArincEventBus; faile
       .handle((word) => {
         this.heading.set(word.value);
 
-        if (word.isNormalOperation()) {
-          this.normalRef.instance.style.visibility = 'visible';
-          this.abnormalRef.instance.style.visibility = 'hidden';
-          this.hdgFlagVisible.set(false);
-        } else {
-          this.normalRef.instance.style.visibility = 'hidden';
-          this.abnormalRef.instance.style.visibility = 'visible';
-          this.hdgFlagVisible.set(true);
+        // fires on effectively every frame; only write the styles when the state changed
+        const isNormalOperation = word.isNormalOperation();
+        if (isNormalOperation !== this.lastNormalOperation) {
+          this.lastNormalOperation = isNormalOperation;
+          this.normalRef.instance.style.visibility = isNormalOperation ? 'visible' : 'hidden';
+          this.abnormalRef.instance.style.visibility = isNormalOperation ? 'hidden' : 'visible';
+          this.hdgFlagVisible.set(!isNormalOperation);
         }
       });
 
@@ -151,6 +152,10 @@ class SelectedHeading extends DisplayComponent<SelectedHeadingProps> {
 
   private text = Subject.create('');
 
+  private lastTargetRounded = NaN;
+
+  private lastOffset = NaN;
+
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
@@ -186,6 +191,8 @@ class SelectedHeading extends DisplayComponent<SelectedHeadingProps> {
     }, true);
   }
 
+  // Runs on every heading change (effectively every frame), so string builds and the
+  // transform write are deduped against the previous state
   private handleDelta() {
     const trkFpaActive = this.fcuDiscreteWord1.bitValueOr(25, false);
     const targetValue = trkFpaActive ? this.selectedTrack : this.selectedHeading;
@@ -199,12 +206,19 @@ class SelectedHeading extends DisplayComponent<SelectedHeadingProps> {
 
     const headingDelta = getSmallestAngle(targetValue.value, this.heading);
 
-    this.text.set(Math.round(targetValue.value).toString().padStart(3, '0'));
+    const targetRounded = Math.round(targetValue.value);
+    if (targetRounded !== this.lastTargetRounded) {
+      this.lastTargetRounded = targetRounded;
+      this.text.set(targetRounded.toString().padStart(3, '0'));
+    }
 
     if (Math.abs(headingDelta) < DisplayRange) {
-      const offset = (headingDelta * DistanceSpacing) / ValueSpacing;
+      const offset = Math.round(((headingDelta * DistanceSpacing) / ValueSpacing) * 100) / 100;
 
-      this.targetIndicator.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
+      if (offset !== this.lastOffset) {
+        this.lastOffset = offset;
+        this.targetIndicator.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
+      }
       this.targetIndicator.instance.classList.remove('HiddenElement');
       this.headingTextRight.instance.classList.add('HiddenElement');
       this.headingTextLeft.instance.classList.add('HiddenElement');
@@ -271,14 +285,16 @@ class GroundTrackBug extends DisplayComponent<GroundTrackBugProps> {
     this.props.heading,
   );
 
-  private transformSub = MappedSubject.create(
-    ([groundTrack, heading]) => {
-      const offset = (getSmallestAngle(groundTrack.value, heading) * DistanceSpacing) / ValueSpacing;
-      return `translate3d(${offset}px, 0px, 0px)`;
-    },
+  // rounded so the transform string below is only rebuilt when the position actually changed;
+  // the inputs fire on effectively every frame
+  private readonly offsetSub = MappedSubject.create(
+    ([groundTrack, heading]) =>
+      Math.round(((getSmallestAngle(groundTrack.value, heading) * DistanceSpacing) / ValueSpacing) * 100) / 100,
     this.groundTrack,
     this.props.heading,
   );
+
+  private readonly transformSub = this.offsetSub.map((offset) => `translate3d(${offset}px, 0px, 0px)`);
 
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
@@ -321,67 +337,52 @@ class QFUIndicator extends DisplayComponent<{
 
   private text = Subject.create('');
 
+  private lastPointerOffset = NaN;
+
+  // Runs on every heading change (effectively every frame while LS is shown), so the transform
+  // write is deduped against the previous state
+  private updatePointer() {
+    if (this.ilsCourse < 0) {
+      this.qfuContainer.instance.classList.add('HiddenElement');
+    } else if (this.lsPressed) {
+      this.qfuContainer.instance.classList.remove('HiddenElement');
+      const delta = getSmallestAngle(this.ilsCourse, this.heading);
+      if (Math.abs(delta) > DisplayRange) {
+        if (delta > 0) {
+          this.ilsCourseRight.instance.classList.remove('HiddenElement');
+          this.ilsCourseLeft.instance.classList.add('HiddenElement');
+          this.ilsCoursePointer.instance.classList.add('HiddenElement');
+        } else {
+          this.ilsCourseLeft.instance.classList.remove('HiddenElement');
+          this.ilsCourseRight.instance.classList.add('HiddenElement');
+          this.ilsCoursePointer.instance.classList.add('HiddenElement');
+        }
+      } else {
+        const offset = Math.round(((delta * DistanceSpacing) / ValueSpacing) * 100) / 100;
+        if (offset !== this.lastPointerOffset) {
+          this.lastPointerOffset = offset;
+          this.ilsCoursePointer.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
+        }
+        this.ilsCoursePointer.instance.classList.remove('HiddenElement');
+        this.ilsCourseRight.instance.classList.add('HiddenElement');
+        this.ilsCourseLeft.instance.classList.add('HiddenElement');
+      }
+    }
+  }
+
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
     this.props.heading.sub((h) => {
       this.heading = h;
-
-      const delta = getSmallestAngle(this.ilsCourse, this.heading);
-      this.text.set(Math.round(this.ilsCourse).toString().padStart(3, '0'));
-
-      if (this.ilsCourse < 0) {
-        this.qfuContainer.instance.classList.add('HiddenElement');
-      } else if (this.lsPressed) {
-        this.qfuContainer.instance.classList.remove('HiddenElement');
-        if (Math.abs(delta) > DisplayRange) {
-          if (delta > 0) {
-            this.ilsCourseRight.instance.classList.remove('HiddenElement');
-            this.ilsCourseLeft.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          } else {
-            this.ilsCourseLeft.instance.classList.remove('HiddenElement');
-            this.ilsCourseRight.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          }
-        } else {
-          const offset = (getSmallestAngle(this.ilsCourse, this.heading) * DistanceSpacing) / ValueSpacing;
-          this.ilsCoursePointer.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
-          this.ilsCoursePointer.instance.classList.remove('HiddenElement');
-          this.ilsCourseRight.instance.classList.add('HiddenElement');
-          this.ilsCourseLeft.instance.classList.add('HiddenElement');
-        }
-      }
+      this.updatePointer();
     });
 
     this.props.ILSCourse.sub((c) => {
       this.ilsCourse = c;
-
-      const delta = getSmallestAngle(this.ilsCourse, this.heading);
+      // the QFU readout only depends on the course, not on the heading
       this.text.set(Math.round(this.ilsCourse).toString().padStart(3, '0'));
-
-      if (c < 0) {
-        this.qfuContainer.instance.classList.add('HiddenElement');
-      } else if (this.lsPressed) {
-        this.qfuContainer.instance.classList.remove('HiddenElement');
-        if (Math.abs(delta) > DisplayRange) {
-          if (delta > 0) {
-            this.ilsCourseRight.instance.classList.remove('HiddenElement');
-            this.ilsCourseLeft.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          } else {
-            this.ilsCourseLeft.instance.classList.remove('HiddenElement');
-            this.ilsCourseRight.instance.classList.add('HiddenElement');
-            this.ilsCoursePointer.instance.classList.add('HiddenElement');
-          }
-        } else {
-          const offset = (getSmallestAngle(this.ilsCourse, this.heading) * DistanceSpacing) / ValueSpacing;
-          this.ilsCoursePointer.instance.style.transform = `translate3d(${offset}px, 0px, 0px)`;
-          this.ilsCoursePointer.instance.classList.remove('HiddenElement');
-          this.ilsCourseRight.instance.classList.add('HiddenElement');
-          this.ilsCourseLeft.instance.classList.add('HiddenElement');
-        }
-      }
+      this.updatePointer();
     });
 
     this.props.lsPressed.sub((ls) => {

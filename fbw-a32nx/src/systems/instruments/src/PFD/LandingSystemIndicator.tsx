@@ -209,7 +209,6 @@ class LandingSystemInfo extends DisplayComponent<LandingSystemInfoProps> {
     );
 
     this.isLsFreqHidden.sub((hidden) => {
-      console.log('isLsFreqHidden', hidden, this.lsFrequency.get());
       if (hidden) {
         this.freqTextLeading.pause();
         this.freqTextTrailing.pause();
@@ -364,6 +363,10 @@ class LocalizerIndicator extends DisplayComponent<{ bus: ArincEventBus; instrume
 
   private readonly isLocDiamondHidden = this.dots.map((v) => v < -2 || v > 2);
 
+  // rounded so the transform string below is only rebuilt when the position actually changed;
+  // dots is updated on every realTime tick while LOC is received
+  private readonly locDiamondOffset = this.dots.map((dots) => Math.round(((dots * 30.221) / 2) * 100) / 100);
+
   private handleNavRadialError(): void {
     const radialError = MathUtils.correctMsfsLocaliserError(this.locRadialError.get());
     const deviation = this.lagFilter.step(radialError, this.props.instrument.deltaTime / 1000);
@@ -435,7 +438,7 @@ class LocalizerIndicator extends DisplayComponent<{ bus: ArincEventBus; instrume
               HiddenElement: this.isLocDiamondHidden,
             }}
             style={{
-              transform: this.dots.map((dots) => `translate3d(${(dots * 30.221) / 2}px, 0px, 0px)`),
+              transform: this.locDiamondOffset.map((offset) => `translate3d(${offset}px, 0px, 0px)`),
             }}
             d="m65.129 130.51 3.7776 2.5198 3.7776-2.5198-3.7776-2.5198z"
           />
@@ -480,23 +483,29 @@ class GlideSlopeIndicator extends DisplayComponent<{ bus: ArincEventBus; instrum
 
   private glideSlopeDiamond = FSComponent.createRef<SVGPathElement>();
 
+  private lastDiamondState: 'upper' | 'lower' | 'center' | undefined = undefined;
+
+  private lastDiamondOffset = NaN;
+
+  // Runs on every glideSlopeError event (effectively every frame while GS is received);
+  // class and transform writes are deduped against the previous state
   private handleGlideSlopeError(glideSlopeError: number): void {
     const deviation = this.lagFilter.step(glideSlopeError, this.props.instrument.deltaTime / 1000);
     const dots = deviation / 0.4;
 
-    if (dots > 2) {
-      this.upperDiamond.instance.classList.remove('HiddenElement');
-      this.lowerDiamond.instance.classList.add('HiddenElement');
-      this.glideSlopeDiamond.instance.classList.add('HiddenElement');
-    } else if (dots < -2) {
-      this.upperDiamond.instance.classList.add('HiddenElement');
-      this.lowerDiamond.instance.classList.remove('HiddenElement');
-      this.glideSlopeDiamond.instance.classList.add('HiddenElement');
-    } else {
-      this.upperDiamond.instance.classList.add('HiddenElement');
-      this.lowerDiamond.instance.classList.add('HiddenElement');
-      this.glideSlopeDiamond.instance.classList.remove('HiddenElement');
-      this.glideSlopeDiamond.instance.style.transform = `translate3d(0px, ${(dots * 30.238) / 2}px, 0px)`;
+    const state = dots > 2 ? 'upper' : dots < -2 ? 'lower' : 'center';
+    if (state !== this.lastDiamondState) {
+      this.lastDiamondState = state;
+      this.upperDiamond.instance.classList.toggle('HiddenElement', state !== 'upper');
+      this.lowerDiamond.instance.classList.toggle('HiddenElement', state !== 'lower');
+      this.glideSlopeDiamond.instance.classList.toggle('HiddenElement', state !== 'center');
+    }
+    if (state === 'center') {
+      const offset = Math.round(((dots * 30.238) / 2) * 100) / 100;
+      if (offset !== this.lastDiamondOffset) {
+        this.lastDiamondOffset = offset;
+        this.glideSlopeDiamond.instance.style.transform = `translate3d(0px, ${offset}px, 0px)`;
+      }
     }
   }
 

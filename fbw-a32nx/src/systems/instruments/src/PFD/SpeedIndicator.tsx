@@ -1309,6 +1309,10 @@ export class MachNumber extends DisplayComponent<{ bus: ArincEventBus }> {
     w.isNormalOperation() || w.isFunctionalTest() ? Math.round(w.value * 1000) : 0,
   );
 
+  private lastPermilleDisplayed = NaN;
+
+  // Runs on every mach change (effectively every frame in flight); the text string is only
+  // rebuilt when the displayed permille value actually changed
   private handleMachDisplay(mach: Arinc429WordData) {
     if (mach.value > 0.5) {
       this.machHysteresis = true;
@@ -1321,12 +1325,18 @@ export class MachNumber extends DisplayComponent<{ bus: ArincEventBus }> {
     if (hideMachDisplay) {
       this.machFlagVisible.set(false);
       this.machTextSub.set('');
+      this.lastPermilleDisplayed = NaN;
     } else if (mach.isFailureWarning()) {
       this.machFlagVisible.set(true);
       this.machTextSub.set('');
+      this.lastPermilleDisplayed = NaN;
     } else {
       this.machFlagVisible.set(false);
-      this.machTextSub.set(`.${this.machPermille.get()}`);
+      const permille = this.machPermille.get();
+      if (permille !== this.lastPermilleDisplayed) {
+        this.lastPermilleDisplayed = permille;
+        this.machTextSub.set(`.${permille}`);
+      }
     }
   }
 
