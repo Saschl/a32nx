@@ -11,8 +11,9 @@ import {
   RegisteredSimVar,
 } from '@flybywiresim/fbw-sdk';
 
+import { Coordinates } from '@fmgc/flightplanning/data/geo';
 import { GuidanceController } from '@fmgc/guidance/GuidanceController';
-import { PathVector, pathVectorLength, pathVectorValid } from '@fmgc/guidance/lnav/PathVector';
+import { PathVector, PathVectorType, pathVectorLength, pathVectorValid } from '@fmgc/guidance/lnav/PathVector';
 import { ArmedLateralMode, isArmed, LateralMode } from '@shared/autopilot';
 import { FlightPlanIndex } from '@fmgc/flightplanning/FlightPlanManager';
 import { FlightPlanService } from '@fmgc/flightplanning/FlightPlanService';
@@ -24,6 +25,9 @@ import { FlightPhaseManagerEvents } from '@fmgc/flightphase';
 import { FlightPlanUtils } from '@fmgc/flightplanning/FlightPlanUtils';
 
 const UPDATE_TIMER = 2_500;
+
+// how often identical vectors are re-sent anyway, so a reloaded instrument recovers its data
+const KEEP_ALIVE_TIMER = 30_000;
 
 export class EfisVectors {
   private syncer: GenericDataListenerSync = new GenericDataListenerSync();
@@ -59,12 +63,29 @@ export class EfisVectors {
 
   private updateTimer = 0;
 
+  private keepAliveTimer = 0;
+
+  private keepAliveResync = false;
+
+  private readonly lastTransmitted: Record<EfisSide, Map<EfisVectorsGroup, PathVector[] | null>> = {
+    L: new Map(),
+    R: new Map(),
+  };
+
   public update(deltaTime: number): void {
     this.updateTimer += deltaTime;
+    this.keepAliveTimer += deltaTime;
 
     if (this.updateTimer >= UPDATE_TIMER) {
+      // A reloaded or late-attached instrument only recovers its vectors when they are re-sent,
+      // so the transmit dedupe is bypassed once in a while
+      if (this.keepAliveTimer >= KEEP_ALIVE_TIMER) {
+        this.keepAliveTimer = 0;
+        this.keepAliveResync = true;
+      }
       this.updateSide('L', true);
       this.updateSide('R', true);
+      this.keepAliveResync = false;
       this.updateTimer = 0;
     } else {
       this.updateSide('L');
@@ -317,6 +338,103 @@ export class EfisVectors {
   }
 
   private transmit(vectors: PathVector[] | null, vectorsGroup: EfisVectorsGroup, side: EfisSide): void {
+    // Most of the periodic forced updates re-produce identical content. Serializing the whole
+    // path geometry through Coherent (and re-materializing it in every listening instrument)
+    // on every cycle causes GC spikes with long flight plans, so identical content is only
+    // re-sent by the occasional keep-alive resync.
+    const lastTransmittedForSide = this.lastTransmitted[side];
+    if (
+      !this.keepAliveResync &&
+      lastTransmittedForSide.has(vectorsGroup) &&
+      EfisVectors.pathVectorsEqual(lastTransmittedForSide.get(vectorsGroup), vectors)
+    ) {
+      return;
+    }
+    // snapshot a copy, as the transmitted vectors come out of the live geometry
+    lastTransmittedForSide.set(vectorsGroup, EfisVectors.clonePathVectors(vectors));
+
     this.syncer.sendEvent(`A32NX_EFIS_VECTORS_${side}_${EfisVectorsGroup[vectorsGroup]}`, vectors);
+  }
+
+  private static coordinatesEqual(a: Coordinates, b: Coordinates): boolean {
+    return a.lat === b.lat && a.long === b.long;
+  }
+
+  private static pathVectorsEqual(a: PathVector[] | null, b: PathVector[] | null): boolean {
+    if (a === null || b === null) {
+      return a === b;
+    }
+    if (a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      const va = a[i];
+      const vb = b[i];
+      if (va.type === PathVectorType.Line && vb.type === PathVectorType.Line) {
+        if (
+          !EfisVectors.coordinatesEqual(va.startPoint, vb.startPoint) ||
+          !EfisVectors.coordinatesEqual(va.endPoint, vb.endPoint)
+        ) {
+          return false;
+        }
+      } else if (va.type === PathVectorType.Arc && vb.type === PathVectorType.Arc) {
+        if (
+          va.sweepAngle !== vb.sweepAngle ||
+          !EfisVectors.coordinatesEqual(va.startPoint, vb.startPoint) ||
+          !EfisVectors.coordinatesEqual(va.endPoint, vb.endPoint) ||
+          !EfisVectors.coordinatesEqual(va.centrePoint, vb.centrePoint)
+        ) {
+          return false;
+        }
+      } else if (va.type === PathVectorType.DebugPoint && vb.type === PathVectorType.DebugPoint) {
+        if (
+          va.annotation !== vb.annotation ||
+          va.colour !== vb.colour ||
+          !EfisVectors.coordinatesEqual(va.startPoint, vb.startPoint)
+        ) {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static clonePathVectors(vectors: PathVector[] | null): PathVector[] | null {
+    if (vectors === null) {
+      return null;
+    }
+    const copy: PathVector[] = new Array(vectors.length);
+    for (let i = 0; i < vectors.length; i++) {
+      const vector = vectors[i];
+      switch (vector.type) {
+        case PathVectorType.Line:
+          copy[i] = {
+            type: PathVectorType.Line,
+            startPoint: { ...vector.startPoint },
+            endPoint: { ...vector.endPoint },
+          };
+          break;
+        case PathVectorType.Arc:
+          copy[i] = {
+            type: PathVectorType.Arc,
+            startPoint: { ...vector.startPoint },
+            endPoint: { ...vector.endPoint },
+            centrePoint: { ...vector.centrePoint },
+            sweepAngle: vector.sweepAngle,
+          };
+          break;
+        default:
+          copy[i] = {
+            type: PathVectorType.DebugPoint,
+            startPoint: { ...vector.startPoint },
+            annotation: vector.annotation,
+            colour: vector.colour,
+          };
+          break;
+      }
+    }
+    return copy;
   }
 }
