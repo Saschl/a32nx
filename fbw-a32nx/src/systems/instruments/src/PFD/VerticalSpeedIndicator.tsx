@@ -362,25 +362,37 @@ class VSpeedText extends DisplayComponent<{
 
   private visibilitySub = Subject.create('hidden');
 
+  private lastVsHundreds = NaN;
+
+  private lastTextOffset = NaN;
+
   onAfterRender(node: VNode): void {
     super.onAfterRender(node);
 
+    // filteredVs fires on effectively every frame while the VS moves; only touch the DOM when
+    // the displayed (rounded) value or position actually changed
     this.props.filteredVs.sub((vs) => {
       const absVSpeed = Math.abs(vs);
 
       if (absVSpeed < 200) {
         this.visibilitySub.set('hidden');
-      } else {
-        this.visibilitySub.set('inherit');
+        return;
       }
+      this.visibilitySub.set('inherit');
 
       const sign = Math.sign(vs);
 
-      const textOffset = this.props.yOffset.get() - sign * 2.4;
+      const vsHundreds = Math.round(absVSpeed / 100);
+      if (vsHundreds !== this.lastVsHundreds) {
+        this.lastVsHundreds = vsHundreds;
+        this.vsTextRef.instance.textContent = (vsHundreds < 10 ? '0' : '') + vsHundreds.toString();
+      }
 
-      const text = (Math.round(absVSpeed / 100) < 10 ? '0' : '') + Math.round(absVSpeed / 100).toString();
-      this.vsTextRef.instance.textContent = text;
-      this.groupRef.instance.style.transform = `translate3d(0px, ${textOffset}px, 0px)`;
+      const textOffset = Math.round((this.props.yOffset.get() - sign * 2.4) * 100) / 100;
+      if (textOffset !== this.lastTextOffset) {
+        this.lastTextOffset = textOffset;
+        this.groupRef.instance.style.transform = `translate3d(0px, ${textOffset}px, 0px)`;
+      }
     }, true);
 
     this.props.textColour.sub((colour) => {

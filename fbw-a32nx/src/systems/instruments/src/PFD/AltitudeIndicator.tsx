@@ -48,18 +48,32 @@ class LandingElevationIndicator extends DisplayComponent<{ bus: ArincEventBus }>
 
   private delta = 0;
 
+  private isHidden: boolean | undefined = undefined;
+
+  private lastOffset = NaN;
+
+  // Runs on every altitude change (effectively every frame), so class and attribute writes
+  // are deduped against the previous state
   private handleLandingElevation() {
     const landingElevationValid =
       !this.landingElevation.isFailureWarning() && !this.landingElevation.isNoComputedData();
     const delta = this.altitude.get().value - this.landingElevation.value;
-    const offset = ((delta - DisplayRange) * DistanceSpacing) / ValueSpacing;
     this.delta = delta;
-    if (delta > DisplayRange || (this.flightPhase !== 7 && this.flightPhase !== 8) || !landingElevationValid) {
-      this.landingElevationIndicator.instance.classList.add('HiddenElement');
-    } else {
-      this.landingElevationIndicator.instance.classList.remove('HiddenElement');
+
+    const hidden = delta > DisplayRange || (this.flightPhase !== 7 && this.flightPhase !== 8) || !landingElevationValid;
+    if (hidden !== this.isHidden) {
+      this.isHidden = hidden;
+      this.landingElevationIndicator.instance.classList.toggle('HiddenElement', hidden);
     }
-    this.landingElevationIndicator.instance.setAttribute('d', `m130.85 123.56h-13.096v${offset}h13.096z`);
+
+    if (!hidden) {
+      // rounded to 0.01 viewBox units so unchanged positions skip the DOM write
+      const offset = Math.round(((delta - DisplayRange) * DistanceSpacing * 100) / ValueSpacing) / 100;
+      if (offset !== this.lastOffset) {
+        this.lastOffset = offset;
+        this.landingElevationIndicator.instance.setAttribute('d', `m130.85 123.56h-13.096v${offset}h13.096z`);
+      }
+    }
   }
 
   onAfterRender(node: VNode): void {
@@ -72,12 +86,7 @@ class LandingElevationIndicator extends DisplayComponent<{ bus: ArincEventBus }>
       .whenChanged()
       .handle((fp) => {
         this.flightPhase = fp;
-
-        if ((fp !== 7 && fp !== 8) || this.delta > DisplayRange) {
-          this.landingElevationIndicator.instance.classList.add('HiddenElement');
-        } else {
-          this.landingElevationIndicator.instance.classList.remove('HiddenElement');
-        }
+        this.handleLandingElevation();
       });
 
     sub
