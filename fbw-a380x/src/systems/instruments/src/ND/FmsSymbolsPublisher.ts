@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { BasePublisher, EventBus } from '@microsoft/msfs-sdk';
-import { EfisSide, NdSymbol, NdTraffic, GenericDataListenerSync } from '@flybywiresim/fbw-sdk';
+import { EfisSide, NdSymbol, NdTraffic, GenericDataListenerRecvSync } from '@flybywiresim/fbw-sdk';
 
 import { PathVector } from '@fmgc/guidance/lnav/PathVector';
 
@@ -20,63 +20,48 @@ export interface FmsSymbolsData {
 }
 
 export class FmsSymbolsPublisher extends BasePublisher<FmsSymbolsData> {
-  private readonly events: GenericDataListenerSync[] = [];
+  // One shared listener for all topics: a GenericDataListenerSync per topic would materialize
+  // and walk every incoming EB_EVENTS package once per instance, which causes GC spikes with
+  // the large symbol/vector packages of long flight plans
+  private readonly events = new GenericDataListenerRecvSync();
 
   constructor(bus: EventBus, side: EfisSide) {
     super(bus);
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data) => {
-        this.publish('symbols', data);
-      }, `A32NX_EFIS_${side}_SYMBOLS`),
-    );
+    this.events.on(`A32NX_EFIS_${side}_SYMBOLS`, (ev, data: NdSymbol[]) => {
+      this.publish('symbols', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: PathVector[]) => {
-        this.publish('vectorsActive', data);
-      }, `A32NX_EFIS_VECTORS_${side}_ACTIVE`),
-    );
+    this.events.on(`A32NX_EFIS_VECTORS_${side}_ACTIVE`, (ev, data: PathVector[]) => {
+      this.publish('vectorsActive', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: PathVector[]) => {
-        this.publish('vectorsActiveEosid', data);
-      }, `A32NX_EFIS_VECTORS_${side}_ACTIVE_EOSID`),
-    );
+    this.events.on(`A32NX_EFIS_VECTORS_${side}_ACTIVE_EOSID`, (ev, data: PathVector[]) => {
+      this.publish('vectorsActiveEosid', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: PathVector[]) => {
-        this.publish('vectorsDashed', data);
-      }, `A32NX_EFIS_VECTORS_${side}_DASHED`),
-    );
+    this.events.on(`A32NX_EFIS_VECTORS_${side}_DASHED`, (ev, data: PathVector[]) => {
+      this.publish('vectorsDashed', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: PathVector[]) => {
-        this.publish('vectorsTemporary', data);
-      }, `A32NX_EFIS_VECTORS_${side}_TEMPORARY`),
-    );
+    this.events.on(`A32NX_EFIS_VECTORS_${side}_TEMPORARY`, (ev, data: PathVector[]) => {
+      this.publish('vectorsTemporary', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: PathVector[]) => {
-        this.publish('vectorsMissed', data);
-      }, `A32NX_EFIS_VECTORS_${side}_MISSED`),
-    );
+    this.events.on(`A32NX_EFIS_VECTORS_${side}_MISSED`, (ev, data: PathVector[]) => {
+      this.publish('vectorsMissed', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: PathVector[]) => {
-        this.publish('vectorsAlternate', data);
-      }, `A32NX_EFIS_VECTORS_${side}_ALTERNATE`),
-    );
+    this.events.on(`A32NX_EFIS_VECTORS_${side}_ALTERNATE`, (ev, data: PathVector[]) => {
+      this.publish('vectorsAlternate', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: PathVector[]) => {
-        this.publish('vectorsSecondary', data);
-      }, `A32NX_EFIS_VECTORS_${side}_SECONDARY`),
-    );
+    this.events.on(`A32NX_EFIS_VECTORS_${side}_SECONDARY`, (ev, data: PathVector[]) => {
+      this.publish('vectorsSecondary', data);
+    });
 
-    this.events.push(
-      new GenericDataListenerSync((ev, data: NdTraffic[]) => {
-        this.publish('traffic', data);
-      }, `A32NX_TCAS_${side}_TRAFFIC`),
-    );
+    this.events.on(`A32NX_TCAS_${side}_TRAFFIC`, (ev, data: NdTraffic[]) => {
+      this.publish('traffic', data);
+    });
   }
 }
