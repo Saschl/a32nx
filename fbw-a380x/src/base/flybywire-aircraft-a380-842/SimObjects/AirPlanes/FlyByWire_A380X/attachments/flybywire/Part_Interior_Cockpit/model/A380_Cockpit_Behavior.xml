@@ -103,15 +103,16 @@
         </Component>
 
         <!-- TEMPORARY A32NX VARIABLE MAPPING -->
-
         <Component ID="VARIABLE_MAPPING">
             <Update Frequency="18">
                 (L:A32NX_OVHD_INTLT_ANN, number) (&gt;L:A380X_OVHD_INTLT_ANN, number)
 
                 (A:LIGHT POTENTIOMETER:7, Percent over 100) 0 &gt; if{
                     1 1 (&gt;K:2:CABIN_LIGHTS_SET)
+                    2 1 (&gt;K:2:CABIN_LIGHTS_SET)
                 } els{
                     1 0 (&gt;K:2:CABIN_LIGHTS_SET)
+                    2 0 (&gt;K:2:CABIN_LIGHTS_SET)
                 }
 
                 (A:LIGHT POTENTIOMETER:7, Percent over 100) (&gt;O:PrevPot7Value)
@@ -1851,7 +1852,7 @@
                     }
                 </Update>
 
-                <Update Frequency="500">
+                <Update Frequency="5">
                 <!-- In the auto position, the seatbelt signs come on when engines are running and either slats are extended or main gear is downlocked -->
                 <!-- TODO: Move logic to responsible system -->
                     (L:XMLVAR_SWITCH_OVHD_INTLT_SEATBELT_Position) 1 == if{
@@ -2322,7 +2323,7 @@
                     <POTENTIOMETER>7</POTENTIOMETER>
                     <FAILURE>1</FAILURE>
                     <SIMVAR_INDEX>1</SIMVAR_INDEX>
-                    <EMISSIVE_CODE>(L:A32NX_ELEC_DC_ESS_BUS_IS_POWERED, Bool)</EMISSIVE_CODE>
+                    <EMISSIVE_CODE>(L:A32NX_ELEC_DC_GND_FLT_SVC_BUS_IS_POWERED, Bool)</EMISSIVE_CODE>
                 </UseTemplate>
 
                 <!-- F/O dome light -->
